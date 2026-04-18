@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     volumes:
       - aoi-logs:/var/log/aoi
+      - aoi-data:/var/lib/aoi
 
   aoi-mock-sender:
     build:
@@ -63,3 +64,4 @@ services:
 
 volumes:
   aoi-logs:
+  aoi-data:

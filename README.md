@@ -9,6 +9,7 @@ This repository currently implements the first milestone from `docs/priority.md`
 - structured inference event schema
 - JSONL log writer
 - HTTP ingestion service for inference events
+- SQLite persistence for `inspection_runs` and `defect_logs`
 - optional mock event sender for development traffic
 - local file-backed logging flow behind the ingestion API
 - basic tests for schema and log writing
@@ -48,6 +49,8 @@ curl -X POST http://127.0.0.1:8000/events \
 ```
 
 Accepted events are written as newline-delimited JSON to `logs/inference.jsonl`.
+Accepted event batches are also persisted into a SQLite database as one `inspection_run`
+plus related `defect_logs`.
 
 ## Run Mock Event Sender
 
@@ -62,6 +65,7 @@ PYTHONPATH=src python3 -m aoi.cli send-mock-events --endpoint http://127.0.0.1:8
 The repository includes a local stack for:
 
 - `aoi-app`: exposes the HTTP ingestion API and writes validated events to JSONL
+- `aoi-app`: also persists accepted batches to `/var/lib/aoi/aoi.db`
 - `aoi-mock-sender`: continuously sends mock events to the API
 - `promtail`: scrapes JSONL logs from the shared volume
 - `loki`: stores and indexes logs
@@ -122,6 +126,12 @@ To inspect app logs:
 
 ```bash
 docker compose logs aoi-app
+```
+
+To inspect the persisted SQLite database inside the app container:
+
+```bash
+docker exec aoi-app python -c "import sqlite3; conn=sqlite3.connect('/var/lib/aoi/aoi.db'); print(conn.execute('select pcb_id, model_version, status from inspection_runs order by rowid desc limit 5').fetchall())"
 ```
 
 To inspect mock sender logs:

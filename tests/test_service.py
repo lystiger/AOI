@@ -2,13 +2,15 @@ import json
 import threading
 from urllib import request
 
+from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
 from aoi.service import IngestionServer
 
 
 def test_health_endpoint_returns_ok(tmp_path) -> None:
     log_path = tmp_path / "inference.jsonl"
-    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path))
+    db_path = tmp_path / "aoi.db"
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), DatabaseManager(db_path))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
@@ -25,7 +27,8 @@ def test_health_endpoint_returns_ok(tmp_path) -> None:
 
 def test_post_events_persists_records(tmp_path) -> None:
     log_path = tmp_path / "inference.jsonl"
-    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path))
+    db_path = tmp_path / "aoi.db"
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), DatabaseManager(db_path))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
@@ -58,4 +61,5 @@ def test_post_events_persists_records(tmp_path) -> None:
         thread.join(timeout=5)
 
     assert result["accepted"] == 1
+    assert "run_id" in result
     assert log_path.exists()

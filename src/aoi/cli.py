@@ -44,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("logs/inference.jsonl"),
         help="path to JSONL log file",
     )
+    serve.add_argument(
+        "--db-path",
+        type=Path,
+        default=Path("data/aoi.db"),
+        help="path to SQLite database file",
+    )
 
     sender = subparsers.add_parser("send-mock-events", help="send mock events to the HTTP service")
     sender.add_argument("--batch-size", type=int, default=5, help="events sent per cycle")
@@ -83,7 +89,7 @@ def main() -> None:
         return
 
     if args.command == "serve-http":
-        run_server(host=args.host, port=args.port, log_path=args.output)
+        run_server(host=args.host, port=args.port, log_path=args.output, db_path=args.db_path)
         return
 
     if args.command == "send-mock-events":
