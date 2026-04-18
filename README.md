@@ -10,6 +10,7 @@ This repository currently implements the first milestone from `docs/priority.md`
 - JSONL log writer
 - HTTP ingestion service for inference events
 - SQLite persistence for `inspection_runs` and `defect_logs`
+- dedicated Vite + React frontend in `web/`
 - optional mock event sender for development traffic
 - local file-backed logging flow behind the ingestion API
 - basic tests for schema and log writing
@@ -92,6 +93,41 @@ curl 'http://127.0.0.1:8000/runs?status=FAIL&defect_type=MISALIGNMENT&limit=10'
 curl 'http://127.0.0.1:8000/runs/<run_id>?component_id=U002'
 curl 'http://127.0.0.1:8000/runs/<run_id>/defects?inspection_result=FAIL&severity=major'
 ```
+
+## Run Dedicated Frontend
+
+The repo also contains a separate React app in `web/`.
+
+This environment uses `nvm` with Node `22`, recorded in `.nvmrc`.
+
+Load Node:
+
+```bash
+export NVM_DIR="$HOME/.nvm"
+. "$NVM_DIR/nvm.sh"
+nvm use
+```
+
+Install dependencies:
+
+```bash
+cd web
+npm install
+```
+
+Run the Vite dev server:
+
+```bash
+npm run dev
+```
+
+Frontend URL:
+
+```text
+http://127.0.0.1:5173
+```
+
+The Vite dev server proxies `/health`, `/runs`, and `/events` to the AOI backend on port `8000`.
 
 ## Run Mock Event Sender
 
