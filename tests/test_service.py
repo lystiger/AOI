@@ -4,6 +4,7 @@ from urllib import request
 
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
+from aoi.schema import InferenceEvent, InspectionResult
 from aoi.service import IngestionServer
 
 
@@ -63,3 +64,167 @@ def test_post_events_persists_records(tmp_path) -> None:
     assert result["accepted"] == 1
     assert "run_id" in result
     assert log_path.exists()
+
+
+def test_list_runs_returns_recent_runs(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    persisted_run = database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-0100",
+                component_id="U100",
+                inspection_result=InspectionResult.FAIL,
+                defect_type="MISALIGNMENT",
+                confidence_score=0.92,
+                inference_latency_ms=21,
+                timestamp="2026-04-18T12:00:00+00:00",
+            )
+        ],
+        model_version="v1.0.0",
+    )
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with request.urlopen(f"http://127.0.0.1:{server.server_port}/runs?limit=5", timeout=5) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["count"] == 1
+    assert result["runs"][0]["id"] == persisted_run.run_id
+    assert result["runs"][0]["model_version"] == "v1.0.0"
+
+
+def test_get_run_returns_embedded_defect_logs(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    persisted_run = database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-0200",
+                component_id="R200",
+                inspection_result=InspectionResult.FAIL,
+                defect_type="LIFTED_LEAD",
+                confidence_score=0.83,
+                inference_latency_ms=28,
+                timestamp="2026-04-18T12:05:00+00:00",
+            )
+        ]
+    )
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with request.urlopen(f"http://127.0.0.1:{server.server_port}/runs/{persisted_run.run_id}", timeout=5) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["run"]["id"] == persisted_run.run_id
+    assert result["run"]["event_count"] == 1
+    assert result["run"]["defect_logs"][0]["defect_type"] == "LIFTED_LEAD"
+
+
+def test_list_runs_supports_status_and_pcb_filters(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-1000",
+                component_id="U100",
+                inspection_result=InspectionResult.FAIL,
+                defect_type="MISALIGNMENT",
+                confidence_score=0.9,
+                inference_latency_ms=20,
+                timestamp="2026-04-18T12:10:00+00:00",
+            )
+        ]
+    )
+    database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-2000",
+                component_id="U200",
+                inspection_result=InspectionResult.PASS,
+                defect_type="NO_DEFECT",
+                confidence_score=0.99,
+                inference_latency_ms=18,
+                timestamp="2026-04-18T12:11:00+00:00",
+            )
+        ]
+    )
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with request.urlopen(
+            f"http://127.0.0.1:{server.server_port}/runs?status=PASS&pcb_id=PCB-2000",
+            timeout=5,
+        ) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["count"] == 1
+    assert result["runs"][0]["pcb_id"] == "PCB-2000"
+    assert result["runs"][0]["status"] == "PASS"
+
+
+def test_run_defects_support_filters(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    persisted_run = database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-3000",
+                component_id="U300",
+                inspection_result=InspectionResult.FAIL,
+                defect_type="MISALIGNMENT",
+                confidence_score=0.84,
+                inference_latency_ms=25,
+                timestamp="2026-04-18T12:20:00+00:00",
+            ),
+            InferenceEvent.create(
+                pcb_id="PCB-3000",
+                component_id="U301",
+                inspection_result=InspectionResult.PASS,
+                defect_type="NO_DEFECT",
+                confidence_score=0.98,
+                inference_latency_ms=19,
+                timestamp="2026-04-18T12:20:01+00:00",
+            ),
+        ]
+    )
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with request.urlopen(
+            f"http://127.0.0.1:{server.server_port}/runs/{persisted_run.run_id}/defects?inspection_result=FAIL&defect_type=MISALIGNMENT",
+            timeout=5,
+        ) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["count"] == 1
+    assert result["defect_logs"][0]["component_id"] == "U300"

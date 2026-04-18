@@ -115,19 +115,115 @@ class DatabaseManager:
             ).fetchone()
         return dict(row) if row is not None else None
 
-    def fetch_defect_logs(self, run_id: str) -> list[dict[str, object]]:
+    def fetch_defect_logs(
+        self,
+        run_id: str,
+        *,
+        component_id: str | None = None,
+        defect_type: str | None = None,
+        severity: str | None = None,
+        inspection_result: str | None = None,
+    ) -> list[dict[str, object]]:
+        clauses = ["run_id = ?"]
+        params: list[object] = [run_id]
+        if component_id is not None:
+            clauses.append("component_id = ?")
+            params.append(component_id)
+        if defect_type is not None:
+            clauses.append("defect_type = ?")
+            params.append(defect_type)
+        if severity is not None:
+            clauses.append("severity = ?")
+            params.append(severity)
+        if inspection_result is not None:
+            clauses.append("inspection_result = ?")
+            params.append(inspection_result)
+
+        where_clause = " AND ".join(clauses)
         with self._connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT id, run_id, component_id, defect_type, severity, confidence_score,
                        inference_latency_ms, inspection_result, timestamp
                 FROM defect_logs
-                WHERE run_id = ?
+                WHERE {where_clause}
                 ORDER BY id ASC
                 """,
-                (run_id,),
+                params,
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        pcb_id: str | None = None,
+        status: str | None = None,
+        model_version: str | None = None,
+        defect_type: str | None = None,
+    ) -> list[dict[str, object]]:
+        safe_limit = max(1, min(limit, 200))
+        clauses: list[str] = []
+        params: list[object] = []
+        if pcb_id is not None:
+            clauses.append("r.pcb_id = ?")
+            params.append(pcb_id)
+        if status is not None:
+            clauses.append("r.status = ?")
+            params.append(status)
+        if model_version is not None:
+            clauses.append("r.model_version = ?")
+            params.append(model_version)
+        if defect_type is not None:
+            clauses.append(
+                "EXISTS (SELECT 1 FROM defect_logs AS dx WHERE dx.run_id = r.id AND dx.defect_type = ?)"
+            )
+            params.append(defect_type)
+
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(safe_limit)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    r.id,
+                    r.pcb_id,
+                    r.timestamp,
+                    r.model_version,
+                    r.status,
+                    COUNT(d.id) AS event_count
+                FROM inspection_runs AS r
+                LEFT JOIN defect_logs AS d ON d.run_id = r.id
+                {where_sql}
+                GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.status
+                ORDER BY r.timestamp DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_run_with_defects(
+        self,
+        run_id: str,
+        *,
+        component_id: str | None = None,
+        defect_type: str | None = None,
+        severity: str | None = None,
+        inspection_result: str | None = None,
+    ) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        run_row["defect_logs"] = self.fetch_defect_logs(
+            run_id,
+            component_id=component_id,
+            defect_type=defect_type,
+            severity=severity,
+            inspection_result=inspection_result,
+        )
+        run_row["event_count"] = len(run_row["defect_logs"])
+        return run_row
 
     @staticmethod
     def _derive_run_status(events: list[InferenceEvent]) -> str:

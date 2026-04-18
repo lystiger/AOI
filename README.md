@@ -52,6 +52,47 @@ Accepted events are written as newline-delimited JSON to `logs/inference.jsonl`.
 Accepted event batches are also persisted into a SQLite database as one `inspection_run`
 plus related `defect_logs`.
 
+Read recent runs:
+
+```bash
+curl http://127.0.0.1:8000/runs?limit=5
+```
+
+Supported run filters:
+
+- `limit`
+- `pcb_id`
+- `status`
+- `model_version`
+- `defect_type`
+
+Read one run with embedded defect logs:
+
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>
+```
+
+Supported embedded defect filters:
+
+- `component_id`
+- `defect_type`
+- `severity`
+- `inspection_result`
+
+Read defect logs for one run:
+
+```bash
+curl http://127.0.0.1:8000/runs/<run_id>/defects
+```
+
+Example filtered queries:
+
+```bash
+curl 'http://127.0.0.1:8000/runs?status=FAIL&defect_type=MISALIGNMENT&limit=10'
+curl 'http://127.0.0.1:8000/runs/<run_id>?component_id=U002'
+curl 'http://127.0.0.1:8000/runs/<run_id>/defects?inspection_result=FAIL&severity=major'
+```
+
 ## Run Mock Event Sender
 
 To continuously generate synthetic traffic against the HTTP service:
