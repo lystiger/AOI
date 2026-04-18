@@ -27,6 +27,8 @@ logs/
 build/
 dist/
 *.egg-info/
+web/node_modules/
+web/dist/
 
 # IDE and OS files
 .DS_Store

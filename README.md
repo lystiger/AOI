@@ -24,6 +24,8 @@ src/aoi/
   mock_inference.py
   cli.py
   service.py
+web/
+  src/
 tests/
 ```
 
@@ -98,7 +100,7 @@ curl 'http://127.0.0.1:8000/runs/<run_id>/defects?inspection_result=FAIL&severit
 
 The repo also contains a separate React app in `web/`.
 
-This environment uses `nvm` with Node `22`, recorded in `.nvmrc`.
+This environment uses Node `22`.
 
 Load Node:
 
@@ -128,6 +130,7 @@ http://127.0.0.1:5173
 ```
 
 The Vite dev server proxies `/health`, `/runs`, and `/events` to the AOI backend on port `8000`.
+When the frontend runs inside Docker, the proxy target is injected with `VITE_PROXY_TARGET=http://aoi-app:8000`.
 
 ## Run Mock Event Sender
 
@@ -143,6 +146,7 @@ The repository includes a local stack for:
 
 - `aoi-app`: exposes the HTTP ingestion API and writes validated events to JSONL
 - `aoi-app`: also persists accepted batches to `/var/lib/aoi/aoi.db`
+- `aoi-web`: runs the dedicated frontend from `web/`
 - `aoi-mock-sender`: continuously sends mock events to the API
 - `promtail`: scrapes JSONL logs from the shared volume
 - `loki`: stores and indexes logs
@@ -163,6 +167,7 @@ docker compose down
 ### Service URLs
 
 - AOI ingestion API: `http://localhost:8000`
+- AOI frontend: `http://localhost:5173`
 - Grafana: `http://localhost:3000`
 - Loki: `http://localhost:3100`
 

@@ -10,6 +10,18 @@ services:
       - aoi-logs:/var/log/aoi
       - aoi-data:/var/lib/aoi
 
+  aoi-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: aoi-web
+    depends_on:
+      - aoi-app
+    environment:
+      VITE_PROXY_TARGET: http://aoi-app:8000
+    ports:
+      - "5173:5173"
+
   aoi-mock-sender:
     build:
       context: .

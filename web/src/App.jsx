@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin
+const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_BASE_URL || 'http://localhost:3000'
+
 const RUN_FILTER_DEFAULTS = {
   limit: '15',
   pcb_id: '',
@@ -248,11 +251,11 @@ function App() {
         </div>
         <aside className="hero-card">
           <span className="eyebrow">Live Tools</span>
-          <a href="http://localhost:8000/health" target="_blank" rel="noreferrer">
+          <a href={`${API_BASE_URL}/health`} target="_blank" rel="noreferrer">
             API health
           </a>
           <a
-            href="http://localhost:3000/d/aoi-overview/aoi-overview"
+            href={`${GRAFANA_BASE_URL}/d/aoi-overview/aoi-overview`}
             target="_blank"
             rel="noreferrer"
           >
