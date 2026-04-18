@@ -7,5 +7,4 @@ COPY src /app/src
 
 ENV PYTHONPATH=/app/src
 
-CMD ["python", "-m", "aoi.cli", "stream-mock-logs", "--batch-size", "5", "--interval-seconds", "5", "--output", "/var/log/aoi/inference.jsonl"]
-
+CMD ["python", "-m", "aoi.cli", "serve-http", "--host", "0.0.0.0", "--port", "8000", "--output", "/var/log/aoi/inference.jsonl"]

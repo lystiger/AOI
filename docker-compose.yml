@@ -4,8 +4,29 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: aoi-app
+    ports:
+      - "8000:8000"
     volumes:
       - aoi-logs:/var/log/aoi
+
+  aoi-mock-sender:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aoi-mock-sender
+    command:
+      - python
+      - -m
+      - aoi.cli
+      - send-mock-events
+      - --batch-size
+      - "5"
+      - --interval-seconds
+      - "5"
+      - --endpoint
+      - http://aoi-app:8000/events
+    depends_on:
+      - aoi-app
 
   loki:
     image: grafana/loki:3.0.0
@@ -42,4 +63,3 @@ services:
 
 volumes:
   aoi-logs:
-

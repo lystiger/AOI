@@ -50,6 +50,43 @@ class InferenceEvent:
             inference_latency_ms=inference_latency_ms,
         )
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "InferenceEvent":
+        raw_result = payload.get("inspection_result")
+        if raw_result is None:
+            raise ValueError("inspection_result is required")
+
+        timestamp = payload.get("timestamp")
+        if timestamp is None:
+            event_timestamp = None
+        elif isinstance(timestamp, str) and timestamp.strip():
+            event_timestamp = timestamp
+            cls._validate_timestamp(event_timestamp)
+        else:
+            raise ValueError("timestamp must be a non-empty ISO8601 string")
+
+        try:
+            inspection_result = InspectionResult(str(raw_result))
+        except ValueError as exc:
+            raise ValueError("inspection_result must be PASS or FAIL") from exc
+
+        confidence_score = payload.get("confidence_score")
+        inference_latency_ms = payload.get("inference_latency_ms")
+        if confidence_score is None:
+            raise ValueError("confidence_score is required")
+        if inference_latency_ms is None:
+            raise ValueError("inference_latency_ms is required")
+
+        return cls.create(
+            timestamp=event_timestamp,
+            pcb_id=cls._require_string(payload, "pcb_id"),
+            component_id=cls._require_string(payload, "component_id"),
+            inspection_result=inspection_result,
+            defect_type=cls._require_string(payload, "defect_type"),
+            confidence_score=float(confidence_score),
+            inference_latency_ms=int(inference_latency_ms),
+        )
+
     @staticmethod
     def _validate(
         *,
@@ -70,8 +107,22 @@ class InferenceEvent:
         if inference_latency_ms < 0:
             raise ValueError("inference_latency_ms must be non-negative")
 
+    @staticmethod
+    def _require_string(payload: dict[str, object], field_name: str) -> str:
+        value = payload.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} must be a non-empty string")
+        return value
+
+    @staticmethod
+    def _validate_timestamp(timestamp: str) -> None:
+        candidate = timestamp.replace("Z", "+00:00")
+        try:
+            datetime.fromisoformat(candidate)
+        except ValueError as exc:
+            raise ValueError("timestamp must be a valid ISO8601 string") from exc
+
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
         payload["inspection_result"] = self.inspection_result.value
         return payload
-

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
+from itertools import count
 from pathlib import Path
+from urllib import error, request
 
 from aoi.log_manager import LogManager
 from aoi.mock_inference import generate_mock_events
+from aoi.service import run_server
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,6 +33,25 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("logs/inference.jsonl"),
         help="path to JSONL log file",
+    )
+
+    serve = subparsers.add_parser("serve-http", help="run the AOI ingestion HTTP service")
+    serve.add_argument("--host", default="0.0.0.0", help="bind host")
+    serve.add_argument("--port", type=int, default=8000, help="bind port")
+    serve.add_argument(
+        "--output",
+        type=Path,
+        default=Path("logs/inference.jsonl"),
+        help="path to JSONL log file",
+    )
+
+    sender = subparsers.add_parser("send-mock-events", help="send mock events to the HTTP service")
+    sender.add_argument("--batch-size", type=int, default=5, help="events sent per cycle")
+    sender.add_argument("--interval-seconds", type=float, default=5.0, help="delay between cycles")
+    sender.add_argument(
+        "--endpoint",
+        default="http://127.0.0.1:8000/events",
+        help="HTTP endpoint for event ingestion",
     )
 
     return parser
@@ -56,6 +79,33 @@ def main() -> None:
                 f"Cycle {cycle}: wrote {args.batch_size} events to {args.output}",
                 flush=True,
             )
+            time.sleep(args.interval_seconds)
+        return
+
+    if args.command == "serve-http":
+        run_server(host=args.host, port=args.port, log_path=args.output)
+        return
+
+    if args.command == "send-mock-events":
+        for cycle in count(1):
+            payload = {"events": [event.to_dict() for event in generate_mock_events(args.batch_size)]}
+            body = json.dumps(payload).encode("utf-8")
+            http_request = request.Request(
+                args.endpoint,
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with request.urlopen(http_request, timeout=10) as response:
+                    response_body = response.read().decode("utf-8")
+            except error.URLError as exc:
+                print(f"Cycle {cycle}: failed to send events: {exc}", flush=True)
+            else:
+                print(
+                    f"Cycle {cycle}: sent {args.batch_size} events to {args.endpoint} -> {response_body}",
+                    flush=True,
+                )
             time.sleep(args.interval_seconds)
 
 

@@ -8,8 +8,9 @@ This repository currently implements the first milestone from `docs/priority.md`
 
 - structured inference event schema
 - JSONL log writer
-- mock inference event generation
-- local file-backed logging flow for development
+- HTTP ingestion service for inference events
+- optional mock event sender for development traffic
+- local file-backed logging flow behind the ingestion API
 - basic tests for schema and log writing
 
 ## Project Layout
@@ -20,24 +21,48 @@ src/aoi/
   log_manager.py
   mock_inference.py
   cli.py
+  service.py
 tests/
 ```
 
-## Run Mock Log Generation
+## Run Local HTTP Service
 
 Use the local package path when running without installation:
 
 ```bash
-PYTHONPATH=src python3 -m aoi.cli generate-mock-logs --count 5 --output logs/inference.jsonl
+PYTHONPATH=src python3 -m aoi.cli serve-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
 ```
 
-This writes newline-delimited JSON records to `logs/inference.jsonl`.
+Health check:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+Send one event:
+
+```bash
+curl -X POST http://127.0.0.1:8000/events \
+  -H 'Content-Type: application/json' \
+  -d '{"events":[{"pcb_id":"PCB-0001","component_id":"R101","inspection_result":"FAIL","defect_type":"MISALIGNMENT","confidence_score":0.88,"inference_latency_ms":31}]}'
+```
+
+Accepted events are written as newline-delimited JSON to `logs/inference.jsonl`.
+
+## Run Mock Event Sender
+
+To continuously generate synthetic traffic against the HTTP service:
+
+```bash
+PYTHONPATH=src python3 -m aoi.cli send-mock-events --endpoint http://127.0.0.1:8000/events
+```
 
 ## Docker Stack
 
 The repository includes a local stack for:
 
-- `aoi-app`: continuously emits mock inference logs
+- `aoi-app`: exposes the HTTP ingestion API and writes validated events to JSONL
+- `aoi-mock-sender`: continuously sends mock events to the API
 - `promtail`: scrapes JSONL logs from the shared volume
 - `loki`: stores and indexes logs
 - `grafana`: queries and visualizes Loki data
@@ -56,6 +81,7 @@ docker compose down
 
 ### Service URLs
 
+- AOI ingestion API: `http://localhost:8000`
 - Grafana: `http://localhost:3000`
 - Loki: `http://localhost:3100`
 
@@ -63,6 +89,26 @@ Grafana default credentials:
 
 - username: `admin`
 - password: `admin`
+
+### Provisioned Dashboard
+
+Grafana provisions an `AOI Overview` dashboard automatically in the `AOI` folder.
+
+Direct URL:
+
+```text
+http://localhost:3000/d/aoi-overview/aoi-overview
+```
+
+The dashboard includes:
+
+- event count in the last 5 minutes
+- fail count in the last 5 minutes
+- boards seen in the last 15 minutes
+- average inference latency
+- inspection result rate over time
+- failure type breakdown
+- raw AOI event logs
 
 ### Inspect logs
 
@@ -76,6 +122,12 @@ To inspect app logs:
 
 ```bash
 docker compose logs aoi-app
+```
+
+To inspect mock sender logs:
+
+```bash
+docker compose logs aoi-mock-sender
 ```
 
 To inspect Promtail logs:
