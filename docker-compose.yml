@@ -1,0 +1,45 @@
+services:
+  aoi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aoi-app
+    volumes:
+      - aoi-logs:/var/log/aoi
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: aoi-loki
+    command: -config.file=/etc/loki/config.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/config.yml:/etc/loki/config.yml:ro
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: aoi-promtail
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    volumes:
+      - ./deploy/promtail/config.yml:/etc/promtail/config.yml:ro
+      - aoi-logs:/var/log/aoi:ro
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: aoi-grafana
+    depends_on:
+      - loki
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  aoi-logs:
+
