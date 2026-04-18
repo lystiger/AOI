@@ -1,0 +1,2 @@
+"""AOI logging pipeline package."""
+
