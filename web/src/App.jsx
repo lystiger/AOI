@@ -326,6 +326,8 @@ function App() {
   const [isRunRailOpen, setIsRunRailOpen] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [hudGhostOpacity, setHudGhostOpacity] = useState(0.2)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -503,8 +505,61 @@ function App() {
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
           </button>
+          <button
+            type="button"
+            className={`dock-button ${isSettingsOpen ? 'active' : ''}`}
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            title="System Settings"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
         </div>
       </header>
+
+      {isSettingsOpen && (
+        <div className="settings-overlay" onClick={() => setIsSettingsOpen(false)}>
+          <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-header">
+              <h2>System Settings</h2>
+              <button className="ghost-button" onClick={() => setIsSettingsOpen(false)}>Close</button>
+            </div>
+            <div className="settings-content">
+              <section className="settings-section">
+                <p className="eyebrow">Display</p>
+                <div className="settings-row">
+                  <span>HUD Ghost Opacity</span>
+                  <div className="settings-control">
+                    <span className="value-label">{Math.round(hudGhostOpacity * 100)}%</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={hudGhostOpacity}
+                      onChange={(e) => setHudGhostOpacity(parseFloat(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <span>Show Coordinate Grid</span>
+                  <input type="checkbox" checked={true} readOnly />
+                </div>
+                <div className="settings-row">
+                  <span>Industrial Dark Theme</span>
+                  <input type="checkbox" checked={true} readOnly />
+                </div>
+              </section>
+              <section className="settings-section">
+                <p className="eyebrow">Inference</p>
+                <div className="settings-row">
+                  <span>Mock Event Stream</span>
+                  <input type="checkbox" checked={true} readOnly />
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error ? <div className="error-banner">{error}</div> : null}
 
@@ -578,6 +633,7 @@ function App() {
                 {selectedRun ? <StatusChip value={selectedRun.status} /> : null}
                 <span className="compact-meta">{selectedRun ? formatTimestamp(selectedRun.timestamp) : '-'}</span>
                 <span className="compact-meta">{failCount} fail defects</span>
+                {detailLoading && <span className="loading-indicator">Updating...</span>}
               </div>
               {selectedImage?.image_role === 'demo_full_board' ? (
                 <div className="compact-note">Demo image active</div>
@@ -597,10 +653,10 @@ function App() {
                 ))}
               </select>
               <button type="button" className="ghost-button" onClick={() => stepDefect(-1)}>
-                Prev
+                &lt;
               </button>
               <button type="button" className="ghost-button" onClick={() => stepDefect(1)}>
-                Next
+                &gt;
               </button>
             </div>
           </div>
@@ -663,21 +719,21 @@ function App() {
                 <div className="defect-list">
                   {!selectedRunId ? (
                     <div className="empty-state">Select a run to inspect defects.</div>
-                  ) : detailLoading ? (
-                    <div className="empty-state">Loading run detail…</div>
-                  ) : visibleDefects.length ? (
-                    visibleDefects.map((defect) => (
-                      <DefectListItem
-                        key={defect.id}
-                        defect={defect}
-                        active={defect.id === selectedDefect?.id}
-                        hovered={defect.id === hoveredDefectId}
-                        onSelect={setSelectedDefectId}
-                        onHover={setHoveredDefectId}
-                      />
-                    ))
                   ) : (
-                    <div className="empty-state">No defects matched the current filters.</div>
+                    visibleDefects.length ? (
+                      visibleDefects.map((defect) => (
+                        <DefectListItem
+                          key={defect.id}
+                          defect={defect}
+                          active={defect.id === selectedDefect?.id}
+                          hovered={defect.id === hoveredDefectId}
+                          onSelect={setSelectedDefectId}
+                          onHover={setHoveredDefectId}
+                        />
+                      ))
+                    ) : (
+                      <div className="empty-state">No defects matched the current filters.</div>
+                    )
                   )}
                 </div>
               </section>
@@ -686,12 +742,10 @@ function App() {
             <div className="viewer-container">
               {!selectedRunId ? (
                 <div className="viewer-empty"><div className="empty-state">Select a run to load the PCB review surface.</div></div>
-              ) : detailLoading ? (
-                <div className="viewer-empty"><div className="empty-state">Loading run detail…</div></div>
               ) : (
                 <>
                   <PcbViewer
-                    key={`${selectedRunId || 'none'}:${effectiveSelectedImageId}`}
+                    key={`${selectedRunId || 'none'}`}
                     image={selectedImage}
                     run={selectedRun}
                     defects={visibleDefects}
@@ -701,7 +755,10 @@ function App() {
                     onSelectDefect={setSelectedDefectId}
                   />
                   {selectedDefect ? (
-                    <div className="floating-inspector">
+                    <div
+                      className="floating-inspector"
+                      style={{ '--ghost-opacity': hudGhostOpacity }}
+                    >
                       <div className="inspector-header">
                         <p className="eyebrow">Defect Inspector</p>
                         <StatusChip value={selectedDefect.inspection_result} />
