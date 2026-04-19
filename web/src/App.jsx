@@ -127,11 +127,26 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
   const viewerRef = useRef(null)
 
   function setScale(nextScale) {
-    setViewerScale(clamp(nextScale, 1, 5))
+    setViewerScale(clamp(nextScale, 0.5, 10))
   }
 
   function resetViewer() {
-    setViewerScale(1)
+    if (!viewerRef.current || !image) return
+    const bounds = viewerRef.current.getBoundingClientRect()
+    // Calculate scale to fit the image into the workspace with some padding
+    const padding = 40
+    const availableWidth = bounds.width - padding
+    const availableHeight = bounds.height - padding
+
+    // Use image metadata dimensions for calculation
+    const imgWidth = image.image_width || 1600
+    const imgHeight = image.image_height || 900
+
+    const scaleX = availableWidth / imgWidth
+    const scaleY = availableHeight / imgHeight
+    const nextScale = Math.min(scaleX, scaleY, 1.0)
+
+    setViewerScale(nextScale)
     setViewerOffset({ x: 0, y: 0 })
   }
 
@@ -142,7 +157,7 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
     }
 
     onSelectDefect(defect.id)
-    const nextScale = 2
+    const nextScale = 2.5
     const bounds = viewerRef.current.getBoundingClientRect()
     const centerX = (defect.overlay_x + defect.overlay_width / 2) * bounds.width
     const centerY = (defect.overlay_y + defect.overlay_height / 2) * bounds.height
@@ -155,9 +170,6 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
   }
 
   function startDrag(event) {
-    if (viewerScale <= 1) {
-      return
-    }
     setIsDragging(true)
     dragRef.current = {
       startX: event.clientX,
@@ -183,15 +195,26 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
 
   function handleWheel(event) {
     event.preventDefault()
-    setScale(viewerScale + (event.deltaY < 0 ? 0.16 : -0.16))
+    const zoomSpeed = 0.001
+    const delta = -event.deltaY
+    const scaleFactor = Math.pow(1.1, delta / 100)
+    setScale(viewerScale * scaleFactor)
   }
+
+  useEffect(() => {
+    if (image?.id) {
+      // Only auto-fit if it's a DIFFERENT image than before
+      const timer = setTimeout(resetViewer, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [image?.id])
 
   return (
     <section className="viewer-panel">
       <div className="viewer-toolbar">
         <div className="viewer-toolbar-group">
           <button type="button" className="ghost-button" onClick={resetViewer}>
-            Fit board
+            Reset View
           </button>
           <button
             type="button"
@@ -199,16 +222,16 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
             onClick={() => selectedDefect && focusDefect(selectedDefect.id)}
             disabled={!selectedDefect}
           >
-            Fit defect
+            Center Defect
           </button>
         </div>
         <div className="viewer-toolbar-group">
-          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale - 0.2)}>
-            Zoom -
+          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale * 0.8)}>
+            -
           </button>
           <div className="zoom-readout">{Math.round(viewerScale * 100)}%</div>
-          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale + 0.2)}>
-            Zoom +
+          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale * 1.25)}>
+            +
           </button>
         </div>
       </div>
@@ -227,7 +250,20 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
             className="viewer-stage"
             style={{ transform: `translate(${viewerOffset.x}px, ${viewerOffset.y}px) scale(${viewerScale})` }}
           >
-            <img className="viewer-image" src={image.image_path} alt={`${run.pcb_id} inspection board`} />
+            {viewerScale > 1.5 && (
+              <div
+                className="viewer-grid"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage:
+                    'linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)',
+                  backgroundSize: '20px 20px',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            <img className="viewer-image" src={image.image_path} alt={`${run.pcb_id} board`} />
             {defects.map((defect) => {
               const overlayState =
                 defect.id === selectedDefect?.id
@@ -266,7 +302,7 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
             })}
           </div>
         ) : (
-          <div className="empty-state">No scan image available for this run.</div>
+          <div className="empty-state">No inspection image.</div>
         )}
       </div>
     </section>
@@ -422,14 +458,6 @@ function App() {
     <div className="app-shell">
       <header className="workspace-topbar">
         <div className="workspace-title-group">
-          <button
-            type="button"
-            className={`dock-button ${isRunRailOpen ? 'active' : ''}`}
-            onClick={() => setIsRunRailOpen(!isRunRailOpen)}
-            title="Toggle Run History"
-          >
-            <span className="icon">📋</span>
-          </button>
           <div className="workspace-title">
             <span className="eyebrow">AOI Review Workstation</span>
             <h1>PCB defect review</h1>
@@ -450,13 +478,22 @@ function App() {
           >
             Grafana
           </a>
+          <div className="topbar-divider"></div>
+          <button
+            type="button"
+            className={`dock-button ${isRunRailOpen ? 'active' : ''}`}
+            onClick={() => setIsRunRailOpen(!isRunRailOpen)}
+            title="Toggle Run History"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="9" y1="22" x2="9" y2="10"></line></svg>
+          </button>
           <button
             type="button"
             className={`dock-button ${isSidebarOpen ? 'active' : ''}`}
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             title="Toggle Defect List"
           >
-            <span className="icon">☰</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
           <button
             type="button"
@@ -464,7 +501,7 @@ function App() {
             onClick={() => setIsFiltersOpen(!isFiltersOpen)}
             title="Toggle Defect Filters"
           >
-            <span className="icon">🔍</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
           </button>
         </div>
       </header>
