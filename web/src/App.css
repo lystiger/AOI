@@ -461,6 +461,12 @@
   background: var(--accent-soft);
 }
 
+.setup-step-status.needs_review {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
 .setup-step-status.blocked,
 .setup-step-status.not_required {
   color: var(--muted);
@@ -492,6 +498,25 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+.setup-button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.setup-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+
+.setup-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
 }
 
 .setup-summary {
@@ -829,6 +854,82 @@ textarea {
 
 .upload-prompt p {
   margin: 0;
+  color: var(--muted);
+}
+
+.fiducial-preview {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #000;
+  min-height: 220px;
+}
+
+.fiducial-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fiducial-box {
+  position: absolute;
+  border: 2px solid var(--warn);
+  background: rgba(255, 196, 61, 0.12);
+}
+
+.barcode-box {
+  position: absolute;
+  border: 2px solid var(--accent);
+  background: rgba(83, 155, 245, 0.14);
+}
+
+.fiducial-box span {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.barcode-box span {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.fiducial-list {
+  display: grid;
+  gap: 8px;
+}
+
+.fiducial-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.fiducial-list-item strong,
+.fiducial-list-item span {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.fiducial-list-item span {
   color: var(--muted);
 }
 

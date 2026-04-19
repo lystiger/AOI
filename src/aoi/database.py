@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -86,6 +87,42 @@ class DatabaseManager:
             )
             self._ensure_column(
                 connection,
+                table_name="inspection_runs",
+                column_name="requires_fiducials",
+                definition="INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="fiducial_status",
+                definition="TEXT NOT NULL DEFAULT 'not_required'",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="fiducials_json",
+                definition="TEXT",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="requires_barcode",
+                definition="INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="barcode_status",
+                definition="TEXT NOT NULL DEFAULT 'not_required'",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="barcode_json",
+                definition="TEXT",
+            )
+            self._ensure_column(
+                connection,
                 table_name="defect_logs",
                 column_name="run_image_id",
                 definition="TEXT",
@@ -148,10 +185,18 @@ class DatabaseManager:
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO inspection_runs (id, pcb_id, timestamp, model_version, status, model_name, setup_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO inspection_runs (
+                    id, pcb_id, timestamp, model_version, status, model_name, setup_status,
+                    requires_fiducials, fiducial_status, fiducials_json,
+                    requires_barcode, barcode_status, barcode_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, pcb_id, run_timestamp, model_version, status, None, "review_ready"),
+                (
+                    run_id, pcb_id, run_timestamp, model_version, status, None, "review_ready",
+                    0, "not_required", None,
+                    0, "not_required", None,
+                ),
             )
             connection.executemany(
                 """
@@ -232,12 +277,22 @@ class DatabaseManager:
             "model_name": None,
             "status": "SETUP",
             "setup_status": "not_ready",
+            "requires_fiducials": 0,
+            "fiducial_status": "not_required",
+            "fiducials": [],
+            "requires_barcode": 0,
+            "barcode_status": "not_required",
+            "barcode": None,
         }
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO inspection_runs (id, pcb_id, timestamp, model_version, status, model_name, setup_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO inspection_runs (
+                    id, pcb_id, timestamp, model_version, status, model_name, setup_status,
+                    requires_fiducials, fiducial_status, fiducials_json,
+                    requires_barcode, barcode_status, barcode_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_row["id"],
@@ -247,6 +302,12 @@ class DatabaseManager:
                     run_row["status"],
                     run_row["model_name"],
                     run_row["setup_status"],
+                    run_row["requires_fiducials"],
+                    run_row["fiducial_status"],
+                    None,
+                    run_row["requires_barcode"],
+                    run_row["barcode_status"],
+                    None,
                 ),
             )
         return run_row
@@ -256,6 +317,8 @@ class DatabaseManager:
         run_id: str,
         *,
         model_name: str | None = None,
+        requires_fiducials: bool | None = None,
+        requires_barcode: bool | None = None,
         setup_status: str | None = None,
     ) -> dict[str, object] | None:
         run_row = self.fetch_run(run_id)
@@ -266,16 +329,49 @@ class DatabaseManager:
         if model_name is not None:
             next_model_name = model_name.strip() or None
 
-        next_setup_status = setup_status or self._calculate_setup_status(run_id, next_model_name)
+        next_requires_fiducials = int(bool(run_row.get("requires_fiducials")))
+        if requires_fiducials is not None:
+            next_requires_fiducials = int(requires_fiducials)
+
+        next_fiducial_status = self._calculate_fiducial_status(
+            run_id,
+            requires_fiducials=bool(next_requires_fiducials),
+            current_status=str(run_row.get("fiducial_status") or "not_required"),
+        )
+        next_requires_barcode = int(bool(run_row.get("requires_barcode")))
+        if requires_barcode is not None:
+            next_requires_barcode = int(requires_barcode)
+        next_barcode_status = self._calculate_barcode_status(
+            run_id,
+            requires_barcode=bool(next_requires_barcode),
+            current_status=str(run_row.get("barcode_status") or "not_required"),
+        )
+        next_setup_status = setup_status or self._calculate_setup_status(
+            run_id,
+            next_model_name,
+            requires_fiducials=bool(next_requires_fiducials),
+            fiducial_status=next_fiducial_status,
+            requires_barcode=bool(next_requires_barcode),
+            barcode_status=next_barcode_status,
+        )
 
         with self._connect() as connection:
             connection.execute(
                 """
                 UPDATE inspection_runs
-                SET model_name = ?, setup_status = ?
+                SET model_name = ?, requires_fiducials = ?, fiducial_status = ?,
+                    requires_barcode = ?, barcode_status = ?, setup_status = ?
                 WHERE id = ?
                 """,
-                (next_model_name, next_setup_status, run_id),
+                (
+                    next_model_name,
+                    next_requires_fiducials,
+                    next_fiducial_status,
+                    next_requires_barcode,
+                    next_barcode_status,
+                    next_setup_status,
+                    run_id,
+                ),
             )
         return self.fetch_run(run_id)
 
@@ -283,13 +379,24 @@ class DatabaseManager:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT id, pcb_id, timestamp, model_version, model_name, status, setup_status
+                SELECT id, pcb_id, timestamp, model_version, model_name, status, setup_status,
+                       requires_fiducials, fiducial_status, fiducials_json,
+                       requires_barcode, barcode_status, barcode_json
                 FROM inspection_runs
                 WHERE id = ?
                 """,
                 (run_id,),
             ).fetchone()
-        return dict(row) if row is not None else None
+        if row is None:
+            return None
+        payload = dict(row)
+        payload["requires_fiducials"] = bool(payload.get("requires_fiducials"))
+        payload["fiducials"] = json.loads(payload["fiducials_json"]) if payload.get("fiducials_json") else []
+        payload["requires_barcode"] = bool(payload.get("requires_barcode"))
+        payload["barcode"] = json.loads(payload["barcode_json"]) if payload.get("barcode_json") else None
+        payload.pop("fiducials_json", None)
+        payload.pop("barcode_json", None)
+        return payload
 
     def fetch_defect_logs(
         self,
@@ -383,17 +490,28 @@ class DatabaseManager:
                     r.model_name,
                     r.status,
                     r.setup_status,
+                    r.requires_fiducials,
+                    r.fiducial_status,
+                    r.requires_barcode,
+                    r.barcode_status,
                     COUNT(d.id) AS event_count
                 FROM inspection_runs AS r
                 LEFT JOIN defect_logs AS d ON d.run_id = r.id
                 {where_sql}
-                GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.model_name, r.status, r.setup_status
+                GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.model_name, r.status, r.setup_status,
+                         r.requires_fiducials, r.fiducial_status, r.requires_barcode, r.barcode_status
                 ORDER BY r.timestamp DESC
                 LIMIT ?
                 """,
                 params,
             ).fetchall()
-        return [dict(row) for row in rows]
+        payload = []
+        for row in rows:
+            entry = dict(row)
+            entry["requires_fiducials"] = bool(entry.get("requires_fiducials"))
+            entry["requires_barcode"] = bool(entry.get("requires_barcode"))
+            payload.append(entry)
+        return payload
 
     def fetch_run_with_defects(
         self,
@@ -418,6 +536,145 @@ class DatabaseManager:
         )
         run_row["event_count"] = len(run_row["defect_logs"])
         return run_row
+
+    def add_run_image(
+        self,
+        run_id: str,
+        *,
+        image_id: str,
+        image_path: str,
+        image_role: str,
+        image_width: int,
+        image_height: int,
+        created_at: str,
+    ) -> dict[str, object] | None:
+        if self.fetch_run(run_id) is None:
+            return None
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (image_id, run_id, image_path, image_role, image_width, image_height, 0, created_at),
+            )
+        return self.update_run(run_id)
+
+    def detect_fiducials(self, run_id: str) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        if not run_row["requires_fiducials"]:
+            raise ValueError("fiducials are not required for this run")
+        images = self.fetch_run_images(run_id)
+        if not images:
+            raise ValueError("scan image is required before fiducial detection")
+
+        fiducials = self._build_mock_fiducials(images[0]["id"])
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET fiducial_status = ?, fiducials_json = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "needs_review",
+                    json.dumps(fiducials),
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=True,
+                        fiducial_status="needs_review",
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
+
+    def confirm_fiducials(self, run_id: str) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET fiducial_status = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "confirmed",
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=bool(run_row.get("requires_fiducials")),
+                        fiducial_status="confirmed",
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
+
+    def detect_barcode(self, run_id: str) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        if not run_row["requires_barcode"]:
+            raise ValueError("barcode is not required for this run")
+        images = self.fetch_run_images(run_id)
+        if not images:
+            raise ValueError("scan image is required before barcode detection")
+
+        barcode = self._build_mock_barcode(images[0]["id"], str(run_row["pcb_id"]))
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET barcode_status = ?, barcode_json = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "needs_review",
+                    json.dumps(barcode),
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=bool(run_row.get("requires_fiducials")),
+                        fiducial_status=str(run_row.get("fiducial_status") or "not_required"),
+                        requires_barcode=True,
+                        barcode_status="needs_review",
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
+
+    def confirm_barcode(self, run_id: str) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET barcode_status = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "confirmed",
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=bool(run_row.get("requires_fiducials")),
+                        fiducial_status=str(run_row.get("fiducial_status") or "not_required"),
+                        requires_barcode=bool(run_row.get("requires_barcode")),
+                        barcode_status="confirmed",
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
 
     @staticmethod
     def _derive_run_status(events: list[InferenceEvent]) -> str:
@@ -543,11 +800,61 @@ class DatabaseManager:
     def _build_default_pcb_id(run_id: str) -> str:
         return f"RUN-{run_id.split('-')[0].upper()}"
 
-    def _calculate_setup_status(self, run_id: str, model_name: object) -> str:
-        if model_name and str(model_name).strip() and self.fetch_run_images(run_id):
+    @staticmethod
+    def _build_mock_fiducials(run_image_id: str) -> list[dict[str, object]]:
+        return [
+            {"id": "fid-1", "run_image_id": run_image_id, "x": 0.08, "y": 0.1, "width": 0.035, "height": 0.035, "confidence": 0.98},
+            {"id": "fid-2", "run_image_id": run_image_id, "x": 0.86, "y": 0.12, "width": 0.035, "height": 0.035, "confidence": 0.94},
+            {"id": "fid-3", "run_image_id": run_image_id, "x": 0.12, "y": 0.82, "width": 0.035, "height": 0.035, "confidence": 0.91},
+        ]
+
+    def _calculate_fiducial_status(self, run_id: str, *, requires_fiducials: bool, current_status: str) -> str:
+        if not requires_fiducials:
+            return "not_required"
+        if not self.fetch_run_images(run_id):
+            return "blocked"
+        if current_status in {"needs_review", "confirmed"}:
+            return current_status
+        return "ready"
+
+    def _calculate_barcode_status(self, run_id: str, *, requires_barcode: bool, current_status: str) -> str:
+        if not requires_barcode:
+            return "not_required"
+        if not self.fetch_run_images(run_id):
+            return "blocked"
+        if current_status in {"needs_review", "confirmed"}:
+            return current_status
+        return "ready"
+
+    def _calculate_setup_status(
+        self,
+        run_id: str,
+        model_name: object,
+        *,
+        requires_fiducials: bool = False,
+        fiducial_status: str = "not_required",
+        requires_barcode: bool = False,
+        barcode_status: str = "not_required",
+    ) -> str:
+        has_model = bool(model_name and str(model_name).strip())
+        has_images = bool(self.fetch_run_images(run_id))
+        fiducials_ready = (not requires_fiducials or fiducial_status == "confirmed")
+        barcode_ready = (not requires_barcode or barcode_status == "confirmed")
+        if has_model and has_images and fiducials_ready and barcode_ready:
             return "review_ready"
-        if model_name and str(model_name).strip():
-            return "in_progress"
-        if self.fetch_run_images(run_id):
+        if has_model or has_images:
             return "in_progress"
         return "not_ready"
+
+    @staticmethod
+    def _build_mock_barcode(run_image_id: str, pcb_id: str) -> dict[str, object]:
+        return {
+            "id": "barcode-1",
+            "run_image_id": run_image_id,
+            "x": 0.72,
+            "y": 0.78,
+            "width": 0.16,
+            "height": 0.08,
+            "confidence": 0.93,
+            "decoded_value": f"{pcb_id}-LOT-01",
+        }

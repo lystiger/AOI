@@ -87,6 +87,58 @@ function EmptyStateMessage({ title, body }) {
   )
 }
 
+function FiducialPreview({ image, fiducials }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to preview fiducial detection.</div>
+  }
+
+  return (
+    <div className="fiducial-preview">
+      <img src={image.image_path} alt="Fiducial preview" />
+      {fiducials.map((fiducial) => (
+        <div
+          key={fiducial.id}
+          className="fiducial-box"
+          style={{
+            left: `${fiducial.x * 100}%`,
+            top: `${fiducial.y * 100}%`,
+            width: `${fiducial.width * 100}%`,
+            height: `${fiducial.height * 100}%`,
+          }}
+        >
+          <span>{Math.round(fiducial.confidence * 100)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function BarcodePreview({ image, barcode }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to preview barcode detection.</div>
+  }
+  if (!barcode) {
+    return <div className="empty-state">Run barcode detection to preview the detected region.</div>
+  }
+
+  return (
+    <div className="fiducial-preview">
+      <img src={image.image_path} alt="Barcode preview" />
+      <div
+        className="barcode-box"
+        style={{
+          left: `${barcode.x * 100}%`,
+          top: `${barcode.y * 100}%`,
+          width: `${barcode.width * 100}%`,
+          height: `${barcode.height * 100}%`,
+        }}
+      >
+        <span>{barcode.decoded_value}</span>
+      </div>
+    </div>
+  )
+}
+
 function RunCard({ run, active, onSelect }) {
   return (
     <button
@@ -334,15 +386,26 @@ function SetupFlow({
   steps,
   activeStep,
   selectedRun,
+  selectedImage,
   modelDraft,
+  requiresFiducialsDraft,
+  requiresBarcodeDraft,
   onModelDraftChange,
+  onRequiresFiducialsChange,
+  onRequiresBarcodeChange,
   onCreateRun,
   onUploadScan,
   onSaveModel,
+  onDetectFiducials,
+  onConfirmFiducials,
+  onDetectBarcode,
+  onConfirmBarcode,
   onContinueToReview,
   isCreatingRun,
   isUploading,
   isSavingModel,
+  isDetectingFiducials,
+  isDetectingBarcode,
 }) {
   return (
     <div className="setup-shell">
@@ -400,6 +463,22 @@ function SetupFlow({
                 <span>Model Name</span>
                 <input value={modelDraft} onChange={(event) => onModelDraftChange(event.target.value)} />
               </label>
+              <label className="setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={requiresFiducialsDraft}
+                  onChange={(event) => onRequiresFiducialsChange(event.target.checked)}
+                />
+                <span>Require fiducial alignment for this product</span>
+              </label>
+              <label className="setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={requiresBarcodeDraft}
+                  onChange={(event) => onRequiresBarcodeChange(event.target.checked)}
+                />
+                <span>Require barcode validation for this product</span>
+              </label>
               <p>Set the model name now so later steps can decide whether fiducials or barcode validation are required.</p>
               <button
                 type="button"
@@ -414,13 +493,81 @@ function SetupFlow({
 
           {activeStep.id === 'fiducials' ? (
             <div className="setup-action-card">
-              <p>This product does not require fiducial setup in Phase 1. The step stays available for the later automation rollout.</p>
+              {!selectedRun?.requires_fiducials ? (
+                <p>Fiducials are not required for this product. Enable them in the model step if the product needs alignment marks.</p>
+              ) : (
+                <>
+                  <p>Run automated fiducial search, review the overlay results, then confirm when the locations look correct.</p>
+                  <FiducialPreview image={selectedImage} fiducials={selectedRun?.fiducials || []} />
+                  <div className="setup-button-row">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={onDetectFiducials}
+                      disabled={isDetectingFiducials || !selectedImage}
+                    >
+                      {isDetectingFiducials ? 'Detecting...' : 'Detect Fiducials'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onConfirmFiducials}
+                      disabled={selectedRun?.fiducial_status !== 'needs_review'}
+                    >
+                      Confirm Fiducials
+                    </button>
+                  </div>
+                  {selectedRun?.fiducials?.length ? (
+                    <div className="fiducial-list">
+                      {selectedRun.fiducials.map((fiducial) => (
+                        <div key={fiducial.id} className="fiducial-list-item">
+                          <strong>{fiducial.id}</strong>
+                          <span>{Math.round(fiducial.confidence * 100)}% confidence</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
 
           {activeStep.id === 'barcode' ? (
             <div className="setup-action-card">
-              <p>This product does not require barcode setup in Phase 1. The step stays available for the later automation rollout.</p>
+              {!selectedRun?.requires_barcode ? (
+                <p>Barcode validation is not required for this product. Enable it in the model step if the product needs barcode confirmation.</p>
+              ) : (
+                <>
+                  <p>Run automated barcode search, review the decoded result, then confirm when the location and value are correct.</p>
+                  <BarcodePreview image={selectedImage} barcode={selectedRun?.barcode} />
+                  <div className="setup-button-row">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={onDetectBarcode}
+                      disabled={isDetectingBarcode || !selectedImage}
+                    >
+                      {isDetectingBarcode ? 'Detecting...' : 'Detect Barcode'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onConfirmBarcode}
+                      disabled={selectedRun?.barcode_status !== 'needs_review'}
+                    >
+                      Confirm Barcode
+                    </button>
+                  </div>
+                  {selectedRun?.barcode ? (
+                    <div className="fiducial-list">
+                      <div className="fiducial-list-item">
+                        <strong>{selectedRun.barcode.id}</strong>
+                        <span>{selectedRun.barcode.decoded_value}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
 
@@ -445,6 +592,10 @@ function SetupFlow({
             <strong>{selectedRun?.images?.length ? 'Attached' : 'Missing'}</strong>
             <span>Model</span>
             <strong>{selectedRun?.model_name || 'Unset'}</strong>
+            <span>Fiducials</span>
+            <strong>{selectedRun?.requires_fiducials ? selectedRun?.fiducial_status || 'Required' : 'Not required'}</strong>
+            <span>Barcode</span>
+            <strong>{selectedRun?.requires_barcode ? selectedRun?.barcode_status || 'Required' : 'Not required'}</strong>
             <span>Setup</span>
             <strong>{selectedRun?.setup_status || 'Not started'}</strong>
           </div>
@@ -476,7 +627,11 @@ function App() {
   const [isUploading, setIsUploading] = useState(false)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
+  const [isDetectingFiducials, setIsDetectingFiducials] = useState(false)
+  const [isDetectingBarcode, setIsDetectingBarcode] = useState(false)
   const [modelDraft, setModelDraft] = useState('')
+  const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
+  const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
   const [dismissedSetupRuns, setDismissedSetupRuns] = useState({})
   const fileInputRef = useRef(null)
 
@@ -556,7 +711,11 @@ function App() {
       const response = await fetch(`/runs/${selectedRunId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model_name: modelDraft.trim() }),
+        body: JSON.stringify({
+          model_name: modelDraft.trim(),
+          requires_fiducials: requiresFiducialsDraft,
+          requires_barcode: requiresBarcodeDraft,
+        }),
       })
       const payload = await response.json()
       if (!response.ok || payload.status === 'error') {
@@ -576,6 +735,124 @@ function App() {
       setError(`Model Save Error: ${err.message}`)
     } finally {
       setIsSavingModel(false)
+    }
+  }
+
+  async function handleDetectFiducials() {
+    if (!selectedRunId) {
+      return
+    }
+    setIsDetectingFiducials(true)
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/fiducials/detect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Fiducial detection failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setError(`Fiducial Detection Error: ${err.message}`)
+    } finally {
+      setIsDetectingFiducials(false)
+    }
+  }
+
+  async function handleConfirmFiducials() {
+    if (!selectedRunId) {
+      return
+    }
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/fiducials/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Fiducial confirmation failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setError(`Fiducial Confirm Error: ${err.message}`)
+    }
+  }
+
+  async function handleDetectBarcode() {
+    if (!selectedRunId) {
+      return
+    }
+    setIsDetectingBarcode(true)
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/barcode/detect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Barcode detection failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setError(`Barcode Detection Error: ${err.message}`)
+    } finally {
+      setIsDetectingBarcode(false)
+    }
+  }
+
+  async function handleConfirmBarcode() {
+    if (!selectedRunId) {
+      return
+    }
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/barcode/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Barcode confirmation failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setError(`Barcode Confirm Error: ${err.message}`)
     }
   }
 
@@ -717,9 +994,15 @@ function App() {
 
   useEffect(() => {
     setModelDraft(selectedRun?.model_name || '')
-  }, [selectedRun?.id, selectedRun?.model_name])
+    setRequiresFiducialsDraft(Boolean(selectedRun?.requires_fiducials))
+    setRequiresBarcodeDraft(Boolean(selectedRun?.requires_barcode))
+  }, [selectedRun?.id, selectedRun?.model_name, selectedRun?.requires_fiducials, selectedRun?.requires_barcode])
 
   const setupSteps = useMemo(() => {
+    const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
+    const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
+    const requiresBarcode = Boolean(selectedRun?.requires_barcode)
+    const barcodeStatus = selectedRun?.barcode_status || 'not_required'
     const baseSteps = [
       {
         id: 'create-run',
@@ -749,21 +1032,49 @@ function App() {
         id: 'fiducials',
         order: 4,
         label: 'Find Fiducial Marks',
-        description: 'Reserved for model-driven automated fiducial setup in the next phase.',
-        status: 'not_required',
-        statusLabel: 'Not Required',
+        description: 'Detect and confirm fiducial marks when the selected model requires alignment setup.',
+        status: !requiresFiducials ? 'not_required' : fiducialStatus === 'confirmed' ? 'done' : fiducialStatus,
+        statusLabel:
+          !requiresFiducials
+            ? 'Not Required'
+            : fiducialStatus === 'confirmed'
+              ? 'Done'
+              : fiducialStatus === 'needs_review'
+                ? 'Needs Review'
+                : fiducialStatus === 'ready'
+                  ? 'Ready'
+                  : fiducialStatus === 'blocked'
+                    ? 'Blocked'
+                    : 'Ready',
       },
       {
         id: 'barcode',
         order: 5,
         label: 'Find Barcode',
-        description: 'Reserved for model-driven automated barcode setup in the next phase.',
-        status: 'not_required',
-        statusLabel: 'Not Required',
+        description: 'Detect and confirm barcode position and decoded value when the selected model requires barcode validation.',
+        status: !requiresBarcode ? 'not_required' : barcodeStatus === 'confirmed' ? 'done' : barcodeStatus,
+        statusLabel:
+          !requiresBarcode
+            ? 'Not Required'
+            : barcodeStatus === 'confirmed'
+              ? 'Done'
+              : barcodeStatus === 'needs_review'
+                ? 'Needs Review'
+                : barcodeStatus === 'ready'
+                  ? 'Ready'
+                  : barcodeStatus === 'blocked'
+                    ? 'Blocked'
+                    : 'Ready',
       },
     ]
 
-    const isReviewReady = Boolean(selectedRunId && hasScan && hasModel)
+    const isReviewReady = Boolean(
+      selectedRunId &&
+      hasScan &&
+      hasModel &&
+      (!requiresFiducials || fiducialStatus === 'confirmed') &&
+      (!requiresBarcode || barcodeStatus === 'confirmed'),
+    )
     baseSteps.push({
       id: 'continue-review',
       order: 6,
@@ -774,6 +1085,7 @@ function App() {
     })
 
     const activeStepId =
+      baseSteps.find((step) => step.status === 'needs_review')?.id ||
       baseSteps.find((step) => step.status === 'ready')?.id ||
       baseSteps.find((step) => step.status === 'blocked')?.id ||
       baseSteps.at(-1)?.id
@@ -1039,15 +1351,26 @@ function App() {
               steps={setupSteps}
               activeStep={activeSetupStep}
               selectedRun={selectedRun}
+              selectedImage={selectedImage}
               modelDraft={modelDraft}
+              requiresFiducialsDraft={requiresFiducialsDraft}
+              requiresBarcodeDraft={requiresBarcodeDraft}
               onModelDraftChange={setModelDraft}
+              onRequiresFiducialsChange={setRequiresFiducialsDraft}
+              onRequiresBarcodeChange={setRequiresBarcodeDraft}
               onCreateRun={handleCreateRun}
               onUploadScan={openImagePicker}
               onSaveModel={handleSaveModel}
+              onDetectFiducials={handleDetectFiducials}
+              onConfirmFiducials={handleConfirmFiducials}
+              onDetectBarcode={handleDetectBarcode}
+              onConfirmBarcode={handleConfirmBarcode}
               onContinueToReview={handleContinueToReview}
               isCreatingRun={isCreatingRun}
               isUploading={isUploading}
               isSavingModel={isSavingModel}
+              isDetectingFiducials={isDetectingFiducials}
+              isDetectingBarcode={isDetectingBarcode}
             />
           ) : (
           <div className={`review-shell ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>

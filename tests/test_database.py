@@ -37,6 +37,10 @@ def test_persist_events_creates_run_and_defect_logs(tmp_path) -> None:
     assert run_row["model_version"] == "v1.2.3"
     assert run_row["model_name"] is None
     assert run_row["setup_status"] == "review_ready"
+    assert run_row["requires_fiducials"] is False
+    assert run_row["fiducial_status"] == "not_required"
+    assert run_row["requires_barcode"] is False
+    assert run_row["barcode_status"] == "not_required"
     assert len(run_images) == 1
     assert run_images[0]["image_path"] == "/mock/pcb-example-2nd.png"
     assert len(defect_rows) == 2
@@ -94,6 +98,10 @@ def test_create_run_initializes_setup_state(tmp_path) -> None:
     assert run["status"] == "SETUP"
     assert run["model_name"] is None
     assert run["setup_status"] == "not_ready"
+    assert run["requires_fiducials"] is False
+    assert run["fiducial_status"] == "not_required"
+    assert run["requires_barcode"] is False
+    assert run["barcode_status"] == "not_required"
 
 
 def test_update_run_marks_review_ready_once_model_and_image_exist(tmp_path) -> None:
@@ -114,6 +122,64 @@ def test_update_run_marks_review_ready_once_model_and_image_exist(tmp_path) -> N
     assert updated_run is not None
     assert updated_run["model_name"] == "MODEL-123"
     assert updated_run["setup_status"] == "review_ready"
+
+
+def test_detect_and_confirm_fiducials_updates_run_state(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FID")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+
+    updated_run = database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+    assert updated_run is not None
+    assert updated_run["fiducial_status"] == "ready"
+    assert updated_run["setup_status"] == "in_progress"
+
+    detected_run = database.detect_fiducials(run["id"])
+    assert detected_run is not None
+    assert detected_run["fiducial_status"] == "needs_review"
+    assert len(detected_run["fiducials"]) == 3
+
+    confirmed_run = database.confirm_fiducials(run["id"])
+    assert confirmed_run is not None
+    assert confirmed_run["fiducial_status"] == "confirmed"
+    assert confirmed_run["setup_status"] == "review_ready"
+
+
+def test_detect_and_confirm_barcode_updates_run_state(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-BAR")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+
+    updated_run = database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+    assert updated_run is not None
+    assert updated_run["barcode_status"] == "ready"
+    assert updated_run["setup_status"] == "in_progress"
+
+    detected_run = database.detect_barcode(run["id"])
+    assert detected_run is not None
+    assert detected_run["barcode_status"] == "needs_review"
+    assert detected_run["barcode"]["decoded_value"] == "PCB-BAR-LOT-01"
+
+    confirmed_run = database.confirm_barcode(run["id"])
+    assert confirmed_run is not None
+    assert confirmed_run["barcode_status"] == "confirmed"
+    assert confirmed_run["setup_status"] == "review_ready"
 
 
 def test_persist_events_uses_provided_run_images_and_overlay_coordinates(tmp_path) -> None:

@@ -62,6 +62,18 @@ class IngestionHandler(BaseHTTPRequestHandler):
         if len(parts) == 3 and parts[0] == "runs" and parts[2] == "images":
             self._handle_post_run_image(parts[1])
             return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "fiducials" and parts[3] == "detect":
+            self._handle_detect_fiducials(parts[1])
+            return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "fiducials" and parts[3] == "confirm":
+            self._handle_confirm_fiducials(parts[1])
+            return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "barcode" and parts[3] == "detect":
+            self._handle_detect_barcode(parts[1])
+            return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "barcode" and parts[3] == "confirm":
+            self._handle_confirm_barcode(parts[1])
+            return
 
         self._write_json(
             HTTPStatus.NOT_FOUND,
@@ -146,10 +158,26 @@ class IngestionHandler(BaseHTTPRequestHandler):
                 {"status": "error", "message": "model_name must be a non-empty string"},
             )
             return
+        requires_fiducials = payload.get("requires_fiducials")
+        if "requires_fiducials" in payload and not isinstance(requires_fiducials, bool):
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"status": "error", "message": "requires_fiducials must be a boolean"},
+            )
+            return
+        requires_barcode = payload.get("requires_barcode")
+        if "requires_barcode" in payload and not isinstance(requires_barcode, bool):
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"status": "error", "message": "requires_barcode must be a boolean"},
+            )
+            return
 
         run = self.server.database_manager.update_run(
             run_id,
             model_name=model_name if "model_name" in payload else None,
+            requires_fiducials=requires_fiducials if "requires_fiducials" in payload else None,
+            requires_barcode=requires_barcode if "requires_barcode" in payload else None,
         )
         if run is None:
             self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
@@ -192,12 +220,56 @@ class IngestionHandler(BaseHTTPRequestHandler):
             f.write(image_data)
 
         image_id = str(uuid.uuid4())
-        self.server.database_manager._connect().execute(
-            "INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (image_id, run_id, f"/runs/{run_id}/images/{image_id}", "full_board", 1600, 900, run["timestamp"])
+        updated_run = self.server.database_manager.add_run_image(
+            run_id,
+            image_id=image_id,
+            image_path=f"/runs/{run_id}/images/{image_id}",
+            image_role="full_board",
+            image_width=1600,
+            image_height=900,
+            created_at=str(run["timestamp"]),
         )
+        if updated_run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
 
-        self._write_json(HTTPStatus.CREATED, {"status": "ok", "image_id": image_id})
+        self._write_json(HTTPStatus.CREATED, {"status": "ok", "image_id": image_id, "run": updated_run})
+
+    def _handle_detect_fiducials(self, run_id: str) -> None:
+        try:
+            run = self.server.database_manager.detect_fiducials(run_id)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_confirm_fiducials(self, run_id: str) -> None:
+        run = self.server.database_manager.confirm_fiducials(run_id)
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_detect_barcode(self, run_id: str) -> None:
+        try:
+            run = self.server.database_manager.detect_barcode(run_id)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_confirm_barcode(self, run_id: str) -> None:
+        run = self.server.database_manager.confirm_barcode(run_id)
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
 
     def _handle_get_image(self, run_id: str, image_id: str) -> None:
         run_dir = self.server.storage_path / run_id
