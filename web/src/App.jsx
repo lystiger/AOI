@@ -152,21 +152,33 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
 
   function focusDefect(defectId) {
     const defect = defects.find((entry) => entry.id === defectId)
-    if (!defect || !viewerRef.current) {
+    if (!defect || !viewerRef.current || !image) {
       return
     }
 
     onSelectDefect(defect.id)
-    const nextScale = 2.5
-    const bounds = viewerRef.current.getBoundingClientRect()
-    const centerX = (defect.overlay_x + defect.overlay_width / 2) * bounds.width
-    const centerY = (defect.overlay_y + defect.overlay_height / 2) * bounds.height
+
+    // Industrial Centering Math
+    // 1. Find the target center in normalized coordinates (0 to 1)
+    const targetX = defect.overlay_x + defect.overlay_width / 2
+    const targetY = defect.overlay_y + defect.overlay_height / 2
+
+    // 2. Set a comfortable zoom level for component inspection
+    // We target a scale that makes the component roughly 30% of the screen
+    const componentSize = Math.max(defect.overlay_width, defect.overlay_height)
+    const nextScale = clamp(0.3 / (componentSize || 0.1), 1.5, 6)
+
+    // 3. Calculate offset relative to the IMAGE CENTER (0.5, 0.5)
+    // Since CSS centers the stage, offset {0,0} is the image center.
+    // We need to shift the stage by the distance from center to target, negated.
+    const imgWidth = image.image_width || 1600
+    const imgHeight = image.image_height || 900
+
+    const offsetX = -(targetX - 0.5) * imgWidth * nextScale
+    const offsetY = -(targetY - 0.5) * imgHeight * nextScale
 
     setViewerScale(nextScale)
-    setViewerOffset({
-      x: bounds.width / 2 - centerX * nextScale,
-      y: bounds.height / 2 - centerY * nextScale,
-    })
+    setViewerOffset({ x: offsetX, y: offsetY })
   }
 
   function startDrag(event) {
