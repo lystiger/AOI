@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +34,11 @@ class IngestionHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith("/runs/"):
+            parts = [p for p in parsed.path.split("/") if p]
+            # Pattern: /runs/<run_id>/images/<image_id>
+            if len(parts) == 4 and parts[2] == "images":
+                self._handle_get_image(parts[1], parts[3])
+                return
             self._handle_get_run(self.path)
             return
 
@@ -42,28 +48,29 @@ class IngestionHandler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path != "/events":
-            self._write_json(
-                HTTPStatus.NOT_FOUND,
-                {"status": "error", "message": "route not found"},
-            )
+        parsed = urlparse(self.path)
+        if parsed.path == "/events":
+            self._handle_post_events()
             return
 
+        # Pattern: /runs/<run_id>/images
+        parts = [p for p in parsed.path.split("/") if p]
+        if len(parts) == 3 and parts[0] == "runs" and parts[2] == "images":
+            self._handle_post_run_image(parts[1])
+            return
+
+        self._write_json(
+            HTTPStatus.NOT_FOUND,
+            {"status": "error", "message": "route not found"},
+        )
+
+    def _handle_post_events(self) -> None:
         try:
             raw_body = self._read_body()
             payload = json.loads(raw_body)
             events, model_version, images = self._parse_payload(payload)
-        except json.JSONDecodeError:
-            self._write_json(
-                HTTPStatus.BAD_REQUEST,
-                {"status": "error", "message": "request body must be valid JSON"},
-            )
-            return
-        except ValueError as exc:
-            self._write_json(
-                HTTPStatus.BAD_REQUEST,
-                {"status": "error", "message": str(exc)},
-            )
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
             return
 
         for event in events:
@@ -79,14 +86,73 @@ class IngestionHandler(BaseHTTPRequestHandler):
             HTTPStatus.ACCEPTED,
             {
                 "status": "accepted",
-                "accepted": len(events),
                 "run_id": persisted_run.run_id,
-                "run_status": persisted_run.status,
             },
         )
 
     def log_message(self, format: str, *args: object) -> None:
         return
+
+    def _handle_post_run_image(self, run_id: str) -> None:
+        run = self.server.database_manager.fetch_run(run_id)
+        if not run:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+
+        content_length_str = self.headers.get("Content-Length", "0")
+        try:
+            content_length = int(content_length_str)
+        except ValueError:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "invalid content length"})
+            return
+
+        if content_length == 0:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "empty image body"})
+            return
+
+        image_data = self.rfile.read(content_length)
+        
+        ext = "png"
+        content_type = self.headers.get("Content-Type", "image/png")
+        if "jpeg" in content_type:
+            ext = "jpg"
+            
+        image_filename = f"scan.{ext}"
+        run_dir = self.server.storage_path / run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        file_path = run_dir / image_filename
+
+        with open(file_path, "wb") as f:
+            f.write(image_data)
+
+        image_id = str(uuid.uuid4())
+        self.server.database_manager._connect().execute(
+            "INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (image_id, run_id, f"/runs/{run_id}/images/{image_id}", "full_board", 1600, 900, run["timestamp"])
+        )
+
+        self._write_json(HTTPStatus.CREATED, {"status": "ok", "image_id": image_id})
+
+    def _handle_get_image(self, run_id: str, image_id: str) -> None:
+        run_dir = self.server.storage_path / run_id
+        image_file = None
+        for ext in ["png", "jpg", "jpeg"]:
+            candidate = run_dir / f"scan.{ext}"
+            if candidate.exists():
+                image_file = candidate
+                break
+
+        if not image_file:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "image not found"})
+            return
+
+        self.send_response(HTTPStatus.OK)
+        content_type = "image/png" if image_file.suffix == ".png" else "image/jpeg"
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(image_file.stat().st_size))
+        self.end_headers()
+        with open(image_file, "rb") as f:
+            self.wfile.write(f.read())
 
     def _read_body(self) -> str:
         content_length = self.headers.get("Content-Length")
@@ -265,19 +331,24 @@ class IngestionServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         log_manager: LogManager,
         database_manager: DatabaseManager,
+        storage_path: Path,
     ) -> None:
         super().__init__(server_address, IngestionHandler)
         self.log_manager = log_manager
         self.database_manager = database_manager
+        self.storage_path = storage_path
+        self.storage_path.mkdir(parents=True, exist_ok=True)
 
 
-def run_server(*, host: str, port: int, log_path: Path, db_path: Path) -> None:
+def run_server(*, host: str, port: int, log_path: Path, db_path: Path, storage_path: Path) -> None:
     server = IngestionServer(
         (host, port),
         LogManager(log_path),
         DatabaseManager(db_path),
+        storage_path,
     )
     print(f"AOI ingestion service listening on http://{host}:{port}", flush=True)
+    print(f"Storing run assets in: {storage_path.absolute()}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

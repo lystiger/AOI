@@ -50,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("data/aoi.db"),
         help="path to SQLite database file",
     )
+    serve.add_argument(
+        "--storage-path",
+        type=Path,
+        default=Path("data/storage"),
+        help="path to store uploaded run assets",
+    )
 
     sender = subparsers.add_parser("send-mock-events", help="send mock events to the HTTP service")
     sender.add_argument("--batch-size", type=int, default=5, help="events sent per cycle")
@@ -89,7 +95,13 @@ def main() -> None:
         return
 
     if args.command == "serve-http":
-        run_server(host=args.host, port=args.port, log_path=args.output, db_path=args.db_path)
+        run_server(
+            host=args.host,
+            port=args.port,
+            log_path=args.output,
+            db_path=args.db_path,
+            storage_path=args.storage_path,
+        )
         return
 
     if args.command == "send-mock-events":
