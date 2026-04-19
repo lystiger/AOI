@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
-from aoi.schema import InferenceEvent
+from aoi.schema import InferenceEvent, RunImageInput
 
 
 class IngestionHandler(BaseHTTPRequestHandler):
@@ -52,7 +52,7 @@ class IngestionHandler(BaseHTTPRequestHandler):
         try:
             raw_body = self._read_body()
             payload = json.loads(raw_body)
-            events, model_version = self._parse_payload(payload)
+            events, model_version, images = self._parse_payload(payload)
         except json.JSONDecodeError:
             self._write_json(
                 HTTPStatus.BAD_REQUEST,
@@ -72,6 +72,7 @@ class IngestionHandler(BaseHTTPRequestHandler):
         persisted_run = self.server.database_manager.persist_events(
             events=events,
             model_version=model_version,
+            images=images,
         )
 
         self._write_json(
@@ -99,14 +100,26 @@ class IngestionHandler(BaseHTTPRequestHandler):
             raise ValueError("request body must not be empty")
         return self.rfile.read(length).decode("utf-8")
 
-    def _parse_payload(self, payload: object) -> tuple[list[InferenceEvent], str | None]:
+    def _parse_payload(
+        self, payload: object
+    ) -> tuple[list[InferenceEvent], str | None, list[RunImageInput] | None]:
         model_version: str | None = None
+        images: list[RunImageInput] | None = None
         if isinstance(payload, dict):
             raw_model_version = payload.get("model_version")
             if raw_model_version is not None:
                 if not isinstance(raw_model_version, str) or not raw_model_version.strip():
                     raise ValueError("model_version must be a non-empty string when provided")
                 model_version = raw_model_version
+            raw_images = payload.get("images")
+            if raw_images is not None:
+                if not isinstance(raw_images, list) or not raw_images:
+                    raise ValueError("images must be a non-empty list when provided")
+                images = []
+                for item in raw_images:
+                    if not isinstance(item, dict):
+                        raise ValueError("each image must be a JSON object")
+                    images.append(RunImageInput.from_dict(item))
             raw_events = payload.get("events", [payload])
         elif isinstance(payload, list):
             raw_events = payload
@@ -121,7 +134,7 @@ class IngestionHandler(BaseHTTPRequestHandler):
             if not isinstance(item, dict):
                 raise ValueError("each event must be a JSON object")
             events.append(InferenceEvent.from_dict(item))
-        return events, model_version
+        return events, model_version, images
 
     def _handle_list_runs(self, query_string: str) -> None:
         query = parse_qs(query_string)

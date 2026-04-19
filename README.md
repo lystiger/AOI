@@ -51,6 +51,39 @@ curl -X POST http://127.0.0.1:8000/events \
   -d '{"events":[{"pcb_id":"PCB-0001","component_id":"R101","inspection_result":"FAIL","defect_type":"MISALIGNMENT","confidence_score":0.88,"inference_latency_ms":31}]}'
 ```
 
+Send one event with explicit run image metadata and overlay coordinates:
+
+```bash
+curl -X POST http://127.0.0.1:8000/events \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "images": [
+      {
+        "image_path": "/runs/PCB-0001/images/top.png",
+        "image_role": "top_view",
+        "image_width": 1600,
+        "image_height": 900
+      }
+    ],
+    "events": [
+      {
+        "pcb_id": "PCB-0001",
+        "component_id": "R101",
+        "inspection_result": "FAIL",
+        "defect_type": "MISALIGNMENT",
+        "confidence_score": 0.88,
+        "inference_latency_ms": 31,
+        "run_image_index": 0,
+        "overlay_x": 0.33,
+        "overlay_y": 0.44,
+        "overlay_width": 0.07,
+        "overlay_height": 0.05,
+        "overlay_shape": "rect"
+      }
+    ]
+  }'
+```
+
 Accepted events are written as newline-delimited JSON to `logs/inference.jsonl`.
 Accepted event batches are also persisted into a SQLite database as one `inspection_run`
 plus related `defect_logs`.

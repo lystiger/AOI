@@ -2,438 +2,273 @@
 
 ## Goal
 
-Define the web UI layout for reviewing AOI inspection runs with a zoomable PCB image and clickable defect overlays.
+Define a web layout for AOI review that keeps the PCB image, defect list, and run navigation visible with minimal scrolling.
 
-This document is a UI specification for the feature planned in `docs/pcb_image_overlay_plan.md`.
+This document updates the earlier layout direction into a workstation-style screen.
 
-## Design Intent
+## Core Decision
 
-The PCB image should be the primary working surface.
+The review screen should not behave like a dashboard page.
 
-The layout should support the real operator task:
+It should behave like an operator workstation:
 
-1. open a run
-2. identify failed defects quickly
-3. jump to the defect visually
-4. inspect the marked area
-5. decide whether the call looks valid
+- thin global header
+- compact run rail
+- compact defect rail
+- large image canvas
+- almost no vertical travel before the user can inspect a defect
 
-This should feel like an AOI review console adapted for the web, not like a generic image gallery.
+## Problem With The Earlier Skeleton
 
-## Core Principles
+The earlier version had the right building blocks, but it still stacked too much content vertically:
 
-- the board image is the main content, not a secondary attachment
-- defect navigation should be driven by both image overlays and structured defect rows
-- zoom and pan are necessary, but they should support defect review rather than replace it
-- the interface should stay usable when a run has no image
-- controls should be lighter than a desktop AOI machine UI
+- hero area
+- summary cards
+- run history panel
+- review cards
+- image viewer
 
-## Recommended Screen Structure
+That makes the user scroll before the core inspection loop is even visible.
 
-Use a three-part layout on desktop:
+## Revised First-Screen Rule
 
-1. left panel: run context and defect list
-2. main canvas: zoomable PCB image with overlays
-3. top utility bar: image controls and quick navigation
+On desktop, the first screen should show all of the following at once:
 
-### Desktop Layout
+- current run identity
+- defect list
+- PCB image
+- zoom controls
+- defect navigation controls
 
-Suggested structure:
+If any of those are below the fold by default, the layout is wrong for this workflow.
+
+## Recommended Desktop Structure
 
 ```text
-+---------------------------------------------------------------+
-| Header: Run title | status | image selector | zoom controls   |
-+----------------------+----------------------------------------+
-| Left panel           | Main image canvas                      |
-|                      |                                        |
-| Run summary          |  PCB image                             |
-| Defect filters       |  bounding boxes / markers              |
-| Defect list          |  selected-defect callout               |
-| Selected detail      |                                        |
-|                      |                                        |
-+----------------------+----------------------------------------+
++------------------------------------------------------------------+
+| Thin top bar: title | run counts | API/Grafana links             |
++------------------------+-----------------------------------------+
+| Run rail               | Review workspace                        |
+|                        |                                         |
+| Run filters            | Run line + image selector + prev/next   |
+| Run history            |-----------------------------------------|
+|                        | Defect rail        | Large PCB canvas   |
+|                        | filters            | overlays           |
+|                        | defect list        | zoom / pan         |
+|                        | compact inspector  |                    |
++------------------------+-----------------------------------------+
 ```
-
-### Mobile / Narrow Layout
-
-Use a stacked layout:
-
-1. header and quick controls
-2. image canvas
-3. selected defect summary
-4. defect list
-
-On small screens, avoid showing a persistent side panel beside the image.
 
 ## Layout Regions
 
-### 1. Header / Utility Bar
+### 1. Thin Top Bar
 
 Purpose:
 
-- identify the current run
-- expose the minimum set of image controls
-- give access to quick navigation
+- identify the screen
+- show small summary counts
+- expose links to API and Grafana
 
-Recommended contents:
+Do not place large descriptive copy here.
 
-- run ID or PCB ID
-- run status chip
-- image selector if multiple images exist
-- `Fit board`
-- `Fit defect`
-- zoom in
-- zoom out
-- reset view
-- next defect
-- previous defect
+Recommended content:
 
-Controls that should be avoided in the first release:
+- title
+- run count
+- fail-run count
+- event count
+- API link
+- Grafana link
 
-- large floating icon stacks
-- freeform drawing tools
-- rotate image tools unless the source images actually require rotation
-
-### 2. Left Panel
+### 2. Run Rail
 
 Purpose:
 
-- keep structured inspection context visible
-- provide fast, defect-driven navigation
+- support switching runs quickly
+- keep run filtering available without taking over the page
 
-Recommended sections:
+Contents:
 
-#### Run Summary
+- compact run filters
+- scrollable run history list
 
-Include:
+Rules:
+
+- visually dense
+- independently scrollable
+- no large cards
+
+### 3. Review Top Bar
+
+Purpose:
+
+- identify the active run
+- expose the minimum set of review controls
+
+Contents:
 
 - PCB ID
+- status chip
 - timestamp
-- status
-- model version
-- total event count
-- fail count
+- fail defect count
+- image selector
+- previous defect
+- next defect
 
-#### Defect Filters
+This should be a thin control bar inside the review workspace, not a large header block.
 
-Include:
-
-- defect type
-- severity
-- inspection result
-- component search
-- review status if that state exists later
-
-#### Defect List
-
-Each row should show:
-
-- component ID
-- defect type
-- severity
-- confidence score
-- review state
-
-Each row should support:
-
-- click to focus the corresponding overlay
-- hover to highlight the corresponding overlay
-
-#### Selected Defect Detail
-
-When a defect is selected, show:
-
-- component ID
-- defect type
-- severity
-- inspection result
-- confidence score
-- timestamp
-- image name or view name
-
-This section should be compact. The image remains the main inspection surface.
-
-### 3. Main PCB Canvas
+### 4. Defect Rail
 
 Purpose:
 
-- present the board image as the central evidence view
-- allow the operator to inspect the marked region closely
+- drive navigation through the image
+- keep filters and selected-defect context nearby
+
+Contents:
+
+- compact defect filters
+- scrollable defect list
+- compact inspector for the selected defect
+
+Rules:
+
+- this rail must not push the image downward
+- the defect list should take most of the rail height
+- selected-defect detail should be compact, not a large summary section
+
+### 5. Main PCB Canvas
+
+Purpose:
+
+- present the visual evidence as the primary inspection surface
 
 Behavior:
 
-- image should fit the available canvas by default
-- zoom should center on the pointer or selected defect
-- pan should be enabled when zoomed in
-- overlays should scale with the image
-- the selected defect should remain visually distinct at all zoom levels
+- full board visible by default
+- overlays visible immediately
+- zoom with wheel or buttons
+- pan when zoomed
+- click box to select defect
+- double click or command action to fit selected defect
 
-The canvas should support:
+The canvas should dominate the workspace visually.
 
-- mouse wheel zoom
-- drag to pan
-- click overlay to select defect
-- keyboard navigation for next/previous defect if practical
+## Interaction Model
 
-## Overlay Design
-
-### Overlay Types
-
-First release should support:
-
-- rectangle bounding boxes
-
-Later releases may support:
-
-- points
-- polygons
-- segmentation masks
-
-### Overlay States
-
-The overlays need more than one color if the user is expected to review them.
-
-Recommended states:
-
-- `default`: visible but not emphasized
-- `hovered`: stronger outline
-- `selected`: strongest outline and optional glow
-- `confirmed`: stable success color
-- `false_positive`: muted or alternate color
-- `hidden_by_filter`: not rendered
-
-### Visual Rules
-
-- overlays must remain visible on dark and bright PCB areas
-- selected overlays should use stronger stroke width, not only color
-- small defects should have a minimum clickable target
-- labels should not permanently clutter the board at full zoom-out
-
-Recommended approach:
-
-- draw boxes at all times
-- show labels only for hovered or selected overlays
-
-## Selection And Navigation Model
-
-Selection must be synchronized across all views.
-
-### Defect Row -> Canvas
+### Row To Canvas
 
 When the user clicks a defect row:
 
-- that defect becomes selected
-- the image pans or zooms to bring the defect into focus
-- the overlay becomes visually emphasized
-- the selected defect detail updates
+- select that defect
+- highlight its overlay
+- keep the image visible
 
-### Canvas -> Defect Row
+Optional but recommended:
+
+- allow a stronger focus action that zooms to the defect
+
+### Canvas To Row
 
 When the user clicks an overlay:
 
-- that defect becomes selected
-- the list scrolls to the matching row if needed
-- the selected defect detail updates
+- select that defect
+- synchronize the defect list
+- update the compact inspector
 
-### Keyboard / Sequential Navigation
+### Sequential Review
 
-Support:
+The screen must support:
 
-- next defect
 - previous defect
+- next defect
 
-These actions should move in the currently filtered order.
+These should move through the currently filtered defect order.
 
-This matters because operators often work defect-by-defect, not board-by-board manually.
+## Controls To Keep
 
-## Zoom And Pan Behavior
+- fit board
+- fit defect
+- zoom in
+- zoom out
+- previous defect
+- next defect
+- image selector if multiple images exist
 
-This is the part that can make the feature feel professional or frustrating.
+## Controls To Avoid In The First Release
 
-### Default View
+- large floating toolbars
+- freeform drawing tools
+- rotate tools unless the source images require them
+- dashboard-style summary blocks on this screen
 
-On initial load:
+## Density Guidance
 
-- fit the full board within the canvas
-- center the image
-- render all visible overlays
-
-### Zoom Controls
-
-Required:
-
-- mouse wheel or trackpad pinch zoom
-- button zoom in
-- button zoom out
-- reset view
-- fit selected defect
+This UI should be denser than the previous skeleton.
 
 Recommended:
 
-- animated transition when jumping to a defect
+- short labels
+- compact chips
+- compact filters
+- scrollable rails
+- fewer decorative surfaces
 
 Avoid:
 
-- over-smooth animation that slows defect review
+- oversized cards
+- large marketing copy
+- multiple large summary sections
+- duplicated run metadata in several places
 
-### Pan Controls
+## Mobile / Narrow Layout
 
-Required:
+On narrow screens, stack the regions in this order:
 
-- click-and-drag pan when zoomed in
+1. thin top bar
+2. review top bar
+3. image canvas
+4. defect list
+5. compact inspector
+6. run rail
 
-Recommended:
+On mobile, the image still comes before the long lists.
 
-- constrain panning enough that the user cannot lose the board entirely
-
-### Minimap
-
-A minimap is not mandatory for the first release, but becomes useful if:
-
-- images are very large
-- the user often zooms deeply
-- multi-image runs are introduced
-
-If added later, it should show:
-
-- current viewport rectangle
-- selected defect location
-
-## Empty And Fallback States
-
-### No Image For Run
-
-If a run does not have an image:
-
-- show a neutral placeholder in the canvas
-- explain that no scan image is available
-- keep the defect list usable
-
-Do not make the whole run detail page look broken.
-
-### No Defects Match Filters
-
-If filters remove all visible defects:
-
-- keep the image visible
-- hide filtered overlays
-- show a clear message in the list area
-
-### Image Failed To Load
-
-If the image path exists in metadata but cannot be loaded:
-
-- show an error state in the canvas
-- keep the defect list visible
-- avoid clearing the whole run detail panel
-
-## Recommended First-Release Scope
-
-The first release should stay tight.
+## First Release Scope
 
 Include:
 
+- compact workstation shell
 - one primary image per run
 - rectangle overlays
-- click row to focus overlay
-- click overlay to focus row
-- zoom in/out
-- drag to pan
-- fit board
-- fit selected defect
-- selected defect detail card
+- run rail
+- defect rail
+- large PCB canvas
+- compact inspector
 - no-image fallback state
 
 Defer:
 
 - annotation editing
-- overlay drawing tools
 - review comments
-- multiple synchronized panes
+- multiple synchronized image panes
 - advanced AOI machine controls
-
-## Styling Direction
-
-The UI should look like an operations tool, not a marketing dashboard.
-
-Recommended direction:
-
-- dark or neutral canvas area around the PCB image
-- high-contrast overlay colors
-- compact information density in the left panel
-- clear chips for status and severity
-- restrained motion
-
-Avoid:
-
-- oversized cards
-- decorative gradients on the inspection surface
-- visual noise that competes with overlays
-
-## Data Contract Needed By The UI
-
-The UI expects, at minimum:
-
-- run metadata
-- one or more image records
-- defect records
-- image ID linked from each defect
-- normalized overlay coordinates
-- optional overlay shape
-
-Example frontend shape:
-
-```json
-{
-  "run": {
-    "id": "run-123",
-    "pcb_id": "PCB-001",
-    "status": "FAIL",
-    "images": [
-      {
-        "id": "img-1",
-        "image_path": "/runs/run-123/images/board.png",
-        "image_width": 2048,
-        "image_height": 1536
-      }
-    ],
-    "defect_logs": [
-      {
-        "id": 10,
-        "component_id": "U002",
-        "defect_type": "MISALIGNMENT",
-        "severity": "major",
-        "inspection_result": "FAIL",
-        "run_image_id": "img-1",
-        "overlay_shape": "rect",
-        "overlay_x": 0.42,
-        "overlay_y": 0.31,
-        "overlay_width": 0.06,
-        "overlay_height": 0.04
-      }
-    ]
-  }
-}
-```
 
 ## Acceptance Criteria
 
-The layout is acceptable for the first implementation when:
+The layout is acceptable when:
 
-- the user can open a run and immediately see the board image
-- the user can zoom and pan without losing overlay alignment
-- clicking a defect row focuses the corresponding image region
-- clicking a bounding box focuses the corresponding defect row
-- the selected defect is clearly distinguishable from all others
-- the UI remains usable when no image is available
+- the image is visible immediately on desktop without scrolling
+- the defect list is visible immediately on desktop without scrolling
+- the user can move between defects without losing context
+- the run rail, defect rail, and image canvas each remain usable independently
+- the screen feels like a review workstation rather than a long reporting page
 
 ## Recommendation
 
-Build the web layout around a synchronized defect list and image canvas.
+Build the AOI review UI as a compact workstation with three active zones:
 
-The desktop AOI reference image is useful as a workflow reference, but the web implementation should simplify it:
+- run rail
+- defect rail
+- image canvas
 
-- fewer controls
-- stronger selection behavior
-- clearer list-to-image synchronization
-- more emphasis on the selected defect than on general tooling
+That is the right structure for fast defect validation and it avoids the biggest problem in the earlier version: too much vertical scrolling before the actual inspection task begins.
