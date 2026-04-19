@@ -4,8 +4,11 @@ import json
 import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+
+from PIL import Image, UnidentifiedImageError
 
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
@@ -219,14 +222,16 @@ class IngestionHandler(BaseHTTPRequestHandler):
         with open(file_path, "wb") as f:
             f.write(image_data)
 
+        image_width, image_height = self._read_image_size(image_data)
+
         image_id = str(uuid.uuid4())
         updated_run = self.server.database_manager.add_run_image(
             run_id,
             image_id=image_id,
             image_path=f"/runs/{run_id}/images/{image_id}",
             image_role="full_board",
-            image_width=1600,
-            image_height=900,
+            image_width=image_width,
+            image_height=image_height,
             created_at=str(run["timestamp"]),
         )
         if updated_run is None:
@@ -303,6 +308,18 @@ class IngestionHandler(BaseHTTPRequestHandler):
         if length < 1:
             raise ValueError("request body must not be empty")
         return self.rfile.read(length).decode("utf-8")
+
+    @staticmethod
+    def _read_image_size(image_data: bytes) -> tuple[int, int]:
+        try:
+            with Image.open(BytesIO(image_data)) as image:
+                width, height = image.size
+        except UnidentifiedImageError as exc:
+            raise ValueError("unsupported image format; upload a valid image file") from exc
+
+        if width < 1 or height < 1:
+            raise ValueError("invalid image dimensions")
+        return width, height
 
     def _parse_payload(
         self, payload: object

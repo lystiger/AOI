@@ -163,6 +163,26 @@
   align-content: start;
 }
 
+.rail-group {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.rail-group + .rail-group {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.rail-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+
 .field {
   display: grid;
   gap: 4px;
@@ -611,9 +631,18 @@
   height: 100%;
   width: 100%;
   display: flex;
+  background: var(--bg);
+}
+
+.viewer-panel {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.viewer-empty {
   align-items: center;
   justify-content: center;
-  background: var(--bg);
 }
 
 .viewer-toolbar {

@@ -184,6 +184,10 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
   const [viewerScale, setViewerScale] = useState(1)
   const [viewerOffset, setViewerOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [imageDimensions, setImageDimensions] = useState({
+    width: image?.image_width || 1600,
+    height: image?.image_height || 900,
+  })
   const dragRef = useRef({ startX: 0, startY: 0, offsetX: 0, offsetY: 0 })
   const viewerRef = useRef(null)
 
@@ -200,8 +204,8 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
     const availableHeight = bounds.height - padding
 
     // Use image metadata dimensions for calculation
-    const imgWidth = image.image_width || 1600
-    const imgHeight = image.image_height || 900
+    const imgWidth = imageDimensions.width
+    const imgHeight = imageDimensions.height
 
     const scaleX = availableWidth / imgWidth
     const scaleY = availableHeight / imgHeight
@@ -232,8 +236,8 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
     // 3. Calculate offset relative to the IMAGE CENTER (0.5, 0.5)
     // Since CSS centers the stage, offset {0,0} is the image center.
     // We need to shift the stage by the distance from center to target, negated.
-    const imgWidth = image.image_width || 1600
-    const imgHeight = image.image_height || 900
+    const imgWidth = imageDimensions.width
+    const imgHeight = imageDimensions.height
 
     const offsetX = -(targetX - 0.5) * imgWidth * nextScale
     const offsetY = -(targetY - 0.5) * imgHeight * nextScale
@@ -280,7 +284,14 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
       const timer = setTimeout(resetViewer, 50)
       return () => clearTimeout(timer)
     }
-  }, [image?.id])
+  }, [image?.id, imageDimensions.width, imageDimensions.height])
+
+  useEffect(() => {
+    setImageDimensions({
+      width: image?.image_width || 1600,
+      height: image?.image_height || 900,
+    })
+  }, [image?.id, image?.image_width, image?.image_height])
 
   return (
     <section className="viewer-panel">
@@ -336,7 +347,20 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
                 }}
               />
             )}
-            <img className="viewer-image" src={image.image_path} alt={`${run.pcb_id} board`} />
+            <img
+              className="viewer-image"
+              src={image.image_path}
+              alt={`${run.pcb_id} board`}
+              onLoad={(event) => {
+                const nextWidth = event.currentTarget.naturalWidth || image?.image_width || 1600
+                const nextHeight = event.currentTarget.naturalHeight || image?.image_height || 900
+                setImageDimensions((current) =>
+                  current.width === nextWidth && current.height === nextHeight
+                    ? current
+                    : { width: nextWidth, height: nextHeight },
+                )
+              }}
+            />
             {defects.map((defect) => {
               const overlayState =
                 defect.id === selectedDefect?.id
@@ -879,7 +903,7 @@ function App() {
           if (currentId && payload.runs.some((run) => run.id === currentId)) {
             return currentId
           }
-          return payload.runs[0]?.id ?? null
+          return null
         })
       } catch (loadError) {
         if (loadError.name === 'AbortError') {
@@ -903,6 +927,7 @@ function App() {
 
   useEffect(() => {
     if (!selectedRunId) {
+      setSelectedRun(null)
       return
     }
 
@@ -940,6 +965,15 @@ function App() {
       events: runs.reduce((sum, run) => sum + Number(run.event_count || 0), 0),
     }
   }, [runs])
+
+  const pendingRuns = useMemo(
+    () => runs.filter((run) => run.setup_status !== 'review_ready'),
+    [runs],
+  )
+  const reviewRuns = useMemo(
+    () => runs.filter((run) => run.setup_status === 'review_ready'),
+    [runs],
+  )
 
   const runImages = useMemo(() => {
     if (!selectedRun || !Array.isArray(selectedRun.images)) {
@@ -1281,9 +1315,30 @@ function App() {
             {runsLoading ? (
               <div className="empty-state">Loading runs…</div>
             ) : runs.length ? (
-              runs.map((run) => (
-                <RunCard key={run.id} run={run} active={run.id === selectedRunId} onSelect={setSelectedRunId} />
-              ))
+              <>
+                {pendingRuns.length ? (
+                  <div className="rail-group">
+                    <div className="rail-group-header">
+                      <p className="eyebrow">Pending Setup</p>
+                      <span className="section-note">{pendingRuns.length}</span>
+                    </div>
+                    {pendingRuns.map((run) => (
+                      <RunCard key={run.id} run={run} active={run.id === selectedRunId} onSelect={setSelectedRunId} />
+                    ))}
+                  </div>
+                ) : null}
+                {reviewRuns.length ? (
+                  <div className="rail-group">
+                    <div className="rail-group-header">
+                      <p className="eyebrow">Review History</p>
+                      <span className="section-note">{reviewRuns.length}</span>
+                    </div>
+                    {reviewRuns.map((run) => (
+                      <RunCard key={run.id} run={run} active={run.id === selectedRunId} onSelect={setSelectedRunId} />
+                    ))}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <EmptyStateMessage
                 title="No runs available"

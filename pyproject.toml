@@ -7,7 +7,9 @@ name = "aoi"
 version = "0.1.0"
 description = "AOI logging and monitoring pipeline scaffold"
 requires-python = ">=3.11"
+dependencies = [
+    "pillow>=11.0.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-

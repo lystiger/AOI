@@ -27,6 +27,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: aoi-mock-sender
+    profiles:
+      - mock
     command:
       - python
       - -m
