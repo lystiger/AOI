@@ -35,6 +35,8 @@ def test_persist_events_creates_run_and_defect_logs(tmp_path) -> None:
     assert run_row["pcb_id"] == "PCB-0001"
     assert run_row["status"] == "FAIL"
     assert run_row["model_version"] == "v1.2.3"
+    assert run_row["model_name"] is None
+    assert run_row["setup_status"] == "review_ready"
     assert len(run_images) == 1
     assert run_images[0]["image_path"] == "/mock/pcb-example-2nd.png"
     assert len(defect_rows) == 2
@@ -80,6 +82,38 @@ def test_fetch_run_with_defects_backfills_image_and_overlay_metadata_for_legacy_
     assert run["images"][0]["image_path"] == "/mock/pcb-example-2nd.png"
     assert run["defect_logs"][0]["run_image_id"] == run["images"][0]["id"]
     assert run["defect_logs"][0]["overlay_shape"] == "rect"
+
+
+def test_create_run_initializes_setup_state(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+
+    run = database.create_run()
+
+    assert run["id"]
+    assert run["pcb_id"].startswith("RUN-")
+    assert run["status"] == "SETUP"
+    assert run["model_name"] is None
+    assert run["setup_status"] == "not_ready"
+
+
+def test_update_run_marks_review_ready_once_model_and_image_exist(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-SETUP")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/setup/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+
+    updated_run = database.update_run(run["id"], model_name="MODEL-123")
+
+    assert updated_run is not None
+    assert updated_run["model_name"] == "MODEL-123"
+    assert updated_run["setup_status"] == "review_ready"
 
 
 def test_persist_events_uses_provided_run_images_and_overlay_coordinates(tmp_path) -> None:

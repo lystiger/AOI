@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from aoi.schema import InferenceEvent, InspectionResult, RunImageInput
@@ -73,6 +74,18 @@ class DatabaseManager:
             )
             self._ensure_column(
                 connection,
+                table_name="inspection_runs",
+                column_name="model_name",
+                definition="TEXT",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="setup_status",
+                definition="TEXT NOT NULL DEFAULT 'not_ready'",
+            )
+            self._ensure_column(
+                connection,
                 table_name="defect_logs",
                 column_name="run_image_id",
                 definition="TEXT",
@@ -135,10 +148,10 @@ class DatabaseManager:
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO inspection_runs (id, pcb_id, timestamp, model_version, status)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO inspection_runs (id, pcb_id, timestamp, model_version, status, model_name, setup_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, pcb_id, run_timestamp, model_version, status),
+                (run_id, pcb_id, run_timestamp, model_version, status, None, "review_ready"),
             )
             connection.executemany(
                 """
@@ -207,10 +220,73 @@ class DatabaseManager:
 
         return PersistedRun(run_id=run_id, pcb_id=pcb_id, status=status, event_count=len(events))
 
+    def create_run(self, *, pcb_id: str | None = None) -> dict[str, object]:
+        run_id = str(uuid.uuid4())
+        run_timestamp = datetime.now(timezone.utc).isoformat()
+        run_pcb_id = pcb_id.strip() if pcb_id and pcb_id.strip() else self._build_default_pcb_id(run_id)
+        run_row = {
+            "id": run_id,
+            "pcb_id": run_pcb_id,
+            "timestamp": run_timestamp,
+            "model_version": None,
+            "model_name": None,
+            "status": "SETUP",
+            "setup_status": "not_ready",
+        }
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO inspection_runs (id, pcb_id, timestamp, model_version, status, model_name, setup_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_row["id"],
+                    run_row["pcb_id"],
+                    run_row["timestamp"],
+                    run_row["model_version"],
+                    run_row["status"],
+                    run_row["model_name"],
+                    run_row["setup_status"],
+                ),
+            )
+        return run_row
+
+    def update_run(
+        self,
+        run_id: str,
+        *,
+        model_name: str | None = None,
+        setup_status: str | None = None,
+    ) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+
+        next_model_name = run_row.get("model_name")
+        if model_name is not None:
+            next_model_name = model_name.strip() or None
+
+        next_setup_status = setup_status or self._calculate_setup_status(run_id, next_model_name)
+
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET model_name = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (next_model_name, next_setup_status, run_id),
+            )
+        return self.fetch_run(run_id)
+
     def fetch_run(self, run_id: str) -> dict[str, object] | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id, pcb_id, timestamp, model_version, status FROM inspection_runs WHERE id = ?",
+                """
+                SELECT id, pcb_id, timestamp, model_version, model_name, status, setup_status
+                FROM inspection_runs
+                WHERE id = ?
+                """,
                 (run_id,),
             ).fetchone()
         return dict(row) if row is not None else None
@@ -304,12 +380,14 @@ class DatabaseManager:
                     r.pcb_id,
                     r.timestamp,
                     r.model_version,
+                    r.model_name,
                     r.status,
+                    r.setup_status,
                     COUNT(d.id) AS event_count
                 FROM inspection_runs AS r
                 LEFT JOIN defect_logs AS d ON d.run_id = r.id
                 {where_sql}
-                GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.status
+                GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.model_name, r.status, r.setup_status
                 ORDER BY r.timestamp DESC
                 LIMIT ?
                 """,
@@ -405,43 +483,18 @@ class DatabaseManager:
 
     def _ensure_run_assets(self, run_row: dict[str, object]) -> None:
         run_id = str(run_row["id"])
-        run_timestamp = str(run_row["timestamp"])
         with self._connect() as connection:
             image_rows = connection.execute(
                 "SELECT id FROM run_images WHERE run_id = ? ORDER BY sort_order ASC, created_at ASC",
                 (run_id,),
             ).fetchall()
 
-            if image_rows:
-                run_image_id = str(image_rows[0]["id"])
-            else:
-                run_image_id = str(uuid.uuid4())
-                connection.execute(
-                    """
-                    INSERT INTO run_images (
-                        id,
-                        run_id,
-                        image_path,
-                        image_role,
-                        image_width,
-                        image_height,
-                        sort_order,
-                        created_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        run_image_id,
-                        run_id,
-                        DEMO_RUN_IMAGE_PATH,
-                        DEMO_RUN_IMAGE_ROLE,
-                        DEMO_RUN_IMAGE_WIDTH,
-                        DEMO_RUN_IMAGE_HEIGHT,
-                        0,
-                        run_timestamp,
-                    ),
-                )
+            if not image_rows:
+                # We no longer auto-inject DEMO_RUN_IMAGE_PATH here.
+                # This allows the frontend to show the Upload UI.
+                return
 
+            run_image_id = str(image_rows[0]["id"])
             defect_rows = connection.execute(
                 """
                 SELECT id, run_image_id, overlay_x, overlay_y, overlay_width, overlay_height, overlay_shape
@@ -485,3 +538,16 @@ class DatabaseManager:
                         defect_row["id"],
                     ),
                 )
+
+    @staticmethod
+    def _build_default_pcb_id(run_id: str) -> str:
+        return f"RUN-{run_id.split('-')[0].upper()}"
+
+    def _calculate_setup_status(self, run_id: str, model_name: object) -> str:
+        if model_name and str(model_name).strip() and self.fetch_run_images(run_id):
+            return "review_ready"
+        if model_name and str(model_name).strip():
+            return "in_progress"
+        if self.fetch_run_images(run_id):
+            return "in_progress"
+        return "not_ready"

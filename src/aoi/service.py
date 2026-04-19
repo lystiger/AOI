@@ -49,6 +49,10 @@ class IngestionHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/runs":
+            self._handle_create_run()
+            return
+
         if parsed.path == "/events":
             self._handle_post_events()
             return
@@ -57,6 +61,18 @@ class IngestionHandler(BaseHTTPRequestHandler):
         parts = [p for p in parsed.path.split("/") if p]
         if len(parts) == 3 and parts[0] == "runs" and parts[2] == "images":
             self._handle_post_run_image(parts[1])
+            return
+
+        self._write_json(
+            HTTPStatus.NOT_FOUND,
+            {"status": "error", "message": "route not found"},
+        )
+
+    def do_PATCH(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        parts = [p for p in parsed.path.split("/") if p]
+        if len(parts) == 2 and parts[0] == "runs":
+            self._handle_patch_run(parts[1])
             return
 
         self._write_json(
@@ -87,8 +103,58 @@ class IngestionHandler(BaseHTTPRequestHandler):
             {
                 "status": "accepted",
                 "run_id": persisted_run.run_id,
+                "accepted": len(events),
             },
         )
+
+    def _handle_create_run(self) -> None:
+        try:
+            raw_body = self._read_body()
+            payload = json.loads(raw_body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+
+        if not isinstance(payload, dict):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "payload must be a JSON object"})
+            return
+
+        pcb_id = payload.get("pcb_id")
+        if pcb_id is not None and (not isinstance(pcb_id, str) or not pcb_id.strip()):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "pcb_id must be a non-empty string"})
+            return
+
+        run = self.server.database_manager.create_run(pcb_id=pcb_id)
+        self._write_json(HTTPStatus.CREATED, {"status": "ok", "run": run})
+
+    def _handle_patch_run(self, run_id: str) -> None:
+        try:
+            raw_body = self._read_body()
+            payload = json.loads(raw_body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+
+        if not isinstance(payload, dict):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "payload must be a JSON object"})
+            return
+
+        model_name = payload.get("model_name")
+        if "model_name" in payload and model_name is not None and (not isinstance(model_name, str) or not model_name.strip()):
+            self._write_json(
+                HTTPStatus.BAD_REQUEST,
+                {"status": "error", "message": "model_name must be a non-empty string"},
+            )
+            return
+
+        run = self.server.database_manager.update_run(
+            run_id,
+            model_name=model_name if "model_name" in payload else None,
+        )
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
 
     def log_message(self, format: str, *args: object) -> None:
         return
@@ -331,12 +397,12 @@ class IngestionServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         log_manager: LogManager,
         database_manager: DatabaseManager,
-        storage_path: Path,
+        storage_path: Path | None = None,
     ) -> None:
         super().__init__(server_address, IngestionHandler)
         self.log_manager = log_manager
         self.database_manager = database_manager
-        self.storage_path = storage_path
+        self.storage_path = storage_path or (database_manager.db_path.parent / "run-assets")
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
 

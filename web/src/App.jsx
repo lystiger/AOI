@@ -78,6 +78,15 @@ function StatusChip({ value, kind = 'status' }) {
   return <span className={`chip ${kind} ${String(value).toLowerCase()}`}>{value}</span>
 }
 
+function EmptyStateMessage({ title, body }) {
+  return (
+    <div className="empty-state empty-guidance">
+      <strong>{title}</strong>
+      <p>{body}</p>
+    </div>
+  )
+}
+
 function RunCard({ run, active, onSelect }) {
   return (
     <button
@@ -321,6 +330,130 @@ function PcbViewer({ image, run, defects, selectedDefect, hoveredDefectId, onHov
   )
 }
 
+function SetupFlow({
+  steps,
+  activeStep,
+  selectedRun,
+  modelDraft,
+  onModelDraftChange,
+  onCreateRun,
+  onUploadScan,
+  onSaveModel,
+  onContinueToReview,
+  isCreatingRun,
+  isUploading,
+  isSavingModel,
+}) {
+  return (
+    <div className="setup-shell">
+      <aside className="setup-steps">
+        <div className="setup-steps-header">
+          <p className="eyebrow">Pre-Program Setup</p>
+          <h2>Prepare This Run</h2>
+        </div>
+        <div className="setup-step-list">
+          {steps.map((step) => (
+            <div key={step.id} className={`setup-step-card ${step.active ? 'active' : ''}`}>
+              <div className="setup-step-index">{step.order}</div>
+              <div className="setup-step-copy">
+                <strong>{step.label}</strong>
+                <p>{step.description}</p>
+              </div>
+              <span className={`setup-step-status ${step.status}`}>{step.statusLabel}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      <section className="setup-panel">
+        <div className="setup-panel-header">
+          <p className="eyebrow">Current Step</p>
+          <h2>{activeStep.label}</h2>
+          <p>{activeStep.description}</p>
+        </div>
+
+        <div className="setup-panel-body">
+          {activeStep.id === 'create-run' ? (
+            <div className="setup-action-card">
+              <p>Create a new setup run before uploading assets or entering model data.</p>
+              <button type="button" className="primary-button" onClick={onCreateRun} disabled={isCreatingRun}>
+                {isCreatingRun ? 'Creating Run...' : 'Create Run'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'upload-scan' ? (
+            <div className="setup-action-card">
+              <p>
+                Attach one PCB scan to <strong>{selectedRun?.pcb_id || 'the current run'}</strong>. Fiducial and
+                barcode setup cannot start until an image exists.
+              </p>
+              <button type="button" className="primary-button" onClick={onUploadScan} disabled={isUploading}>
+                {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'enter-model' ? (
+            <div className="setup-action-card">
+              <label className="field">
+                <span>Model Name</span>
+                <input value={modelDraft} onChange={(event) => onModelDraftChange(event.target.value)} />
+              </label>
+              <p>Set the model name now so later steps can decide whether fiducials or barcode validation are required.</p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onSaveModel}
+                disabled={isSavingModel || !modelDraft.trim()}
+              >
+                {isSavingModel ? 'Saving Model...' : 'Save Model Name'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'fiducials' ? (
+            <div className="setup-action-card">
+              <p>This product does not require fiducial setup in Phase 1. The step stays available for the later automation rollout.</p>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'barcode' ? (
+            <div className="setup-action-card">
+              <p>This product does not require barcode setup in Phase 1. The step stays available for the later automation rollout.</p>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'continue-review' ? (
+            <div className="setup-action-card">
+              <p>Required setup is complete. Continue to the standard PCB review surface for this run.</p>
+              <button type="button" className="primary-button" onClick={onContinueToReview}>
+                Continue To Review
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <aside className="setup-summary">
+        <div className="setup-summary-card">
+          <p className="eyebrow">Run Summary</p>
+          <div className="setup-summary-grid">
+            <span>Run</span>
+            <strong>{selectedRun?.pcb_id || 'Not created'}</strong>
+            <span>Scan</span>
+            <strong>{selectedRun?.images?.length ? 'Attached' : 'Missing'}</strong>
+            <span>Model</span>
+            <strong>{selectedRun?.model_name || 'Unset'}</strong>
+            <span>Setup</span>
+            <strong>{selectedRun?.setup_status || 'Not started'}</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
+  )
+}
+
 function App() {
   const [runFilters, setRunFilters] = useState(RUN_FILTER_DEFAULTS)
   const [detailFilters, setDetailFilters] = useState(DETAIL_FILTER_DEFAULTS)
@@ -340,6 +473,118 @@ function App() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [hudGhostOpacity, setHudGhostOpacity] = useState(0.2)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isCreatingRun, setIsCreatingRun] = useState(false)
+  const [isSavingModel, setIsSavingModel] = useState(false)
+  const [modelDraft, setModelDraft] = useState('')
+  const [dismissedSetupRuns, setDismissedSetupRuns] = useState({})
+  const fileInputRef = useRef(null)
+
+  function openImagePicker() {
+    if (isUploading || !selectedRunId) {
+      return
+    }
+    fileInputRef.current?.click()
+  }
+
+  async function handleImageUpload(event) {
+    const file = event.target.files?.[0]
+    if (!file || !selectedRunId) return
+
+    setIsUploading(true)
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/images`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Upload failed')
+      }
+
+      // Refresh the run detail to show the new image immediately
+      const detailPayload = await fetchJson(`/runs/${selectedRunId}${buildQuery(detailFilters)}`)
+      setSelectedRun(detailPayload.run)
+      setRuns((currentRuns) =>
+        currentRuns.map((run) => (run.id === detailPayload.run.id ? { ...run, ...detailPayload.run } : run)),
+      )
+    } catch (err) {
+      setError(`Upload Error: ${err.message}`)
+    } finally {
+      if (event.target) {
+        event.target.value = ''
+      }
+      setIsUploading(false)
+    }
+  }
+
+  async function handleCreateRun() {
+    setIsCreatingRun(true)
+    setError('')
+    try {
+      const response = await fetch('/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Create run failed')
+      }
+      setRuns((currentRuns) => [payload.run, ...currentRuns])
+      setSelectedRunId(payload.run.id)
+      setSelectedRun({ ...payload.run, images: [], defect_logs: [], event_count: 0 })
+      setDismissedSetupRuns((current) => ({ ...current, [payload.run.id]: false }))
+    } catch (err) {
+      setError(`Create Run Error: ${err.message}`)
+    } finally {
+      setIsCreatingRun(false)
+    }
+  }
+
+  async function handleSaveModel() {
+    if (!selectedRunId || !modelDraft.trim()) {
+      return
+    }
+
+    setIsSavingModel(true)
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_name: modelDraft.trim() }),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Save model failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) =>
+        currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)),
+      )
+    } catch (err) {
+      setError(`Model Save Error: ${err.message}`)
+    } finally {
+      setIsSavingModel(false)
+    }
+  }
+
+  function handleContinueToReview() {
+    if (!selectedRunId) {
+      return
+    }
+    setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: true }))
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -467,6 +712,77 @@ function App() {
   }
 
   const failCount = defects.filter((defect) => defect.inspection_result === 'FAIL').length
+  const hasScan = runImages.length > 0
+  const hasModel = Boolean(selectedRun?.model_name?.trim())
+
+  useEffect(() => {
+    setModelDraft(selectedRun?.model_name || '')
+  }, [selectedRun?.id, selectedRun?.model_name])
+
+  const setupSteps = useMemo(() => {
+    const baseSteps = [
+      {
+        id: 'create-run',
+        order: 1,
+        label: 'Create Run',
+        description: 'Create the working record that later scan and model data will attach to.',
+        status: selectedRunId ? 'done' : 'ready',
+        statusLabel: selectedRunId ? 'Done' : 'Ready',
+      },
+      {
+        id: 'upload-scan',
+        order: 2,
+        label: 'Upload PCB Scan',
+        description: 'Attach one board image for the current run.',
+        status: !selectedRunId ? 'blocked' : hasScan ? 'done' : 'ready',
+        statusLabel: !selectedRunId ? 'Blocked' : hasScan ? 'Done' : 'Ready',
+      },
+      {
+        id: 'enter-model',
+        order: 3,
+        label: 'Enter Model Name',
+        description: 'Set the product context before optional automation steps are evaluated.',
+        status: !selectedRunId ? 'blocked' : hasModel ? 'done' : 'ready',
+        statusLabel: !selectedRunId ? 'Blocked' : hasModel ? 'Done' : 'Ready',
+      },
+      {
+        id: 'fiducials',
+        order: 4,
+        label: 'Find Fiducial Marks',
+        description: 'Reserved for model-driven automated fiducial setup in the next phase.',
+        status: 'not_required',
+        statusLabel: 'Not Required',
+      },
+      {
+        id: 'barcode',
+        order: 5,
+        label: 'Find Barcode',
+        description: 'Reserved for model-driven automated barcode setup in the next phase.',
+        status: 'not_required',
+        statusLabel: 'Not Required',
+      },
+    ]
+
+    const isReviewReady = Boolean(selectedRunId && hasScan && hasModel)
+    baseSteps.push({
+      id: 'continue-review',
+      order: 6,
+      label: 'Continue To Review',
+      description: 'Open the normal PCB review surface once required setup is complete.',
+      status: isReviewReady ? 'ready' : 'blocked',
+      statusLabel: isReviewReady ? 'Ready' : 'Blocked',
+    })
+
+    const activeStepId =
+      baseSteps.find((step) => step.status === 'ready')?.id ||
+      baseSteps.find((step) => step.status === 'blocked')?.id ||
+      baseSteps.at(-1)?.id
+
+    return baseSteps.map((step) => ({ ...step, active: step.id === activeStepId }))
+  }, [selectedRunId, hasScan, hasModel])
+
+  const activeSetupStep = setupSteps.find((step) => step.active) || setupSteps[0]
+  const showSetupMode = !selectedRun || (selectedRun.status === 'SETUP' && !dismissedSetupRuns[selectedRun.id])
 
   return (
     <div className="app-shell">
@@ -561,6 +877,22 @@ function App() {
                   <input type="checkbox" checked={true} readOnly />
                 </div>
               </section>
+
+              <section className="settings-section">
+                <p className="eyebrow">Asset Management</p>
+                <div className="settings-row">
+                  <span>Upload Scan for Current Run</span>
+                  <button
+                    type="button"
+                    className={`ghost-button upload-label ${isUploading ? 'loading' : ''}`}
+                    onClick={openImagePicker}
+                    disabled={isUploading || !selectedRunId}
+                  >
+                    {isUploading ? 'Uploading...' : 'Select File'}
+                  </button>
+                </div>
+              </section>
+
               <section className="settings-section">
                 <p className="eyebrow">Inference</p>
                 <div className="settings-row">
@@ -574,6 +906,15 @@ function App() {
       )}
 
       {error ? <div className="error-banner">{error}</div> : null}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageUpload}
+        hidden
+        disabled={isUploading || !selectedRunId}
+      />
 
       <main className={`workspace ${!isRunRailOpen ? 'rail-collapsed' : ''}`}>
         <aside className="panel run-rail">
@@ -632,7 +973,10 @@ function App() {
                 <RunCard key={run.id} run={run} active={run.id === selectedRunId} onSelect={setSelectedRunId} />
               ))
             ) : (
-              <div className="empty-state">No runs matched the current filters.</div>
+              <EmptyStateMessage
+                title="No runs available"
+                body="Runs appear here after inspection events are ingested. Until a run exists, there is nothing to select for PCB scan upload."
+              />
             )}
           </div>
         </aside>
@@ -652,27 +996,60 @@ function App() {
               ) : null}
             </div>
             <div className="review-controls">
-              <select
-                className="image-selector"
-                value={effectiveSelectedImageId}
-                onChange={(event) => setSelectedImageId(event.target.value)}
-                disabled={!runImages.length}
+              {!showSetupMode ? (
+                <select
+                  className="image-selector"
+                  value={effectiveSelectedImageId}
+                  onChange={(event) => setSelectedImageId(event.target.value)}
+                  disabled={!runImages.length}
+                >
+                  {runImages.map((image) => (
+                    <option key={image.id} value={image.id}>
+                      {image.image_role?.replaceAll('_', ' ') || image.id}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                type="button"
+                className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
+                onClick={openImagePicker}
+                disabled={isUploading || !selectedRunId}
               >
-                {runImages.map((image) => (
-                  <option key={image.id} value={image.id}>
-                    {image.image_role?.replaceAll('_', ' ') || image.id}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className="ghost-button" onClick={() => stepDefect(-1)}>
-                &lt;
+                {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
               </button>
-              <button type="button" className="ghost-button" onClick={() => stepDefect(1)}>
-                &gt;
-              </button>
+              {!selectedRunId ? (
+                <span className="upload-helper">Select a run from History to enable upload.</span>
+              ) : null}
+              {!showSetupMode ? (
+                <>
+                  <button type="button" className="ghost-button" onClick={() => stepDefect(-1)}>
+                    &lt;
+                  </button>
+                  <button type="button" className="ghost-button" onClick={() => stepDefect(1)}>
+                    &gt;
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
 
+          {showSetupMode ? (
+            <SetupFlow
+              steps={setupSteps}
+              activeStep={activeSetupStep}
+              selectedRun={selectedRun}
+              modelDraft={modelDraft}
+              onModelDraftChange={setModelDraft}
+              onCreateRun={handleCreateRun}
+              onUploadScan={openImagePicker}
+              onSaveModel={handleSaveModel}
+              onContinueToReview={handleContinueToReview}
+              isCreatingRun={isCreatingRun}
+              isUploading={isUploading}
+              isSavingModel={isSavingModel}
+            />
+          ) : (
           <div className={`review-shell ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>
             <aside className="review-sidebar">
               {isFiltersOpen && (
@@ -730,7 +1107,10 @@ function App() {
                 </div>
                 <div className="defect-list">
                   {!selectedRunId ? (
-                    <div className="empty-state">Select a run to inspect defects.</div>
+                    <EmptyStateMessage
+                      title="No defect list yet"
+                      body="Choose a run from History first. Defects are loaded per run, so this panel stays empty until one is selected."
+                    />
                   ) : (
                     visibleDefects.length ? (
                       visibleDefects.map((defect) => (
@@ -753,7 +1133,19 @@ function App() {
 
             <div className="viewer-container">
               {!selectedRunId ? (
-                <div className="viewer-empty"><div className="empty-state">Select a run to load the PCB review surface.</div></div>
+                <div className="viewer-empty">
+                  <EmptyStateMessage
+                    title="No run selected"
+                    body="Select a run from the History rail to load its PCB review surface. Upload becomes available after a run is selected."
+                  />
+                </div>
+              ) : !selectedImage ? (
+                <div className="viewer-empty">
+                  <div className="empty-state upload-prompt">
+                    <p>No scan image available for this run.</p>
+                    <p>Use the upload control in the header to attach a PCB scan.</p>
+                  </div>
+                </div>
               ) : (
                 <>
                   <PcbViewer
@@ -799,6 +1191,7 @@ function App() {
               )}
             </div>
           </div>
+          )}
         </section>
       </main>
     </div>
