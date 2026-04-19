@@ -286,6 +286,11 @@ function App() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Layout toggles initialized
+  const [isRunRailOpen, setIsRunRailOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true)
+
   useEffect(() => {
     const controller = new AbortController()
 
@@ -416,9 +421,19 @@ function App() {
   return (
     <div className="app-shell">
       <header className="workspace-topbar">
-        <div className="workspace-title">
-          <span className="eyebrow">AOI Review Workstation</span>
-          <h1>PCB defect review</h1>
+        <div className="workspace-title-group">
+          <button
+            type="button"
+            className={`dock-button ${isRunRailOpen ? 'active' : ''}`}
+            onClick={() => setIsRunRailOpen(!isRunRailOpen)}
+            title="Toggle Run History"
+          >
+            <span className="icon">📋</span>
+          </button>
+          <div className="workspace-title">
+            <span className="eyebrow">AOI Review Workstation</span>
+            <h1>PCB defect review</h1>
+          </div>
         </div>
         <div className="workspace-meta">
           <div className="meta-pill">Runs {summary.runs}</div>
@@ -435,12 +450,28 @@ function App() {
           >
             Grafana
           </a>
+          <button
+            type="button"
+            className={`dock-button ${isSidebarOpen ? 'active' : ''}`}
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title="Toggle Defect List"
+          >
+            <span className="icon">☰</span>
+          </button>
+          <button
+            type="button"
+            className={`dock-button ${isFiltersOpen ? 'active' : ''}`}
+            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+            title="Toggle Defect Filters"
+          >
+            <span className="icon">🔍</span>
+          </button>
         </div>
       </header>
 
       {error ? <div className="error-banner">{error}</div> : null}
 
-      <main className="workspace">
+      <main className={`workspace ${!isRunRailOpen ? 'rail-collapsed' : ''}`}>
         <aside className="panel run-rail">
           <div className="rail-section rail-header">
             <div>
@@ -537,53 +568,55 @@ function App() {
             </div>
           </div>
 
-          <div className="review-shell">
+          <div className={`review-shell ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>
             <aside className="review-sidebar">
-              <section className="review-card">
-                <div className="review-card-header">
-                  <p className="eyebrow">Defect filters</p>
-                </div>
-                <div className="sidebar-filters">
-                  <FilterField
-                    compact
-                    label="Component"
-                    value={detailFilters.component_id}
-                    onChange={(value) => setDetailFilters((current) => ({ ...current, component_id: value }))}
-                  />
-                  <FilterField
-                    compact
-                    label="Type"
-                    value={detailFilters.defect_type}
-                    onChange={(value) => setDetailFilters((current) => ({ ...current, defect_type: value }))}
-                  />
-                  <FilterField
-                    compact
-                    label="Severity"
-                    value={detailFilters.severity}
-                    onChange={(value) => setDetailFilters((current) => ({ ...current, severity: value }))}
-                    options={[
-                      { label: 'All', value: '' },
-                      { label: 'none', value: 'none' },
-                      { label: 'minor', value: 'minor' },
-                      { label: 'major', value: 'major' },
-                      { label: 'critical', value: 'critical' },
-                    ]}
-                  />
-                  <FilterField
-                    compact
-                    label="Result"
-                    value={detailFilters.inspection_result}
-                    onChange={(value) =>
-                      setDetailFilters((current) => ({ ...current, inspection_result: value }))
-                    }
-                    options={[
-                      { label: 'All', value: '' },
-                      { label: 'PASS', value: 'PASS' },
-                      { label: 'FAIL', value: 'FAIL' },
-                    ]}
-                  />
-                </div>
-              </section>
+              {isFiltersOpen && (
+                <section className="review-card">
+                  <div className="review-card-header">
+                    <p className="eyebrow">Defect filters</p>
+                  </div>
+                  <div className="sidebar-filters">
+                    <FilterField
+                      compact
+                      label="Component"
+                      value={detailFilters.component_id}
+                      onChange={(value) => setDetailFilters((current) => ({ ...current, component_id: value }))}
+                    />
+                    <FilterField
+                      compact
+                      label="Type"
+                      value={detailFilters.defect_type}
+                      onChange={(value) => setDetailFilters((current) => ({ ...current, defect_type: value }))}
+                    />
+                    <FilterField
+                      compact
+                      label="Severity"
+                      value={detailFilters.severity}
+                      onChange={(value) => setDetailFilters((current) => ({ ...current, severity: value }))}
+                      options={[
+                        { label: 'All', value: '' },
+                        { label: 'none', value: 'none' },
+                        { label: 'minor', value: 'minor' },
+                        { label: 'major', value: 'major' },
+                        { label: 'critical', value: 'critical' },
+                      ]}
+                    />
+                    <FilterField
+                      compact
+                      label="Result"
+                      value={detailFilters.inspection_result}
+                      onChange={(value) =>
+                        setDetailFilters((current) => ({ ...current, inspection_result: value }))
+                      }
+                      options={[
+                        { label: 'All', value: '' },
+                        { label: 'PASS', value: 'PASS' },
+                        { label: 'FAIL', value: 'FAIL' },
+                      ]}
+                    />
+                  </div>
+                </section>
+              )}
 
               <section className="review-card defect-list-card">
                 <div className="review-card-header">
@@ -611,40 +644,54 @@ function App() {
                   )}
                 </div>
               </section>
-
-              <section className="review-card inspector-card">
-                <div className="review-card-header">
-                  <p className="eyebrow">Inspector</p>
-                </div>
-                {selectedDefect ? (
-                  <div className="inspector-grid">
-                    <div><span className="eyebrow">Component</span><strong>{selectedDefect.component_id}</strong></div>
-                    <div><span className="eyebrow">Type</span><strong>{selectedDefect.defect_type}</strong></div>
-                    <div><span className="eyebrow">Severity</span><strong>{selectedDefect.severity}</strong></div>
-                    <div><span className="eyebrow">Confidence</span><strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong></div>
-                  </div>
-                ) : (
-                  <div className="empty-state">Select a defect to inspect it.</div>
-                )}
-              </section>
             </aside>
 
-            {!selectedRunId ? (
-              <div className="viewer-empty"><div className="empty-state">Select a run to load the PCB review surface.</div></div>
-            ) : detailLoading ? (
-              <div className="viewer-empty"><div className="empty-state">Loading run detail…</div></div>
-            ) : (
-              <PcbViewer
-                key={`${selectedRunId || 'none'}:${effectiveSelectedImageId}`}
-                image={selectedImage}
-                run={selectedRun}
-                defects={visibleDefects}
-                selectedDefect={selectedDefect}
-                hoveredDefectId={hoveredDefectId}
-                onHover={setHoveredDefectId}
-                onSelectDefect={setSelectedDefectId}
-              />
-            )}
+            <div className="viewer-container">
+              {!selectedRunId ? (
+                <div className="viewer-empty"><div className="empty-state">Select a run to load the PCB review surface.</div></div>
+              ) : detailLoading ? (
+                <div className="viewer-empty"><div className="empty-state">Loading run detail…</div></div>
+              ) : (
+                <>
+                  <PcbViewer
+                    key={`${selectedRunId || 'none'}:${effectiveSelectedImageId}`}
+                    image={selectedImage}
+                    run={selectedRun}
+                    defects={visibleDefects}
+                    selectedDefect={selectedDefect}
+                    hoveredDefectId={hoveredDefectId}
+                    onHover={setHoveredDefectId}
+                    onSelectDefect={setSelectedDefectId}
+                  />
+                  {selectedDefect ? (
+                    <div className="floating-inspector">
+                      <div className="inspector-header">
+                        <p className="eyebrow">Defect Inspector</p>
+                        <StatusChip value={selectedDefect.inspection_result} />
+                      </div>
+                      <div className="inspector-grid">
+                        <div className="inspector-item">
+                          <span className="eyebrow">Component</span>
+                          <strong>{selectedDefect.component_id}</strong>
+                        </div>
+                        <div className="inspector-item">
+                          <span className="eyebrow">Type</span>
+                          <strong>{selectedDefect.defect_type}</strong>
+                        </div>
+                        <div className="inspector-item">
+                          <span className="eyebrow">Severity</span>
+                          <strong>{selectedDefect.severity}</strong>
+                        </div>
+                        <div className="inspector-item">
+                          <span className="eyebrow">Confidence</span>
+                          <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
           </div>
         </section>
       </main>
