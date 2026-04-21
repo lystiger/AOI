@@ -514,7 +514,6 @@ class DatabaseManager:
         run_row = self.fetch_run(run_id)
         if run_row is None:
             return None
-        self._ensure_run_assets(run_row)
         run_row["images"] = self.fetch_run_images(run_id)
         run_row["defect_logs"] = self.fetch_defect_logs(
             run_id,
@@ -738,89 +737,6 @@ class DatabaseManager:
             event.overlay_height if event.overlay_height is not None else float(fallback["overlay_height"]),
             event.overlay_shape or str(fallback["overlay_shape"]),
         )
-
-    def _ensure_run_assets(self, run_row: dict[str, object]) -> None:
-        run_id = str(run_row["id"])
-        with self._connect() as connection:
-            image_rows = connection.execute(
-                "SELECT id FROM run_images WHERE run_id = ? ORDER BY sort_order ASC, created_at ASC",
-                (run_id,),
-            ).fetchall()
-
-            defect_rows = connection.execute(
-                """
-                SELECT id, run_image_id, overlay_x, overlay_y, overlay_width, overlay_height, overlay_shape
-                FROM defect_logs
-                WHERE run_id = ?
-                ORDER BY id ASC
-                """,
-                (run_id,),
-            ).fetchall()
-
-            if not image_rows:
-                for index, defect_row in enumerate(defect_rows):
-                    needs_overlay = (
-                        defect_row["overlay_x"] is None
-                        or defect_row["overlay_y"] is None
-                        or defect_row["overlay_width"] is None
-                        or defect_row["overlay_height"] is None
-                        or defect_row["overlay_shape"] is None
-                    )
-                    if not needs_overlay:
-                        continue
-                    overlay = self._build_overlay(index)
-                    connection.execute(
-                        """
-                        UPDATE defect_logs
-                        SET overlay_x = ?, overlay_y = ?, overlay_width = ?, overlay_height = ?, overlay_shape = ?
-                        WHERE id = ?
-                        """,
-                        (
-                            float(overlay["overlay_x"]),
-                            float(overlay["overlay_y"]),
-                            float(overlay["overlay_width"]),
-                            float(overlay["overlay_height"]),
-                            str(overlay["overlay_shape"]),
-                            defect_row["id"],
-                        ),
-                    )
-                return
-
-            run_image_id = str(image_rows[0]["id"])
-
-            for index, defect_row in enumerate(defect_rows):
-                needs_update = (
-                    defect_row["run_image_id"] is None
-                    or defect_row["overlay_x"] is None
-                    or defect_row["overlay_y"] is None
-                    or defect_row["overlay_width"] is None
-                    or defect_row["overlay_height"] is None
-                    or defect_row["overlay_shape"] is None
-                )
-                if not needs_update:
-                    continue
-                overlay = self._build_overlay(index)
-                connection.execute(
-                    """
-                    UPDATE defect_logs
-                    SET run_image_id = ?,
-                        overlay_x = ?,
-                        overlay_y = ?,
-                        overlay_width = ?,
-                        overlay_height = ?,
-                        overlay_shape = ?
-                    WHERE id = ?
-                    """,
-                    (
-                        run_image_id,
-                        overlay["overlay_x"],
-                        overlay["overlay_y"],
-                        overlay["overlay_width"],
-                        overlay["overlay_height"],
-                        overlay["overlay_shape"],
-                        defect_row["id"],
-                    ),
-                )
 
     @staticmethod
     def _build_default_pcb_id(run_id: str) -> str:

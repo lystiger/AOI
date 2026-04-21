@@ -50,7 +50,7 @@ def test_persist_events_creates_run_and_defect_logs(tmp_path) -> None:
     assert defect_rows[1]["severity"] == "none"
 
 
-def test_fetch_run_with_defects_backfills_image_and_overlay_metadata_for_legacy_rows(tmp_path) -> None:
+def test_fetch_run_with_defects_does_not_invent_images_or_overlay_metadata_for_legacy_rows(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
 
     with database._connect() as connection:
@@ -83,7 +83,8 @@ def test_fetch_run_with_defects_backfills_image_and_overlay_metadata_for_legacy_
     assert run is not None
     assert run["images"] == []
     assert run["defect_logs"][0]["run_image_id"] is None
-    assert run["defect_logs"][0]["overlay_shape"] == "rect"
+    assert run["defect_logs"][0]["overlay_shape"] is None
+    assert run["defect_logs"][0]["overlay_x"] is None
 
 
 def test_create_run_initializes_setup_state(tmp_path) -> None:
