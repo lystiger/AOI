@@ -3,7 +3,7 @@ import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_BASE_URL || 'http://localhost:3000'
-const DEFAULT_IMAGE_ID = 'demo-full-board'
+const DEFAULT_IMAGE_ID = 'no-image-selected'
 
 const RUN_FILTER_DEFAULTS = {
   limit: '15',
@@ -1397,9 +1397,6 @@ function App() {
                 <span className="compact-meta">{failCount} fail defects</span>
                 {detailLoading && <span className="loading-indicator">Updating...</span>}
               </div>
-              {selectedImage?.image_role === 'demo_full_board' ? (
-                <div className="compact-note">Demo image active</div>
-              ) : null}
             </div>
             <div className="review-controls">
               {!showSetupMode ? (

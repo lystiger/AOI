@@ -30,6 +30,12 @@ dist/
 web/node_modules/
 web/dist/
 
+# Local runtime data
+*.db
+*.sqlite
+*.sqlite3
+run-assets/
+
 # IDE and OS files
 .DS_Store
 .idea/

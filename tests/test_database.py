@@ -41,11 +41,10 @@ def test_persist_events_creates_run_and_defect_logs(tmp_path) -> None:
     assert run_row["fiducial_status"] == "not_required"
     assert run_row["requires_barcode"] is False
     assert run_row["barcode_status"] == "not_required"
-    assert len(run_images) == 1
-    assert run_images[0]["image_path"] == "/mock/pcb-example-2nd.png"
+    assert run_images == []
     assert len(defect_rows) == 2
     assert defect_rows[0]["severity"] == "major"
-    assert defect_rows[0]["run_image_id"] == run_images[0]["id"]
+    assert defect_rows[0]["run_image_id"] is None
     assert defect_rows[0]["overlay_shape"] == "rect"
     assert defect_rows[0]["overlay_x"] is not None
     assert defect_rows[1]["severity"] == "none"
@@ -82,9 +81,8 @@ def test_fetch_run_with_defects_backfills_image_and_overlay_metadata_for_legacy_
     run = database.fetch_run_with_defects("legacy-run")
 
     assert run is not None
-    assert len(run["images"]) == 1
-    assert run["images"][0]["image_path"] == "/mock/pcb-example-2nd.png"
-    assert run["defect_logs"][0]["run_image_id"] == run["images"][0]["id"]
+    assert run["images"] == []
+    assert run["defect_logs"][0]["run_image_id"] is None
     assert run["defect_logs"][0]["overlay_shape"] == "rect"
 
 

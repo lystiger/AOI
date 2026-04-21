@@ -133,14 +133,13 @@ def test_get_run_returns_embedded_defect_logs(tmp_path) -> None:
         thread.join(timeout=5)
 
     assert result["run"]["id"] == persisted_run.run_id
-    assert len(result["run"]["images"]) == 1
-    assert result["run"]["images"][0]["image_path"] == "/mock/pcb-example-2nd.png"
+    assert result["run"]["images"] == []
     assert result["run"]["event_count"] == 1
     assert result["run"]["setup_status"] == "review_ready"
     assert result["run"]["fiducial_status"] == "not_required"
     assert result["run"]["defect_logs"][0]["defect_type"] == "LIFTED_LEAD"
     assert result["run"]["defect_logs"][0]["overlay_shape"] == "rect"
-    assert result["run"]["defect_logs"][0]["run_image_id"] == result["run"]["images"][0]["id"]
+    assert result["run"]["defect_logs"][0]["run_image_id"] is None
 
 
 def test_post_events_accepts_explicit_images_and_overlay_metadata(tmp_path) -> None:

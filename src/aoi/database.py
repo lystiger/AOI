@@ -18,12 +18,6 @@ class PersistedRun:
     event_count: int
 
 
-DEMO_RUN_IMAGE_PATH = "/mock/pcb-example-2nd.png"
-DEMO_RUN_IMAGE_ROLE = "demo_full_board"
-DEMO_RUN_IMAGE_WIDTH = 1464
-DEMO_RUN_IMAGE_HEIGHT = 1013
-
-
 class DatabaseManager:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -172,14 +166,7 @@ class DatabaseManager:
         status = self._derive_run_status(events)
         pcb_id = events[0].pcb_id
         run_timestamp = events[0].timestamp
-        image_records = images or [
-            RunImageInput(
-                image_path=DEMO_RUN_IMAGE_PATH,
-                image_role=DEMO_RUN_IMAGE_ROLE,
-                image_width=DEMO_RUN_IMAGE_WIDTH,
-                image_height=DEMO_RUN_IMAGE_HEIGHT,
-            )
-        ]
+        image_records = images or []
         run_image_ids = [str(uuid.uuid4()) for _ in image_records]
 
         with self._connect() as connection:
@@ -249,7 +236,9 @@ class DatabaseManager:
                 [
                     (
                         run_id,
-                        run_image_ids[self._resolve_image_index(event, len(run_image_ids))],
+                        run_image_ids[self._resolve_image_index(event, len(run_image_ids))]
+                        if run_image_ids
+                        else None,
                         event.component_id,
                         event.defect_type,
                         self._derive_severity(event),
@@ -731,6 +720,8 @@ class DatabaseManager:
 
     @staticmethod
     def _resolve_image_index(event: InferenceEvent, image_count: int) -> int:
+        if image_count == 0:
+            return 0
         if event.run_image_index is None:
             return 0
         if event.run_image_index >= image_count:
@@ -756,12 +747,6 @@ class DatabaseManager:
                 (run_id,),
             ).fetchall()
 
-            if not image_rows:
-                # We no longer auto-inject DEMO_RUN_IMAGE_PATH here.
-                # This allows the frontend to show the Upload UI.
-                return
-
-            run_image_id = str(image_rows[0]["id"])
             defect_rows = connection.execute(
                 """
                 SELECT id, run_image_id, overlay_x, overlay_y, overlay_width, overlay_height, overlay_shape
@@ -771,6 +756,37 @@ class DatabaseManager:
                 """,
                 (run_id,),
             ).fetchall()
+
+            if not image_rows:
+                for index, defect_row in enumerate(defect_rows):
+                    needs_overlay = (
+                        defect_row["overlay_x"] is None
+                        or defect_row["overlay_y"] is None
+                        or defect_row["overlay_width"] is None
+                        or defect_row["overlay_height"] is None
+                        or defect_row["overlay_shape"] is None
+                    )
+                    if not needs_overlay:
+                        continue
+                    overlay = self._build_overlay(index)
+                    connection.execute(
+                        """
+                        UPDATE defect_logs
+                        SET overlay_x = ?, overlay_y = ?, overlay_width = ?, overlay_height = ?, overlay_shape = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            float(overlay["overlay_x"]),
+                            float(overlay["overlay_y"]),
+                            float(overlay["overlay_width"]),
+                            float(overlay["overlay_height"]),
+                            str(overlay["overlay_shape"]),
+                            defect_row["id"],
+                        ),
+                    )
+                return
+
+            run_image_id = str(image_rows[0]["id"])
 
             for index, defect_row in enumerate(defect_rows):
                 needs_update = (
