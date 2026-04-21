@@ -376,6 +376,54 @@ def test_patch_run_endpoint_updates_model_name_and_setup_status(tmp_path) -> Non
     assert result["run"]["barcode_status"] == "ready"
 
 
+def test_patch_run_endpoint_model_change_forces_setup_reentry(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    run = database.create_run(pcb_id="PCB-REWORK")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/rework/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-A", requires_fiducials=True, requires_barcode=True)
+    database.detect_fiducials(run["id"])
+    database.confirm_fiducials(run["id"])
+    database.detect_barcode(run["id"])
+    database.confirm_barcode(run["id"])
+
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    body = json.dumps({"model_name": "MODEL-B"}).encode("utf-8")
+    http_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="PATCH",
+    )
+
+    try:
+        with request.urlopen(http_request, timeout=5) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["status"] == "ok"
+    assert result["run"]["model_name"] == "MODEL-B"
+    assert result["run"]["fiducials"] == []
+    assert result["run"]["barcode"] is None
+    assert result["run"]["fiducial_status"] == "ready"
+    assert result["run"]["barcode_status"] == "ready"
+    assert result["run"]["setup_status"] == "in_progress"
+
+
 def test_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:
     log_path = tmp_path / "inference.jsonl"
     db_path = tmp_path / "aoi.db"

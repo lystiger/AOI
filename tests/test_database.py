@@ -181,6 +181,65 @@ def test_detect_and_confirm_barcode_updates_run_state(tmp_path) -> None:
     assert confirmed_run["setup_status"] == "review_ready"
 
 
+def test_update_run_model_change_clears_confirmed_setup_artifacts(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-REWORK")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/rework/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+
+    database.update_run(run["id"], model_name="MODEL-A", requires_fiducials=True, requires_barcode=True)
+    database.detect_fiducials(run["id"])
+    database.confirm_fiducials(run["id"])
+    database.detect_barcode(run["id"])
+    database.confirm_barcode(run["id"])
+
+    updated_run = database.update_run(run["id"], model_name="MODEL-B")
+
+    assert updated_run is not None
+    assert updated_run["model_name"] == "MODEL-B"
+    assert updated_run["fiducials"] == []
+    assert updated_run["barcode"] is None
+    assert updated_run["fiducial_status"] == "ready"
+    assert updated_run["barcode_status"] == "ready"
+    assert updated_run["setup_status"] == "in_progress"
+
+
+def test_update_run_targeted_requirement_toggle_only_resets_affected_step(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-TOGGLE")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/toggle/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+
+    database.update_run(run["id"], model_name="MODEL-T", requires_fiducials=True, requires_barcode=True)
+    database.detect_fiducials(run["id"])
+    database.confirm_fiducials(run["id"])
+    database.detect_barcode(run["id"])
+    database.confirm_barcode(run["id"])
+
+    updated_run = database.update_run(run["id"], requires_barcode=False)
+
+    assert updated_run is not None
+    assert updated_run["fiducial_status"] == "confirmed"
+    assert updated_run["fiducials"]
+    assert updated_run["barcode_status"] == "not_required"
+    assert updated_run["barcode"] is None
+    assert updated_run["setup_status"] == "review_ready"
+
+
 def test_persist_events_uses_provided_run_images_and_overlay_coordinates(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     persisted_run = database.persist_events(

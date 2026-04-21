@@ -314,26 +314,53 @@ class DatabaseManager:
         if run_row is None:
             return None
 
+        current_model_name = str(run_row.get("model_name") or "").strip()
         next_model_name = run_row.get("model_name")
         if model_name is not None:
             next_model_name = model_name.strip() or None
+        next_model_name_text = str(next_model_name or "").strip()
+        model_changed = model_name is not None and next_model_name_text != current_model_name
 
         next_requires_fiducials = int(bool(run_row.get("requires_fiducials")))
+        current_requires_fiducials = next_requires_fiducials
         if requires_fiducials is not None:
             next_requires_fiducials = int(requires_fiducials)
+        fiducial_requirement_changed = next_requires_fiducials != current_requires_fiducials
+
+        current_fiducial_status = str(run_row.get("fiducial_status") or "not_required")
+        next_fiducial_status = current_fiducial_status
+        next_fiducials_json = json.dumps(run_row.get("fiducials") or []) if run_row.get("fiducials") else None
+        if model_changed or fiducial_requirement_changed:
+            next_fiducials_json = None
+            if not bool(next_requires_fiducials):
+                next_fiducial_status = "not_required"
+            else:
+                next_fiducial_status = "ready" if self.fetch_run_images(run_id) else "blocked"
 
         next_fiducial_status = self._calculate_fiducial_status(
             run_id,
             requires_fiducials=bool(next_requires_fiducials),
-            current_status=str(run_row.get("fiducial_status") or "not_required"),
+            current_status=next_fiducial_status,
         )
         next_requires_barcode = int(bool(run_row.get("requires_barcode")))
+        current_requires_barcode = next_requires_barcode
         if requires_barcode is not None:
             next_requires_barcode = int(requires_barcode)
+        barcode_requirement_changed = next_requires_barcode != current_requires_barcode
+
+        current_barcode_status = str(run_row.get("barcode_status") or "not_required")
+        next_barcode_status = current_barcode_status
+        next_barcode_json = json.dumps(run_row.get("barcode")) if run_row.get("barcode") else None
+        if model_changed or barcode_requirement_changed:
+            next_barcode_json = None
+            if not bool(next_requires_barcode):
+                next_barcode_status = "not_required"
+            else:
+                next_barcode_status = "ready" if self.fetch_run_images(run_id) else "blocked"
         next_barcode_status = self._calculate_barcode_status(
             run_id,
             requires_barcode=bool(next_requires_barcode),
-            current_status=str(run_row.get("barcode_status") or "not_required"),
+            current_status=next_barcode_status,
         )
         next_setup_status = setup_status or self._calculate_setup_status(
             run_id,
@@ -348,16 +375,18 @@ class DatabaseManager:
             connection.execute(
                 """
                 UPDATE inspection_runs
-                SET model_name = ?, requires_fiducials = ?, fiducial_status = ?,
-                    requires_barcode = ?, barcode_status = ?, setup_status = ?
+                SET model_name = ?, requires_fiducials = ?, fiducial_status = ?, fiducials_json = ?,
+                    requires_barcode = ?, barcode_status = ?, barcode_json = ?, setup_status = ?
                 WHERE id = ?
                 """,
                 (
                     next_model_name,
                     next_requires_fiducials,
                     next_fiducial_status,
+                    next_fiducials_json,
                     next_requires_barcode,
                     next_barcode_status,
+                    next_barcode_json,
                     next_setup_status,
                     run_id,
                 ),

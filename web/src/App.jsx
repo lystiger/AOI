@@ -4,6 +4,8 @@ import './App.css'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_BASE_URL || 'http://localhost:3000'
 const DEFAULT_IMAGE_ID = 'no-image-selected'
+const SELECTED_RUN_STORAGE_KEY = 'aoi:selected-run-id'
+const DISMISSED_SETUP_STORAGE_KEY = 'aoi:dismissed-setup-runs'
 
 const RUN_FILTER_DEFAULTS = {
   limit: '15',
@@ -425,6 +427,7 @@ function SetupFlow({
   onDetectBarcode,
   onConfirmBarcode,
   onContinueToReview,
+  isContinueReady,
   isCreatingRun,
   isUploading,
   isSavingModel,
@@ -598,7 +601,7 @@ function SetupFlow({
           {activeStep.id === 'continue-review' ? (
             <div className="setup-action-card">
               <p>Required setup is complete. Continue to the standard PCB review surface for this run.</p>
-              <button type="button" className="primary-button" onClick={onContinueToReview}>
+              <button type="button" className="primary-button" onClick={onContinueToReview} disabled={!isContinueReady}>
                 Continue To Review
               </button>
             </div>
@@ -633,7 +636,12 @@ function App() {
   const [runFilters, setRunFilters] = useState(RUN_FILTER_DEFAULTS)
   const [detailFilters, setDetailFilters] = useState(DETAIL_FILTER_DEFAULTS)
   const [runs, setRuns] = useState([])
-  const [selectedRunId, setSelectedRunId] = useState(null)
+  const [selectedRunId, setSelectedRunId] = useState(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    return window.localStorage.getItem(SELECTED_RUN_STORAGE_KEY)
+  })
   const [selectedRun, setSelectedRun] = useState(null)
   const [selectedImageId, setSelectedImageId] = useState(DEFAULT_IMAGE_ID)
   const [selectedDefectId, setSelectedDefectId] = useState(null)
@@ -657,7 +665,17 @@ function App() {
   const [modelDraft, setModelDraft] = useState('')
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
-  const [dismissedSetupRuns, setDismissedSetupRuns] = useState({})
+  const [dismissedSetupRuns, setDismissedSetupRuns] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {}
+    }
+    try {
+      const rawValue = window.localStorage.getItem(DISMISSED_SETUP_STORAGE_KEY)
+      return rawValue ? JSON.parse(rawValue) : {}
+    } catch {
+      return {}
+    }
+  })
   const fileInputRef = useRef(null)
 
   function openImagePicker() {
@@ -753,6 +771,9 @@ function App() {
         event_count: selectedRun?.event_count || 0,
       }
       setSelectedRun(nextRun)
+      if (nextRun.setup_status !== 'review_ready') {
+        setDismissedSetupRuns((current) => ({ ...current, [payload.run.id]: false }))
+      }
       setRuns((currentRuns) =>
         currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)),
       )
@@ -920,11 +941,29 @@ function App() {
   }
 
   function handleContinueToReview() {
-    if (!selectedRunId) {
+    if (!selectedRunId || !isReviewReady) {
       return
     }
     setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: true }))
   }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (selectedRunId) {
+      window.localStorage.setItem(SELECTED_RUN_STORAGE_KEY, selectedRunId)
+      return
+    }
+    window.localStorage.removeItem(SELECTED_RUN_STORAGE_KEY)
+  }, [selectedRunId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(DISMISSED_SETUP_STORAGE_KEY, JSON.stringify(dismissedSetupRuns))
+  }, [dismissedSetupRuns])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1071,11 +1110,19 @@ function App() {
     setRequiresBarcodeDraft(Boolean(selectedRun?.requires_barcode))
   }, [selectedRun?.id, selectedRun?.model_name, selectedRun?.requires_fiducials, selectedRun?.requires_barcode])
 
+  const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
+  const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
+  const requiresBarcode = Boolean(selectedRun?.requires_barcode)
+  const barcodeStatus = selectedRun?.barcode_status || 'not_required'
+  const isReviewReady = Boolean(
+    selectedRunId &&
+    hasScan &&
+    hasModel &&
+    (!requiresFiducials || fiducialStatus === 'confirmed') &&
+    (!requiresBarcode || barcodeStatus === 'confirmed'),
+  )
+
   const setupSteps = useMemo(() => {
-    const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
-    const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
-    const requiresBarcode = Boolean(selectedRun?.requires_barcode)
-    const barcodeStatus = selectedRun?.barcode_status || 'not_required'
     const baseSteps = [
       {
         id: 'create-run',
@@ -1141,13 +1188,6 @@ function App() {
       },
     ]
 
-    const isReviewReady = Boolean(
-      selectedRunId &&
-      hasScan &&
-      hasModel &&
-      (!requiresFiducials || fiducialStatus === 'confirmed') &&
-      (!requiresBarcode || barcodeStatus === 'confirmed'),
-    )
     baseSteps.push({
       id: 'continue-review',
       order: 6,
@@ -1164,10 +1204,13 @@ function App() {
       baseSteps.at(-1)?.id
 
     return baseSteps.map((step) => ({ ...step, active: step.id === activeStepId }))
-  }, [selectedRunId, hasScan, hasModel])
+  }, [selectedRunId, hasScan, hasModel, requiresFiducials, fiducialStatus, requiresBarcode, barcodeStatus, isReviewReady])
 
   const activeSetupStep = setupSteps.find((step) => step.active) || setupSteps[0]
-  const showSetupMode = !selectedRun || (selectedRun.status === 'SETUP' && !dismissedSetupRuns[selectedRun.id])
+  const showSetupMode =
+    !selectedRun ||
+    selectedRun.setup_status !== 'review_ready' ||
+    (selectedRun.status === 'SETUP' && !dismissedSetupRuns[selectedRun.id])
 
   return (
     <div className="app-shell">
@@ -1465,6 +1508,7 @@ function App() {
               onDetectBarcode={handleDetectBarcode}
               onConfirmBarcode={handleConfirmBarcode}
               onContinueToReview={handleContinueToReview}
+              isContinueReady={isReviewReady}
               isCreatingRun={isCreatingRun}
               isUploading={isUploading}
               isSavingModel={isSavingModel}
