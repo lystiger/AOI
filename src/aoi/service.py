@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -88,6 +89,18 @@ class IngestionHandler(BaseHTTPRequestHandler):
         parts = [p for p in parsed.path.split("/") if p]
         if len(parts) == 2 and parts[0] == "runs":
             self._handle_patch_run(parts[1])
+            return
+
+        self._write_json(
+            HTTPStatus.NOT_FOUND,
+            {"status": "error", "message": "route not found"},
+        )
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        parts = [p for p in parsed.path.split("/") if p]
+        if len(parts) == 2 and parts[0] == "runs":
+            self._handle_delete_run(parts[1])
             return
 
         self._write_json(
@@ -186,6 +199,18 @@ class IngestionHandler(BaseHTTPRequestHandler):
             self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
             return
         self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_delete_run(self, run_id: str) -> None:
+        deleted = self.server.database_manager.delete_run(run_id)
+        if not deleted:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+
+        run_dir = self.server.storage_path / run_id
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
+
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run_id": run_id})
 
     def log_message(self, format: str, *args: object) -> None:
         return

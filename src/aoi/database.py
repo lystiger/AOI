@@ -560,6 +560,16 @@ class DatabaseManager:
             )
         return self.update_run(run_id)
 
+    def delete_run(self, run_id: str) -> bool:
+        if self.fetch_run(run_id) is None:
+            return False
+
+        with self._connect() as connection:
+            connection.execute("DELETE FROM defect_logs WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM run_images WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM inspection_runs WHERE id = ?", (run_id,))
+        return True
+
     def detect_fiducials(self, run_id: str) -> dict[str, object] | None:
         run_row = self.fetch_run(run_id)
         if run_row is None:

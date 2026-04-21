@@ -653,6 +653,7 @@ function App() {
   const [isSavingModel, setIsSavingModel] = useState(false)
   const [isDetectingFiducials, setIsDetectingFiducials] = useState(false)
   const [isDetectingBarcode, setIsDetectingBarcode] = useState(false)
+  const [isDeletingRun, setIsDeletingRun] = useState(false)
   const [modelDraft, setModelDraft] = useState('')
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
@@ -759,6 +760,44 @@ function App() {
       setError(`Model Save Error: ${err.message}`)
     } finally {
       setIsSavingModel(false)
+    }
+  }
+
+  async function handleDeleteRun() {
+    if (!selectedRunId || isDeletingRun) {
+      return
+    }
+    const confirmed = window.confirm(
+      `Delete run ${selectedRun?.pcb_id || selectedRunId}? This removes its history and uploaded scan.`,
+    )
+    if (!confirmed) {
+      return
+    }
+
+    setIsDeletingRun(true)
+    setError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}`, {
+        method: 'DELETE',
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Delete run failed')
+      }
+
+      setRuns((currentRuns) => currentRuns.filter((run) => run.id !== selectedRunId))
+      setDismissedSetupRuns((current) => {
+        const next = { ...current }
+        delete next[selectedRunId]
+        return next
+      })
+      setSelectedRun(null)
+      setSelectedRunId(null)
+      setSelectedImageId(DEFAULT_IMAGE_ID)
+    } catch (err) {
+      setError(`Delete Run Error: ${err.message}`)
+    } finally {
+      setIsDeletingRun(false)
     }
   }
 
@@ -1384,6 +1423,14 @@ function App() {
                 disabled={isUploading || !selectedRunId}
               >
                 {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
+              </button>
+              <button
+                type="button"
+                className="ghost-button delete-button"
+                onClick={handleDeleteRun}
+                disabled={!selectedRunId || isDeletingRun}
+              >
+                {isDeletingRun ? 'Deleting Run...' : 'Delete Run'}
               </button>
               {!selectedRunId ? (
                 <span className="upload-helper">Select a run from History to enable upload.</span>

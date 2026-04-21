@@ -225,3 +225,27 @@ def test_persist_events_uses_provided_run_images_and_overlay_coordinates(tmp_pat
     assert run["images"][1]["image_role"] == "detail_crop"
     assert run["defect_logs"][0]["run_image_id"] == run["images"][1]["id"]
     assert run["defect_logs"][0]["overlay_x"] == 0.4
+
+
+def test_delete_run_removes_run_images_and_defect_logs(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    persisted_run = database.persist_events(
+        events=[
+            InferenceEvent.create(
+                pcb_id="PCB-DEL",
+                component_id="U404",
+                inspection_result=InspectionResult.FAIL,
+                defect_type="MISSING",
+                confidence_score=0.91,
+                inference_latency_ms=22,
+                timestamp="2026-04-20T12:00:00+00:00",
+            )
+        ]
+    )
+
+    deleted = database.delete_run(persisted_run.run_id)
+
+    assert deleted is True
+    assert database.fetch_run(persisted_run.run_id) is None
+    assert database.fetch_run_images(persisted_run.run_id) == []
+    assert database.fetch_defect_logs(persisted_run.run_id) == []

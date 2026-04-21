@@ -1,6 +1,6 @@
 import json
 import threading
-from urllib import request
+from urllib import error, request
 
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
@@ -469,3 +469,60 @@ def test_barcode_detection_and_confirmation_endpoints(tmp_path) -> None:
     assert detect_result["run"]["barcode"]["decoded_value"] == "PCB-BAR-LOT-01"
     assert confirm_result["run"]["barcode_status"] == "confirmed"
     assert confirm_result["run"]["setup_status"] == "review_ready"
+
+
+def test_delete_run_endpoint_removes_run_and_assets(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    storage_path = tmp_path / "run-assets"
+    database = DatabaseManager(db_path)
+    run = database.create_run(pcb_id="PCB-DELETE")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], f"/runs/{run['id']}/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+    run_dir = storage_path / run["id"]
+    run_dir.mkdir(parents=True)
+    (run_dir / "scan.png").write_bytes(b"fake-image")
+
+    server = IngestionServer(
+        ("127.0.0.1", 0),
+        LogManager(log_path),
+        database,
+        storage_path=storage_path,
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    delete_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}",
+        method="DELETE",
+    )
+
+    try:
+        with request.urlopen(delete_request, timeout=5) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        fetch_request = request.Request(
+            f"http://127.0.0.1:{server.server_port}/runs/{run['id']}",
+            method="GET",
+        )
+        try:
+            request.urlopen(fetch_request, timeout=5)
+            missing_status = None
+        except error.HTTPError as exc:
+            missing_status = exc.code
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert result["status"] == "ok"
+    assert result["run_id"] == run["id"]
+    assert database.fetch_run(run["id"]) is None
+    assert not run_dir.exists()
+    assert missing_status == 404
