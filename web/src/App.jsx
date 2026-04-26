@@ -6,6 +6,7 @@ const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_BASE_URL || 'http://localh
 const DEFAULT_IMAGE_ID = 'no-image-selected'
 const SELECTED_RUN_STORAGE_KEY = 'aoi:selected-run-id'
 const DISMISSED_SETUP_STORAGE_KEY = 'aoi:dismissed-setup-runs'
+const SELECTED_IMAGE_STORAGE_KEY = 'aoi:selected-images'
 
 const RUN_FILTER_DEFAULTS = {
   limit: '15',
@@ -427,12 +428,18 @@ function SetupFlow({
   onDetectBarcode,
   onConfirmBarcode,
   onContinueToReview,
+  onStepClick,
   isContinueReady,
   isCreatingRun,
   isUploading,
   isSavingModel,
   isDetectingFiducials,
   isDetectingBarcode,
+  createRunError,
+  uploadError,
+  modelError,
+  fiducialError,
+  barcodeError,
 }) {
   return (
     <div className="setup-shell">
@@ -443,7 +450,12 @@ function SetupFlow({
         </div>
         <div className="setup-step-list">
           {steps.map((step) => (
-            <div key={step.id} className={`setup-step-card ${step.active ? 'active' : ''}`}>
+            <div
+              key={step.id}
+              className={`setup-step-card ${step.active ? 'active' : ''}`}
+              onClick={() => onStepClick?.(step.id)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="setup-step-index">{step.order}</div>
               <div className="setup-step-copy">
                 <strong>{step.label}</strong>
@@ -466,6 +478,7 @@ function SetupFlow({
           {activeStep.id === 'create-run' ? (
             <div className="setup-action-card">
               <p>Create a new setup run before uploading assets or entering model data.</p>
+              {createRunError ? <div className="step-error-message">{createRunError}</div> : null}
               <button type="button" className="primary-button" onClick={onCreateRun} disabled={isCreatingRun}>
                 {isCreatingRun ? 'Creating Run...' : 'Create Run'}
               </button>
@@ -478,6 +491,7 @@ function SetupFlow({
                 Attach one PCB scan to <strong>{selectedRun?.pcb_id || 'the current run'}</strong>. Fiducial and
                 barcode setup cannot start until an image exists.
               </p>
+              {uploadError ? <div className="step-error-message">{uploadError}</div> : null}
               <button type="button" className="primary-button" onClick={onUploadScan} disabled={isUploading}>
                 {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
               </button>
@@ -507,6 +521,7 @@ function SetupFlow({
                 <span>Require barcode validation for this product</span>
               </label>
               <p>Set the model name now so later steps can decide whether fiducials or barcode validation are required.</p>
+              {modelError ? <div className="step-error-message">{modelError}</div> : null}
               <button
                 type="button"
                 className="primary-button"
@@ -525,6 +540,7 @@ function SetupFlow({
               ) : (
                 <>
                   <p>Run automated fiducial search, review the overlay results, then confirm when the locations look correct.</p>
+                  {fiducialError ? <div className="step-error-message">{fiducialError}</div> : null}
                   <FiducialPreview image={selectedImage} fiducials={selectedRun?.fiducials || []} />
                   <div className="setup-button-row">
                     <button
@@ -566,6 +582,7 @@ function SetupFlow({
               ) : (
                 <>
                   <p>Run automated barcode search, review the decoded result, then confirm when the location and value are correct.</p>
+                  {barcodeError ? <div className="step-error-message">{barcodeError}</div> : null}
                   <BarcodePreview image={selectedImage} barcode={selectedRun?.barcode} />
                   <div className="setup-button-row">
                     <button
@@ -643,12 +660,32 @@ function App() {
     return window.localStorage.getItem(SELECTED_RUN_STORAGE_KEY)
   })
   const [selectedRun, setSelectedRun] = useState(null)
-  const [selectedImageId, setSelectedImageId] = useState(DEFAULT_IMAGE_ID)
+  const [selectedImageId, setSelectedImageId] = useState(() => {
+    if (typeof window === 'undefined') {
+      return DEFAULT_IMAGE_ID
+    }
+    try {
+      const selectedRun = window.localStorage.getItem(SELECTED_RUN_STORAGE_KEY)
+      const rawValue = window.localStorage.getItem(SELECTED_IMAGE_STORAGE_KEY)
+      if (!selectedRun || !rawValue) {
+        return DEFAULT_IMAGE_ID
+      }
+      const savedSelections = JSON.parse(rawValue)
+      return savedSelections[selectedRun] || DEFAULT_IMAGE_ID
+    } catch {
+      return DEFAULT_IMAGE_ID
+    }
+  })
   const [selectedDefectId, setSelectedDefectId] = useState(null)
   const [hoveredDefectId, setHoveredDefectId] = useState(null)
   const [runsLoading, setRunsLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState('')
+  const [createRunError, setCreateRunError] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const [modelError, setModelError] = useState('')
+  const [fiducialError, setFiducialError] = useState('')
+  const [barcodeError, setBarcodeError] = useState('')
 
   // Layout toggles initialized
   const [isRunRailOpen, setIsRunRailOpen] = useState(true)
@@ -662,6 +699,7 @@ function App() {
   const [isDetectingFiducials, setIsDetectingFiducials] = useState(false)
   const [isDetectingBarcode, setIsDetectingBarcode] = useState(false)
   const [isDeletingRun, setIsDeletingRun] = useState(false)
+  const [manualStepId, setManualStepId] = useState(null)
   const [modelDraft, setModelDraft] = useState('')
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
@@ -690,7 +728,7 @@ function App() {
     if (!file || !selectedRunId) return
 
     setIsUploading(true)
-    setError('')
+    setUploadError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}/images`, {
         method: 'POST',
@@ -710,7 +748,7 @@ function App() {
         currentRuns.map((run) => (run.id === detailPayload.run.id ? { ...run, ...detailPayload.run } : run)),
       )
     } catch (err) {
-      setError(`Upload Error: ${err.message}`)
+      setUploadError(`Upload Error: ${err.message}`)
     } finally {
       if (event.target) {
         event.target.value = ''
@@ -721,7 +759,7 @@ function App() {
 
   async function handleCreateRun() {
     setIsCreatingRun(true)
-    setError('')
+    setCreateRunError('')
     try {
       const response = await fetch('/runs', {
         method: 'POST',
@@ -737,7 +775,7 @@ function App() {
       setSelectedRun({ ...payload.run, images: [], defect_logs: [], event_count: 0 })
       setDismissedSetupRuns((current) => ({ ...current, [payload.run.id]: false }))
     } catch (err) {
-      setError(`Create Run Error: ${err.message}`)
+      setCreateRunError(`Create Run Error: ${err.message}`)
     } finally {
       setIsCreatingRun(false)
     }
@@ -749,7 +787,7 @@ function App() {
     }
 
     setIsSavingModel(true)
-    setError('')
+    setModelError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}`, {
         method: 'PATCH',
@@ -778,7 +816,7 @@ function App() {
         currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)),
       )
     } catch (err) {
-      setError(`Model Save Error: ${err.message}`)
+      setModelError(`Model Save Error: ${err.message}`)
     } finally {
       setIsSavingModel(false)
     }
@@ -827,7 +865,7 @@ function App() {
       return
     }
     setIsDetectingFiducials(true)
-    setError('')
+    setFiducialError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}/fiducials/detect`, {
         method: 'POST',
@@ -847,7 +885,7 @@ function App() {
       setSelectedRun(nextRun)
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
-      setError(`Fiducial Detection Error: ${err.message}`)
+      setFiducialError(`Fiducial Detection Error: ${err.message}`)
     } finally {
       setIsDetectingFiducials(false)
     }
@@ -857,7 +895,7 @@ function App() {
     if (!selectedRunId) {
       return
     }
-    setError('')
+    setFiducialError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}/fiducials/confirm`, {
         method: 'POST',
@@ -877,7 +915,7 @@ function App() {
       setSelectedRun(nextRun)
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
-      setError(`Fiducial Confirm Error: ${err.message}`)
+      setFiducialError(`Fiducial Confirm Error: ${err.message}`)
     }
   }
 
@@ -886,7 +924,7 @@ function App() {
       return
     }
     setIsDetectingBarcode(true)
-    setError('')
+    setBarcodeError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}/barcode/detect`, {
         method: 'POST',
@@ -906,7 +944,7 @@ function App() {
       setSelectedRun(nextRun)
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
-      setError(`Barcode Detection Error: ${err.message}`)
+      setBarcodeError(`Barcode Detection Error: ${err.message}`)
     } finally {
       setIsDetectingBarcode(false)
     }
@@ -916,7 +954,7 @@ function App() {
     if (!selectedRunId) {
       return
     }
-    setError('')
+    setBarcodeError('')
     try {
       const response = await fetch(`/runs/${selectedRunId}/barcode/confirm`, {
         method: 'POST',
@@ -936,7 +974,7 @@ function App() {
       setSelectedRun(nextRun)
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
-      setError(`Barcode Confirm Error: ${err.message}`)
+      setBarcodeError(`Barcode Confirm Error: ${err.message}`)
     }
   }
 
@@ -966,6 +1004,23 @@ function App() {
   }, [dismissedSetupRuns])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (!selectedRunId) {
+      setSelectedImageId(DEFAULT_IMAGE_ID)
+      return
+    }
+    try {
+      const rawValue = window.localStorage.getItem(SELECTED_IMAGE_STORAGE_KEY)
+      const savedSelections = rawValue ? JSON.parse(rawValue) : {}
+      setSelectedImageId(savedSelections[selectedRunId] || DEFAULT_IMAGE_ID)
+    } catch {
+      setSelectedImageId(DEFAULT_IMAGE_ID)
+    }
+  }, [selectedRunId])
+
+  useEffect(() => {
     const controller = new AbortController()
 
     async function loadRuns() {
@@ -977,6 +1032,11 @@ function App() {
         if (!payload.runs.length) {
           setSelectedRun(null)
         }
+        const validRunIds = new Set(payload.runs.map((run) => run.id))
+        setDismissedSetupRuns((current) => {
+          const next = Object.fromEntries(Object.entries(current).filter(([runId]) => validRunIds.has(runId)))
+          return Object.keys(next).length === Object.keys(current).length ? current : next
+        })
         setSelectedRunId((currentId) => {
           if (currentId && payload.runs.some((run) => run.id === currentId)) {
             return currentId
@@ -1105,9 +1165,32 @@ function App() {
   const hasModel = Boolean(selectedRun?.model_name?.trim())
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !selectedRunId) {
+      return
+    }
+    try {
+      const rawValue = window.localStorage.getItem(SELECTED_IMAGE_STORAGE_KEY)
+      const savedSelections = rawValue ? JSON.parse(rawValue) : {}
+      const nextSelections =
+        effectiveSelectedImageId === DEFAULT_IMAGE_ID
+          ? Object.fromEntries(Object.entries(savedSelections).filter(([runId]) => runId !== selectedRunId))
+          : { ...savedSelections, [selectedRunId]: effectiveSelectedImageId }
+      window.localStorage.setItem(SELECTED_IMAGE_STORAGE_KEY, JSON.stringify(nextSelections))
+    } catch {
+      // Ignore localStorage write failures and keep the UI responsive.
+    }
+  }, [selectedRunId, effectiveSelectedImageId])
+
+  useEffect(() => {
     setModelDraft(selectedRun?.model_name || '')
     setRequiresFiducialsDraft(Boolean(selectedRun?.requires_fiducials))
     setRequiresBarcodeDraft(Boolean(selectedRun?.requires_barcode))
+    setManualStepId(null)
+    setCreateRunError('')
+    setUploadError('')
+    setModelError('')
+    setFiducialError('')
+    setBarcodeError('')
   }, [selectedRun?.id, selectedRun?.model_name, selectedRun?.requires_fiducials, selectedRun?.requires_barcode])
 
   const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
@@ -1197,14 +1280,16 @@ function App() {
       statusLabel: isReviewReady ? 'Ready' : 'Blocked',
     })
 
-    const activeStepId =
+    const autoStepId =
       baseSteps.find((step) => step.status === 'needs_review')?.id ||
       baseSteps.find((step) => step.status === 'ready')?.id ||
       baseSteps.find((step) => step.status === 'blocked')?.id ||
       baseSteps.at(-1)?.id
 
+    const activeStepId = (manualStepId && baseSteps.some(s => s.id === manualStepId)) ? manualStepId : autoStepId
+
     return baseSteps.map((step) => ({ ...step, active: step.id === activeStepId }))
-  }, [selectedRunId, hasScan, hasModel, requiresFiducials, fiducialStatus, requiresBarcode, barcodeStatus, isReviewReady])
+  }, [selectedRunId, hasScan, hasModel, requiresFiducials, fiducialStatus, requiresBarcode, barcodeStatus, isReviewReady, manualStepId])
 
   const activeSetupStep = setupSteps.find((step) => step.active) || setupSteps[0]
   const showSetupMode =
@@ -1351,9 +1436,19 @@ function App() {
               <p className="eyebrow">Run browser</p>
               <h2>History</h2>
             </div>
-            <button type="button" className="ghost-button" onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}>
-              Reset
-            </button>
+            <div className="rail-header-actions">
+              <button
+                type="button"
+                className="primary-button compact"
+                onClick={handleCreateRun}
+                disabled={isCreatingRun}
+              >
+                {isCreatingRun ? '...' : 'New Run'}
+              </button>
+              <button type="button" className="ghost-button" onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}>
+                Reset
+              </button>
+            </div>
           </div>
           <div className="rail-section rail-filters">
             <FilterField
@@ -1443,19 +1538,35 @@ function App() {
             </div>
             <div className="review-controls">
               {!showSetupMode ? (
-                <select
-                  className="image-selector"
-                  value={effectiveSelectedImageId}
-                  onChange={(event) => setSelectedImageId(event.target.value)}
-                  disabled={!runImages.length}
-                >
+                <>
+                  <button
+                    type="button"
+                    className="ghost-button setup-edit-button"
+                    onClick={() => setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: false }))}
+                    disabled={!selectedRunId}
+                  >
+                    Edit Setup
+                  </button>
+                  <select
+                    className="image-selector"
+                    value={effectiveSelectedImageId}
+                    onChange={(event) => setSelectedImageId(event.target.value)}
+                    disabled={!runImages.length}
+                  >
                   {runImages.map((image) => (
                     <option key={image.id} value={image.id}>
-                      {image.image_role?.replaceAll('_', ' ') || image.id}
+                      {image.image_role
+                        ? image.image_role
+                            .replaceAll('_', ' ')
+                            .split(' ')
+                            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                            .join(' ')
+                        : image.id}
                     </option>
                   ))}
                 </select>
-              ) : null}
+              </>
+            ) : null}
               <button
                 type="button"
                 className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
@@ -1508,12 +1619,17 @@ function App() {
               onDetectBarcode={handleDetectBarcode}
               onConfirmBarcode={handleConfirmBarcode}
               onContinueToReview={handleContinueToReview}
+              onStepClick={setManualStepId}
               isContinueReady={isReviewReady}
-              isCreatingRun={isCreatingRun}
-              isUploading={isUploading}
+              isCreatingRun={isCreatingRun}              isUploading={isUploading}
               isSavingModel={isSavingModel}
               isDetectingFiducials={isDetectingFiducials}
               isDetectingBarcode={isDetectingBarcode}
+              createRunError={createRunError}
+              uploadError={uploadError}
+              modelError={modelError}
+              fiducialError={fiducialError}
+              barcodeError={barcodeError}
             />
           ) : (
           <div className={`review-shell ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>

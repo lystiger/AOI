@@ -1,0 +1,20 @@
+
+.run-card-top,
+.run-card-bottom,
+.defect-list-top,
+.defect-list-meta,
+.review-topbar,
+.review-runline,
+.review-controls,
+.viewer-toolbar,
+.viewer-toolbar-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.review-controls {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}

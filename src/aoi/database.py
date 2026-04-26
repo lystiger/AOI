@@ -371,12 +371,17 @@ class DatabaseManager:
             barcode_status=next_barcode_status,
         )
 
+        next_status = str(run_row.get("status") or "SETUP")
+        if next_setup_status != "review_ready":
+            next_status = "SETUP"
+
         with self._connect() as connection:
             connection.execute(
                 """
                 UPDATE inspection_runs
                 SET model_name = ?, requires_fiducials = ?, fiducial_status = ?, fiducials_json = ?,
-                    requires_barcode = ?, barcode_status = ?, barcode_json = ?, setup_status = ?
+                    requires_barcode = ?, barcode_status = ?, barcode_json = ?, setup_status = ?,
+                    status = ?
                 WHERE id = ?
                 """,
                 (
@@ -388,6 +393,7 @@ class DatabaseManager:
                     next_barcode_status,
                     next_barcode_json,
                     next_setup_status,
+                    next_status,
                     run_id,
                 ),
             )

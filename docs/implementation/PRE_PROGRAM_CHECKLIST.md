@@ -52,7 +52,7 @@ Goal: Board identification and serial mapping.
 ## End-to-End Robustness Scenarios (The "Operator Stress Test")
 Verify these multi-step behaviors before signing off on Phase 1:
 
-1. [ ] **The "Dirty Exit"**: Create run, upload scan, close browser. Re-open -> Setup should resume at Step 3.
+1. [x] **The "Dirty Exit"**: Create run, upload scan, close browser. Re-open -> Setup should resume at Step 3.
 2. [x] **The "Model Swap"**: Complete setup -> Go back to Step 3 -> Change model. Dependent steps (Fiducials/Barcode) should reset to `ready` or `blocked`.
 3. [x] **The "Bad Upload"**: Upload a corrupted or non-image file. System must show error message and remain in Step 2.
 4. [x] **The "Ghost Run"**: Delete a run while it is selected in setup mode. UI must gracefully clear and return to empty Step 1.
@@ -64,4 +64,5 @@ Verify these multi-step behaviors before signing off on Phase 1:
 - **Logic**: `src/aoi/database.py` -> Look for `_calculate_setup_status`
 - **Logic**: `src/aoi/database.py` -> Look for `update_run` for model-change and requirement-toggle resets
 - **UI**: `web/src/App.jsx` -> Look for `const setupSteps = useMemo(...)`, `const showSetupMode = ...`, `handleImageUpload`, and the localStorage-backed selected run state
+- **UI**: `web/src/App.jsx` -> Look for `const setupSteps = useMemo(...)`, `const showSetupMode = ...`, `handleImageUpload`, and the localStorage-backed selected run/image state
 - **Tests**: `tests/test_database.py`, `tests/test_service.py`
