@@ -36,8 +36,8 @@ Use this document as the signoff surface for the setup workflow and as the hando
 
 ### What is not production-ready yet
 
-- Negative-path handling for detection failure is incomplete.
-- Manual placement/manual serial-entry fallback is not fully implemented.
+- Detection failure handling is now present, but still heuristic and metadata-driven rather than vision-driven.
+- Manual fiducial and barcode fallback is implemented, but the UI still uses numeric form entry instead of interactive placement.
 - The checklist has more confidence than the automation layer deserves unless mocked behavior is called out explicitly.
 
 ## Phase 1: Guided Run Creation And Preparation
@@ -77,8 +77,8 @@ Goal: alignment flow exists in product terms, but automation is still synthetic.
 | Detect endpoint exists | `POST /runs/<id>/fiducials/detect` | `Shipped` | Endpoint and status transitions are implemented. |
 | Running/reviewable setup UI exists | `web/src/App.jsx` | `Shipped` | Review step, preview, and confirm CTA are present. |
 | Detection data source is real CV output | `src/aoi/database.py` (`detect_fiducials`) | `Mocked` | Uses `_build_mock_fiducials(...)`, not image analysis. |
-| Zero-result failure path | UI + backend detect flow | `Missing` | No explicit "0 fiducials found" operator path yet. |
-| Manual correction fallback | UI fiducial step | `Missing` | Operator can confirm mock results, but cannot place/edit fiducials manually. |
+| Failure path | UI + backend detect flow | `Partial` | Failed detection is now represented explicitly, but the trigger is still heuristic rather than CV-driven. |
+| Manual correction fallback | UI fiducial step | `Partial` | Operator can recover by entering numeric boxes manually, but interactive placement/editing is still missing. |
 | Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify state transitions, not real detection accuracy. |
 
 ## Phase 3: Barcode Detection
@@ -93,7 +93,7 @@ Goal: identification flow exists in product terms, but automation is still synth
 | Needs-review flow exists | `web/src/App.jsx` | `Shipped` | Preview and confirm UI are present. |
 | Detection/decoding data source is real | `src/aoi/database.py` (`detect_barcode`) | `Mocked` | Uses `_build_mock_barcode(...)`, not barcode localization/decoding. |
 | Auto-complete on high confidence | Backend + UI | `Missing` | Current flow still routes through confirm. |
-| Decode-failure/manual serial entry path | UI + backend | `Missing` | No complete operator fallback for unreadable barcodes yet. |
+| Decode-failure/manual serial entry path | UI + backend | `Shipped` | Operator can recover with a manual decoded value and normalized barcode box. |
 | Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify workflow transitions, not real barcode robustness. |
 
 ## End-To-End Operator Stress Tests
@@ -107,7 +107,7 @@ These are the scenarios that matter most for signoff on the current workflow.
 | Bad upload stays in setup with an error | `Shipped` | Current upload path preserves setup mode on failure. |
 | Delete selected run clears setup state cleanly | `Shipped` | Backend delete exists and UI handles the ghost-run case. |
 | Continue-to-review remains locked while setup is incomplete | `Shipped` | Derived readiness gating is present in the UI. |
-| Detection failure can be recovered manually | `Missing` | This is the biggest operator-path gap left in setup. |
+| Detection failure can be recovered manually | `Shipped` | Failed detection can now be completed via manual fiducial/barcode entry. |
 
 ## Recommended Next Milestone
 
@@ -121,9 +121,9 @@ Scope:
 
 - replace `_build_mock_fiducials(...)` with a real detection integration
 - replace `_build_mock_barcode(...)` with a real localization/decode integration
-- add explicit failure states for "nothing found" and "decode failed"
-- add manual fiducial placement/editing
-- add manual barcode/serial entry override
+- replace heuristic failure gates with actual image-analysis failure states such as "nothing found" and "decode failed"
+- upgrade manual fiducial recovery from numeric entry to interactive placement/editing
+- keep the manual barcode override, but back it with real localization/decode results when available
 - keep the current setup-state machine and reuse the existing setup UI
 
 Success criteria:

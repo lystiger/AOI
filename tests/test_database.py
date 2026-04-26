@@ -152,6 +152,48 @@ def test_detect_and_confirm_fiducials_updates_run_state(tmp_path) -> None:
     assert confirmed_run["setup_status"] == "review_ready"
 
 
+def test_detect_fiducials_can_fail_and_manual_save_recovers_run(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FID-FAIL")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/fid-fail/images/img-1", "full_board", 640, 480, 0, run["timestamp"]),
+        )
+
+    database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+
+    try:
+        database.detect_fiducials(run["id"])
+    except ValueError as exc:
+        assert "resolution is too small" in str(exc)
+    else:
+        raise AssertionError("expected fiducial detection to fail")
+
+    failed_run = database.fetch_run(run["id"])
+    assert failed_run is not None
+    assert failed_run["fiducial_status"] == "failed"
+    assert failed_run["setup_status"] == "in_progress"
+
+    recovered_run = database.save_manual_fiducials(
+        run["id"],
+        [
+            {"x": 0.08, "y": 0.1, "width": 0.035, "height": 0.035},
+            {"x": 0.86, "y": 0.12, "width": 0.035, "height": 0.035},
+            {"x": 0.12, "y": 0.82, "width": 0.035, "height": 0.035},
+        ],
+    )
+
+    assert recovered_run is not None
+    assert recovered_run["fiducial_status"] == "confirmed"
+    assert len(recovered_run["fiducials"]) == 3
+    assert recovered_run["setup_status"] == "review_ready"
+
+
 def test_detect_and_confirm_barcode_updates_run_state(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-BAR")
@@ -179,6 +221,44 @@ def test_detect_and_confirm_barcode_updates_run_state(tmp_path) -> None:
     assert confirmed_run is not None
     assert confirmed_run["barcode_status"] == "confirmed"
     assert confirmed_run["setup_status"] == "review_ready"
+
+
+def test_detect_barcode_can_fail_and_manual_save_recovers_run(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-BAR-FAIL")
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar-fail/images/img-1", "full_board", 800, 420, 0, run["timestamp"]),
+        )
+
+    database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+
+    try:
+        database.detect_barcode(run["id"])
+    except ValueError as exc:
+        assert "resolution is too small" in str(exc)
+    else:
+        raise AssertionError("expected barcode detection to fail")
+
+    failed_run = database.fetch_run(run["id"])
+    assert failed_run is not None
+    assert failed_run["barcode_status"] == "failed"
+    assert failed_run["setup_status"] == "in_progress"
+
+    recovered_run = database.save_manual_barcode(
+        run["id"],
+        {"x": 0.72, "y": 0.78, "width": 0.16, "height": 0.08, "decoded_value": "PCB-BAR-FAIL-LOT-01"},
+    )
+
+    assert recovered_run is not None
+    assert recovered_run["barcode_status"] == "confirmed"
+    assert recovered_run["barcode"]["decoded_value"] == "PCB-BAR-FAIL-LOT-01"
+    assert recovered_run["setup_status"] == "review_ready"
 
 
 def test_update_run_model_change_clears_confirmed_setup_artifacts(tmp_path) -> None:

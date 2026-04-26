@@ -605,6 +605,31 @@ class DatabaseManager:
         if not images:
             raise ValueError("scan image is required before fiducial detection")
 
+        detection_failure = self._detect_fiducial_failure(images[0])
+        if detection_failure is not None:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    UPDATE inspection_runs
+                    SET fiducial_status = ?, fiducials_json = ?, setup_status = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        "failed",
+                        None,
+                        self._calculate_setup_status(
+                            run_id,
+                            run_row.get("model_name"),
+                            requires_fiducials=True,
+                            fiducial_status="failed",
+                            requires_barcode=bool(run_row.get("requires_barcode")),
+                            barcode_status=str(run_row.get("barcode_status") or "not_required"),
+                        ),
+                        run_id,
+                    ),
+                )
+            raise ValueError(detection_failure)
+
         fiducials = self._build_mock_fiducials(images[0]["id"])
         with self._connect() as connection:
             connection.execute(
@@ -621,6 +646,8 @@ class DatabaseManager:
                         run_row.get("model_name"),
                         requires_fiducials=True,
                         fiducial_status="needs_review",
+                        requires_barcode=bool(run_row.get("requires_barcode")),
+                        barcode_status=str(run_row.get("barcode_status") or "not_required"),
                     ),
                     run_id,
                 ),
@@ -631,6 +658,10 @@ class DatabaseManager:
         run_row = self.fetch_run(run_id)
         if run_row is None:
             return None
+        if not run_row["requires_fiducials"]:
+            raise ValueError("fiducials are not required for this run")
+        if str(run_row.get("fiducial_status") or "") != "needs_review":
+            raise ValueError("fiducials must be in needs_review before confirmation")
         with self._connect() as connection:
             connection.execute(
                 """
@@ -645,6 +676,42 @@ class DatabaseManager:
                         run_row.get("model_name"),
                         requires_fiducials=bool(run_row.get("requires_fiducials")),
                         fiducial_status="confirmed",
+                        requires_barcode=bool(run_row.get("requires_barcode")),
+                        barcode_status=str(run_row.get("barcode_status") or "not_required"),
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
+
+    def save_manual_fiducials(self, run_id: str, fiducials: list[dict[str, object]]) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        if not run_row["requires_fiducials"]:
+            raise ValueError("fiducials are not required for this run")
+        images = self.fetch_run_images(run_id)
+        if not images:
+            raise ValueError("scan image is required before saving fiducials")
+
+        normalized_fiducials = self._normalize_manual_fiducials(fiducials, images[0]["id"])
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET fiducial_status = ?, fiducials_json = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "confirmed",
+                    json.dumps(normalized_fiducials),
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=True,
+                        fiducial_status="confirmed",
+                        requires_barcode=bool(run_row.get("requires_barcode")),
+                        barcode_status=str(run_row.get("barcode_status") or "not_required"),
                     ),
                     run_id,
                 ),
@@ -660,6 +727,31 @@ class DatabaseManager:
         images = self.fetch_run_images(run_id)
         if not images:
             raise ValueError("scan image is required before barcode detection")
+
+        detection_failure = self._detect_barcode_failure(images[0])
+        if detection_failure is not None:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    UPDATE inspection_runs
+                    SET barcode_status = ?, barcode_json = ?, setup_status = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        "failed",
+                        None,
+                        self._calculate_setup_status(
+                            run_id,
+                            run_row.get("model_name"),
+                            requires_fiducials=bool(run_row.get("requires_fiducials")),
+                            fiducial_status=str(run_row.get("fiducial_status") or "not_required"),
+                            requires_barcode=True,
+                            barcode_status="failed",
+                        ),
+                        run_id,
+                    ),
+                )
+            raise ValueError(detection_failure)
 
         barcode = self._build_mock_barcode(images[0]["id"], str(run_row["pcb_id"]))
         with self._connect() as connection:
@@ -689,6 +781,10 @@ class DatabaseManager:
         run_row = self.fetch_run(run_id)
         if run_row is None:
             return None
+        if not run_row["requires_barcode"]:
+            raise ValueError("barcode is not required for this run")
+        if str(run_row.get("barcode_status") or "") != "needs_review":
+            raise ValueError("barcode must be in needs_review before confirmation")
         with self._connect() as connection:
             connection.execute(
                 """
@@ -704,6 +800,40 @@ class DatabaseManager:
                         requires_fiducials=bool(run_row.get("requires_fiducials")),
                         fiducial_status=str(run_row.get("fiducial_status") or "not_required"),
                         requires_barcode=bool(run_row.get("requires_barcode")),
+                        barcode_status="confirmed",
+                    ),
+                    run_id,
+                ),
+            )
+        return self.fetch_run(run_id)
+
+    def save_manual_barcode(self, run_id: str, barcode: dict[str, object]) -> dict[str, object] | None:
+        run_row = self.fetch_run(run_id)
+        if run_row is None:
+            return None
+        if not run_row["requires_barcode"]:
+            raise ValueError("barcode is not required for this run")
+        images = self.fetch_run_images(run_id)
+        if not images:
+            raise ValueError("scan image is required before saving barcode")
+
+        normalized_barcode = self._normalize_manual_barcode(barcode, images[0]["id"])
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET barcode_status = ?, barcode_json = ?, setup_status = ?
+                WHERE id = ?
+                """,
+                (
+                    "confirmed",
+                    json.dumps(normalized_barcode),
+                    self._calculate_setup_status(
+                        run_id,
+                        run_row.get("model_name"),
+                        requires_fiducials=bool(run_row.get("requires_fiducials")),
+                        fiducial_status=str(run_row.get("fiducial_status") or "not_required"),
+                        requires_barcode=True,
                         barcode_status="confirmed",
                     ),
                     run_id,
@@ -792,7 +922,7 @@ class DatabaseManager:
             return "not_required"
         if not self.fetch_run_images(run_id):
             return "blocked"
-        if current_status in {"needs_review", "confirmed"}:
+        if current_status in {"needs_review", "confirmed", "failed"}:
             return current_status
         return "ready"
 
@@ -801,7 +931,7 @@ class DatabaseManager:
             return "not_required"
         if not self.fetch_run_images(run_id):
             return "blocked"
-        if current_status in {"needs_review", "confirmed"}:
+        if current_status in {"needs_review", "confirmed", "failed"}:
             return current_status
         return "ready"
 
@@ -837,3 +967,86 @@ class DatabaseManager:
             "confidence": 0.93,
             "decoded_value": f"{pcb_id}-LOT-01",
         }
+
+    @staticmethod
+    def _detect_fiducial_failure(image: dict[str, object]) -> str | None:
+        if int(image.get("image_width") or 0) < 800 or int(image.get("image_height") or 0) < 600:
+            return "fiducial detection failed: scan resolution is too small for reliable alignment"
+        return None
+
+    @staticmethod
+    def _detect_barcode_failure(image: dict[str, object]) -> str | None:
+        if int(image.get("image_width") or 0) < 960 or int(image.get("image_height") or 0) < 540:
+            return "barcode detection failed: scan resolution is too small for reliable decoding"
+        return None
+
+    @staticmethod
+    def _normalize_detection_box(
+        payload: dict[str, object],
+        *,
+        run_image_id: str,
+        fallback_id: str,
+        require_decoded_value: bool = False,
+    ) -> dict[str, object]:
+        decoded_value = str(payload.get("decoded_value") or "").strip()
+        if require_decoded_value and not decoded_value:
+            raise ValueError("decoded_value must be a non-empty string")
+
+        normalized = {
+            "id": str(payload.get("id") or fallback_id),
+            "run_image_id": run_image_id,
+            "x": DatabaseManager._require_normalized_float(payload, "x"),
+            "y": DatabaseManager._require_normalized_float(payload, "y"),
+            "width": DatabaseManager._require_positive_normalized_float(payload, "width"),
+            "height": DatabaseManager._require_positive_normalized_float(payload, "height"),
+            "confidence": DatabaseManager._optional_normalized_confidence(payload.get("confidence")),
+        }
+        if require_decoded_value:
+            normalized["decoded_value"] = decoded_value
+        return normalized
+
+    @staticmethod
+    def _normalize_manual_fiducials(fiducials: list[dict[str, object]], run_image_id: str) -> list[dict[str, object]]:
+        if len(fiducials) < 3:
+            raise ValueError("at least 3 fiducials are required")
+        return [
+            DatabaseManager._normalize_detection_box(entry, run_image_id=run_image_id, fallback_id=f"fid-{index + 1}")
+            for index, entry in enumerate(fiducials)
+        ]
+
+    @staticmethod
+    def _normalize_manual_barcode(barcode: dict[str, object], run_image_id: str) -> dict[str, object]:
+        return DatabaseManager._normalize_detection_box(
+            barcode,
+            run_image_id=run_image_id,
+            fallback_id="barcode-1",
+            require_decoded_value=True,
+        )
+
+    @staticmethod
+    def _require_normalized_float(payload: dict[str, object], key: str) -> float:
+        value = payload.get(key)
+        if not isinstance(value, (int, float)):
+            raise ValueError(f"{key} must be a number")
+        number = float(value)
+        if number < 0 or number > 1:
+            raise ValueError(f"{key} must be between 0 and 1")
+        return number
+
+    @staticmethod
+    def _require_positive_normalized_float(payload: dict[str, object], key: str) -> float:
+        number = DatabaseManager._require_normalized_float(payload, key)
+        if number <= 0:
+            raise ValueError(f"{key} must be greater than 0")
+        return number
+
+    @staticmethod
+    def _optional_normalized_confidence(value: object) -> float:
+        if value is None:
+            return 1.0
+        if not isinstance(value, (int, float)):
+            raise ValueError("confidence must be a number")
+        number = float(value)
+        if number < 0 or number > 1:
+            raise ValueError("confidence must be between 0 and 1")
+        return number

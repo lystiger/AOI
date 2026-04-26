@@ -471,6 +471,69 @@ def test_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:
     assert confirm_result["run"]["setup_status"] == "review_ready"
 
 
+def test_fiducial_detection_failure_and_manual_recovery_endpoints(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    run = database.create_run(pcb_id="PCB-FID-FAIL")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 640, 480, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    detect_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}/fiducials/detect",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    manual_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}/fiducials/manual",
+        data=json.dumps(
+            {
+                "fiducials": [
+                    {"x": 0.08, "y": 0.1, "width": 0.035, "height": 0.035},
+                    {"x": 0.86, "y": 0.12, "width": 0.035, "height": 0.035},
+                    {"x": 0.12, "y": 0.82, "width": 0.035, "height": 0.035},
+                ]
+            }
+        ).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(detect_request, timeout=5) as response:
+            raise AssertionError(f"expected detect failure, got {response.status}")
+    except error.HTTPError as exc:
+        detect_result = json.loads(exc.read().decode("utf-8"))
+        assert exc.code == 400
+
+    failed_run = database.fetch_run(run["id"])
+
+    try:
+        with request.urlopen(manual_request, timeout=5) as response:
+            manual_result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert detect_result["message"].startswith("fiducial detection failed")
+    assert failed_run is not None
+    assert failed_run["fiducial_status"] == "failed"
+    assert manual_result["run"]["fiducial_status"] == "confirmed"
+    assert manual_result["run"]["setup_status"] == "review_ready"
+
+
 def test_barcode_detection_and_confirmation_endpoints(tmp_path) -> None:
     log_path = tmp_path / "inference.jsonl"
     db_path = tmp_path / "aoi.db"
@@ -516,6 +579,72 @@ def test_barcode_detection_and_confirmation_endpoints(tmp_path) -> None:
     assert detect_result["run"]["barcode"]["decoded_value"] == "PCB-BAR-LOT-01"
     assert confirm_result["run"]["barcode_status"] == "confirmed"
     assert confirm_result["run"]["setup_status"] == "review_ready"
+
+
+def test_barcode_detection_failure_and_manual_recovery_endpoints(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    db_path = tmp_path / "aoi.db"
+    database = DatabaseManager(db_path)
+    run = database.create_run(pcb_id="PCB-BAR-FAIL")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar/images/img-1", "full_board", 800, 420, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+    server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    detect_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}/barcode/detect",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    manual_request = request.Request(
+        f"http://127.0.0.1:{server.server_port}/runs/{run['id']}/barcode/manual",
+        data=json.dumps(
+            {
+                "barcode": {
+                    "x": 0.72,
+                    "y": 0.78,
+                    "width": 0.16,
+                    "height": 0.08,
+                    "decoded_value": "PCB-BAR-FAIL-LOT-01",
+                }
+            }
+        ).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(detect_request, timeout=5) as response:
+            raise AssertionError(f"expected detect failure, got {response.status}")
+    except error.HTTPError as exc:
+        detect_result = json.loads(exc.read().decode("utf-8"))
+        assert exc.code == 400
+
+    failed_run = database.fetch_run(run["id"])
+
+    try:
+        with request.urlopen(manual_request, timeout=5) as response:
+            manual_result = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert detect_result["message"].startswith("barcode detection failed")
+    assert failed_run is not None
+    assert failed_run["barcode_status"] == "failed"
+    assert manual_result["run"]["barcode_status"] == "confirmed"
+    assert manual_result["run"]["barcode"]["decoded_value"] == "PCB-BAR-FAIL-LOT-01"
+    assert manual_result["run"]["setup_status"] == "review_ready"
 
 
 def test_delete_run_endpoint_removes_run_and_assets(tmp_path) -> None:

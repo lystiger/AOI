@@ -72,11 +72,17 @@ class IngestionHandler(BaseHTTPRequestHandler):
         if len(parts) == 4 and parts[0] == "runs" and parts[2] == "fiducials" and parts[3] == "confirm":
             self._handle_confirm_fiducials(parts[1])
             return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "fiducials" and parts[3] == "manual":
+            self._handle_manual_fiducials(parts[1])
+            return
         if len(parts) == 4 and parts[0] == "runs" and parts[2] == "barcode" and parts[3] == "detect":
             self._handle_detect_barcode(parts[1])
             return
         if len(parts) == 4 and parts[0] == "runs" and parts[2] == "barcode" and parts[3] == "confirm":
             self._handle_confirm_barcode(parts[1])
+            return
+        if len(parts) == 4 and parts[0] == "runs" and parts[2] == "barcode" and parts[3] == "manual":
+            self._handle_manual_barcode(parts[1])
             return
 
         self._write_json(
@@ -277,7 +283,35 @@ class IngestionHandler(BaseHTTPRequestHandler):
         self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
 
     def _handle_confirm_fiducials(self, run_id: str) -> None:
-        run = self.server.database_manager.confirm_fiducials(run_id)
+        try:
+            run = self.server.database_manager.confirm_fiducials(run_id)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_manual_fiducials(self, run_id: str) -> None:
+        try:
+            raw_body = self._read_body()
+            payload = json.loads(raw_body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if not isinstance(payload, dict):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "payload must be a JSON object"})
+            return
+        fiducials = payload.get("fiducials")
+        if not isinstance(fiducials, list):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "fiducials must be an array"})
+            return
+        try:
+            run = self.server.database_manager.save_manual_fiducials(run_id, fiducials)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
         if run is None:
             self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
             return
@@ -295,7 +329,35 @@ class IngestionHandler(BaseHTTPRequestHandler):
         self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
 
     def _handle_confirm_barcode(self, run_id: str) -> None:
-        run = self.server.database_manager.confirm_barcode(run_id)
+        try:
+            run = self.server.database_manager.confirm_barcode(run_id)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if run is None:
+            self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
+            return
+        self._write_json(HTTPStatus.OK, {"status": "ok", "run": run})
+
+    def _handle_manual_barcode(self, run_id: str) -> None:
+        try:
+            raw_body = self._read_body()
+            payload = json.loads(raw_body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
+        if not isinstance(payload, dict):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "payload must be a JSON object"})
+            return
+        barcode = payload.get("barcode")
+        if not isinstance(barcode, dict):
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": "barcode must be a JSON object"})
+            return
+        try:
+            run = self.server.database_manager.save_manual_barcode(run_id, barcode)
+        except ValueError as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"status": "error", "message": str(exc)})
+            return
         if run is None:
             self._write_json(HTTPStatus.NOT_FOUND, {"status": "error", "message": "run not found"})
             return

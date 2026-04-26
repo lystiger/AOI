@@ -596,6 +596,31 @@
   accent-color: var(--accent);
 }
 
+.manual-setup-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.manual-setup-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.manual-setup-item {
+  display: grid;
+  gap: 8px;
+}
+
+.manual-setup-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 8px;
+}
+
 .setup-summary {
   padding: 18px 18px 18px 0;
 }

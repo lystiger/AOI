@@ -23,6 +23,44 @@ const DETAIL_FILTER_DEFAULTS = {
   inspection_result: '',
 }
 
+const DEFAULT_MANUAL_FIDUCIALS = [
+  { id: 'fid-1', x: '0.08', y: '0.10', width: '0.035', height: '0.035' },
+  { id: 'fid-2', x: '0.86', y: '0.12', width: '0.035', height: '0.035' },
+  { id: 'fid-3', x: '0.12', y: '0.82', width: '0.035', height: '0.035' },
+]
+
+function buildManualFiducialsDraft(run) {
+  if (run?.fiducials?.length) {
+    return run.fiducials.map((fiducial, index) => ({
+      id: fiducial.id || `fid-${index + 1}`,
+      x: String(fiducial.x ?? ''),
+      y: String(fiducial.y ?? ''),
+      width: String(fiducial.width ?? ''),
+      height: String(fiducial.height ?? ''),
+    }))
+  }
+  return DEFAULT_MANUAL_FIDUCIALS.map((fiducial) => ({ ...fiducial }))
+}
+
+function buildManualBarcodeDraft(run) {
+  if (run?.barcode) {
+    return {
+      decoded_value: run.barcode.decoded_value || '',
+      x: String(run.barcode.x ?? ''),
+      y: String(run.barcode.y ?? ''),
+      width: String(run.barcode.width ?? ''),
+      height: String(run.barcode.height ?? ''),
+    }
+  }
+  return {
+    decoded_value: run?.pcb_id ? `${run.pcb_id}-LOT-01` : '',
+    x: '0.72',
+    y: '0.78',
+    width: '0.16',
+    height: '0.08',
+  }
+}
+
 function buildQuery(filters) {
   const params = new URLSearchParams()
   Object.entries(filters).forEach(([key, value]) => {
@@ -425,8 +463,12 @@ function SetupFlow({
   onSaveModel,
   onDetectFiducials,
   onConfirmFiducials,
+  onManualFiducialsChange,
+  onSaveManualFiducials,
   onDetectBarcode,
   onConfirmBarcode,
+  onManualBarcodeChange,
+  onSaveManualBarcode,
   onContinueToReview,
   onStepClick,
   isContinueReady,
@@ -434,12 +476,16 @@ function SetupFlow({
   isUploading,
   isSavingModel,
   isDetectingFiducials,
+  isSavingManualFiducials,
   isDetectingBarcode,
+  isSavingManualBarcode,
   createRunError,
   uploadError,
   modelError,
   fiducialError,
   barcodeError,
+  manualFiducialsDraft,
+  manualBarcodeDraft,
 }) {
   return (
     <div className="setup-shell">
@@ -539,7 +585,10 @@ function SetupFlow({
                 <p>Fiducials are not required for this product. Enable them in the model step if the product needs alignment marks.</p>
               ) : (
                 <>
-                  <p>Run automated fiducial search, review the overlay results, then confirm when the locations look correct.</p>
+                  <p>
+                    Run automated fiducial search, review the overlay results, then confirm when the locations look
+                    correct. If detection fails, enter the fiducial boxes manually and save them to recover setup.
+                  </p>
                   {fiducialError ? <div className="step-error-message">{fiducialError}</div> : null}
                   <FiducialPreview image={selectedImage} fiducials={selectedRun?.fiducials || []} />
                   <div className="setup-button-row">
@@ -558,6 +607,37 @@ function SetupFlow({
                       disabled={selectedRun?.fiducial_status !== 'needs_review'}
                     >
                       Confirm Fiducials
+                    </button>
+                  </div>
+                  <div className="manual-setup-card">
+                    <strong>Manual Fiducial Recovery</strong>
+                    <div className="manual-setup-grid">
+                      {manualFiducialsDraft.map((fiducial, index) => (
+                        <div key={fiducial.id || index} className="manual-setup-item">
+                          <strong>{fiducial.id || `fid-${index + 1}`}</strong>
+                          <div className="manual-setup-fields">
+                            <label className="field compact">
+                              <span>X</span>
+                              <input value={fiducial.x} onChange={(event) => onManualFiducialsChange(index, 'x', event.target.value)} />
+                            </label>
+                            <label className="field compact">
+                              <span>Y</span>
+                              <input value={fiducial.y} onChange={(event) => onManualFiducialsChange(index, 'y', event.target.value)} />
+                            </label>
+                            <label className="field compact">
+                              <span>W</span>
+                              <input value={fiducial.width} onChange={(event) => onManualFiducialsChange(index, 'width', event.target.value)} />
+                            </label>
+                            <label className="field compact">
+                              <span>H</span>
+                              <input value={fiducial.height} onChange={(event) => onManualFiducialsChange(index, 'height', event.target.value)} />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" className="ghost-button" onClick={onSaveManualFiducials} disabled={isSavingManualFiducials || !selectedImage}>
+                      {isSavingManualFiducials ? 'Saving Manual Fiducials...' : 'Save Manual Fiducials'}
                     </button>
                   </div>
                   {selectedRun?.fiducials?.length ? (
@@ -581,7 +661,10 @@ function SetupFlow({
                 <p>Barcode validation is not required for this product. Enable it in the model step if the product needs barcode confirmation.</p>
               ) : (
                 <>
-                  <p>Run automated barcode search, review the decoded result, then confirm when the location and value are correct.</p>
+                  <p>
+                    Run automated barcode search, review the decoded result, then confirm when the location and value
+                    are correct. If detection fails, enter the barcode box and decoded value manually.
+                  </p>
                   {barcodeError ? <div className="step-error-message">{barcodeError}</div> : null}
                   <BarcodePreview image={selectedImage} barcode={selectedRun?.barcode} />
                   <div className="setup-button-row">
@@ -600,6 +683,34 @@ function SetupFlow({
                       disabled={selectedRun?.barcode_status !== 'needs_review'}
                     >
                       Confirm Barcode
+                    </button>
+                  </div>
+                  <div className="manual-setup-card">
+                    <strong>Manual Barcode Recovery</strong>
+                    <div className="manual-setup-fields">
+                      <label className="field compact">
+                        <span>Decoded</span>
+                        <input value={manualBarcodeDraft.decoded_value} onChange={(event) => onManualBarcodeChange('decoded_value', event.target.value)} />
+                      </label>
+                      <label className="field compact">
+                        <span>X</span>
+                        <input value={manualBarcodeDraft.x} onChange={(event) => onManualBarcodeChange('x', event.target.value)} />
+                      </label>
+                      <label className="field compact">
+                        <span>Y</span>
+                        <input value={manualBarcodeDraft.y} onChange={(event) => onManualBarcodeChange('y', event.target.value)} />
+                      </label>
+                      <label className="field compact">
+                        <span>W</span>
+                        <input value={manualBarcodeDraft.width} onChange={(event) => onManualBarcodeChange('width', event.target.value)} />
+                      </label>
+                      <label className="field compact">
+                        <span>H</span>
+                        <input value={manualBarcodeDraft.height} onChange={(event) => onManualBarcodeChange('height', event.target.value)} />
+                      </label>
+                    </div>
+                    <button type="button" className="ghost-button" onClick={onSaveManualBarcode} disabled={isSavingManualBarcode || !selectedImage}>
+                      {isSavingManualBarcode ? 'Saving Manual Barcode...' : 'Save Manual Barcode'}
                     </button>
                   </div>
                   {selectedRun?.barcode ? (
@@ -697,12 +808,16 @@ function App() {
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
   const [isDetectingFiducials, setIsDetectingFiducials] = useState(false)
+  const [isSavingManualFiducials, setIsSavingManualFiducials] = useState(false)
   const [isDetectingBarcode, setIsDetectingBarcode] = useState(false)
+  const [isSavingManualBarcode, setIsSavingManualBarcode] = useState(false)
   const [isDeletingRun, setIsDeletingRun] = useState(false)
   const [manualStepId, setManualStepId] = useState(null)
   const [modelDraft, setModelDraft] = useState('')
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
+  const [manualFiducialsDraft, setManualFiducialsDraft] = useState(() => buildManualFiducialsDraft(null))
+  const [manualBarcodeDraft, setManualBarcodeDraft] = useState(() => buildManualBarcodeDraft(null))
   const [dismissedSetupRuns, setDismissedSetupRuns] = useState(() => {
     if (typeof window === 'undefined') {
       return {}
@@ -919,6 +1034,51 @@ function App() {
     }
   }
 
+  function handleManualFiducialChange(index, key, value) {
+    setManualFiducialsDraft((current) =>
+      current.map((fiducial, draftIndex) => (draftIndex === index ? { ...fiducial, [key]: value } : fiducial)),
+    )
+  }
+
+  async function handleSaveManualFiducials() {
+    if (!selectedRunId) {
+      return
+    }
+    setIsSavingManualFiducials(true)
+    setFiducialError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/fiducials/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fiducials: manualFiducialsDraft.map((fiducial) => ({
+            id: fiducial.id,
+            x: Number(fiducial.x),
+            y: Number(fiducial.y),
+            width: Number(fiducial.width),
+            height: Number(fiducial.height),
+          })),
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Manual fiducial save failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setFiducialError(`Manual Fiducial Save Error: ${err.message}`)
+    } finally {
+      setIsSavingManualFiducials(false)
+    }
+  }
+
   async function handleDetectBarcode() {
     if (!selectedRunId) {
       return
@@ -975,6 +1135,49 @@ function App() {
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
       setBarcodeError(`Barcode Confirm Error: ${err.message}`)
+    }
+  }
+
+  function handleManualBarcodeChange(key, value) {
+    setManualBarcodeDraft((current) => ({ ...current, [key]: value }))
+  }
+
+  async function handleSaveManualBarcode() {
+    if (!selectedRunId) {
+      return
+    }
+    setIsSavingManualBarcode(true)
+    setBarcodeError('')
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/barcode/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barcode: {
+            decoded_value: manualBarcodeDraft.decoded_value,
+            x: Number(manualBarcodeDraft.x),
+            y: Number(manualBarcodeDraft.y),
+            width: Number(manualBarcodeDraft.width),
+            height: Number(manualBarcodeDraft.height),
+          },
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Manual barcode save failed')
+      }
+      const nextRun = {
+        ...payload.run,
+        images: selectedRun?.images || [],
+        defect_logs: selectedRun?.defect_logs || [],
+        event_count: selectedRun?.event_count || 0,
+      }
+      setSelectedRun(nextRun)
+      setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
+    } catch (err) {
+      setBarcodeError(`Manual Barcode Save Error: ${err.message}`)
+    } finally {
+      setIsSavingManualBarcode(false)
     }
   }
 
@@ -1185,6 +1388,8 @@ function App() {
     setModelDraft(selectedRun?.model_name || '')
     setRequiresFiducialsDraft(Boolean(selectedRun?.requires_fiducials))
     setRequiresBarcodeDraft(Boolean(selectedRun?.requires_barcode))
+    setManualFiducialsDraft(buildManualFiducialsDraft(selectedRun))
+    setManualBarcodeDraft(buildManualBarcodeDraft(selectedRun))
     setManualStepId(null)
     setCreateRunError('')
     setUploadError('')
@@ -1244,6 +1449,8 @@ function App() {
               ? 'Done'
               : fiducialStatus === 'needs_review'
                 ? 'Needs Review'
+                : fiducialStatus === 'failed'
+                  ? 'Failed'
                 : fiducialStatus === 'ready'
                   ? 'Ready'
                   : fiducialStatus === 'blocked'
@@ -1263,6 +1470,8 @@ function App() {
               ? 'Done'
               : barcodeStatus === 'needs_review'
                 ? 'Needs Review'
+                : barcodeStatus === 'failed'
+                  ? 'Failed'
                 : barcodeStatus === 'ready'
                   ? 'Ready'
                   : barcodeStatus === 'blocked'
@@ -1616,20 +1825,29 @@ function App() {
               onSaveModel={handleSaveModel}
               onDetectFiducials={handleDetectFiducials}
               onConfirmFiducials={handleConfirmFiducials}
+              onManualFiducialsChange={handleManualFiducialChange}
+              onSaveManualFiducials={handleSaveManualFiducials}
               onDetectBarcode={handleDetectBarcode}
               onConfirmBarcode={handleConfirmBarcode}
+              onManualBarcodeChange={handleManualBarcodeChange}
+              onSaveManualBarcode={handleSaveManualBarcode}
               onContinueToReview={handleContinueToReview}
               onStepClick={setManualStepId}
               isContinueReady={isReviewReady}
-              isCreatingRun={isCreatingRun}              isUploading={isUploading}
+              isCreatingRun={isCreatingRun}
+              isUploading={isUploading}
               isSavingModel={isSavingModel}
               isDetectingFiducials={isDetectingFiducials}
+              isSavingManualFiducials={isSavingManualFiducials}
               isDetectingBarcode={isDetectingBarcode}
+              isSavingManualBarcode={isSavingManualBarcode}
               createRunError={createRunError}
               uploadError={uploadError}
               modelError={modelError}
               fiducialError={fiducialError}
               barcodeError={barcodeError}
+              manualFiducialsDraft={manualFiducialsDraft}
+              manualBarcodeDraft={manualBarcodeDraft}
             />
           ) : (
           <div className={`review-shell ${!isSidebarOpen ? 'sidebar-collapsed' : ''}`}>

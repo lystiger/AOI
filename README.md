@@ -10,10 +10,12 @@ This repository currently implements the first milestone from `docs/priority.md`
 - JSONL log writer
 - HTTP ingestion service for inference events
 - SQLite persistence for `inspection_runs` and `defect_logs`
+- setup-oriented run creation and pre-review workflow
+- mock-backed fiducial and barcode setup flow
 - dedicated Vite + React frontend in `web/`
 - optional mock event sender for development traffic
 - local file-backed logging flow behind the ingestion API
-- basic tests for schema and log writing
+- automated tests for schema, persistence, and service behavior
 
 ## Project Layout
 
@@ -263,8 +265,21 @@ docker compose logs promtail
 
 ## Run Tests
 
-If `pytest` is available in the environment:
+Create a local virtual environment and install the Python dependencies:
 
 ```bash
-PYTHONPATH=src python3 -m pytest -q
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Run the full Python test suite:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m pytest -q
+```
+
+Run the setup-related backend and service verification used by the current checklist:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_database.py tests/test_service.py
 ```
