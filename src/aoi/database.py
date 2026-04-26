@@ -299,6 +299,8 @@ class DatabaseManager:
                     None,
                 ),
             )
+        run_row["requires_fiducials"] = False
+        run_row["requires_barcode"] = False
         return run_row
 
     def update_run(

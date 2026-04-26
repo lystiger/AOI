@@ -1,68 +1,164 @@
-# Pre-Program Setup: Verification Checklist
+# Pre-Program Setup: Current Status And Verification
 
-This document is the authoritative source for verifying the "Pre-Program" setup flow. It links directly to implementation and defines the rigor required for production readiness.
+This document is the current-state verification guide for the "Pre-Program" flow in this repository.
 
-## Phase 1: Guided Run Creation & Preparation
-Goal: Eliminate "empty state" dead-ends and provide a robust manual setup path.
+It replaces the older greenfield framing with a sharper question:
 
-### 1.1 Backend: Persistence & API
-| Requirement | Verification Point (Code/Route) | Happy Path | Negative/Edge Path |
-| :--- | :--- | :---: | :---: |
-| **Schema Integrity** | `src/aoi/database.py` (`_initialize`) | [x] Columns exist | [ ] Migration fallback |
-| **Run Creation** | `POST /runs` -> `src/aoi/service.py` (`_handle_create_run`) | [x] UUID + Default PCB ID | [x] Invalid JSON payload |
-| **Run Updates** | `PATCH /runs/<run_id>` -> `src/aoi/service.py` (`_handle_patch_run`) | [x] Partial updates | [x] 404 on missing run |
-| **Model Validation**| `src/aoi/service.py` (`_handle_patch_run`) | [x] Non-empty string | [x] Whitespace-only names |
-| **Setup Status** | `src/aoi/database.py` (`_calculate_setup_status`) | [x] Transition to `review_ready` | [x] Premature readiness blocked |
+- what is already implemented
+- what is currently mocked or simulated
+- what still blocks production readiness
+
+Use this document as the signoff surface for the setup workflow and as the handoff surface for the next milestone.
+
+## Status Legend
+
+- `Shipped`: implemented in the app and covered by code/tests
+- `Partial`: implemented, but with known gaps in error handling or operator recovery
+- `Mocked`: workflow exists, but core automation is synthetic
+- `Missing`: expected by the product flow, not yet implemented
+
+## Current Project Read
+
+### What is real today
+
+- Empty runs can be created from the UI and backend.
+- A run can store a scan image and model name before any review data exists.
+- Setup status is persisted and survives refresh/reload.
+- Required fiducial and barcode steps can be toggled per run.
+- A completed run can be forced back into setup when model requirements change.
+- The UI already switches between setup mode and review mode.
+
+### What is still mocked
+
+- Fiducial detection returns generated overlay data, not computer-vision output.
+- Barcode detection returns generated region and decoded value data, not decoder output.
+- Detection endpoints behave like synchronous mock actions, not durable async jobs.
+
+### What is not production-ready yet
+
+- Negative-path handling for detection failure is incomplete.
+- Manual placement/manual serial-entry fallback is not fully implemented.
+- The checklist has more confidence than the automation layer deserves unless mocked behavior is called out explicitly.
+
+## Phase 1: Guided Run Creation And Preparation
+
+Goal: remove setup dead ends and provide a robust manual path into review.
+
+### 1.1 Backend: Persistence And API
+
+| Requirement | Verification Point | Status | Notes |
+| :--- | :--- | :---: | :--- |
+| Schema integrity for setup fields | `src/aoi/database.py` (`_initialize`) | `Shipped` | Setup columns exist and are exercised by tests. |
+| Migration fallback for older databases | `src/aoi/database.py` | `Shipped` | Legacy column-add paths exist; keep regression coverage on upgraded DBs. |
+| Run creation | `POST /runs` -> `src/aoi/service.py` (`_handle_create_run`) | `Shipped` | Empty setup run with generated PCB ID is covered in `tests/test_service.py`. |
+| Run updates | `PATCH /runs/<run_id>` -> `src/aoi/service.py` (`_handle_patch_run`) | `Shipped` | Partial update path and missing-run handling are covered. |
+| Model validation | `src/aoi/service.py` (`_handle_patch_run`) | `Shipped` | Rejects non-string and whitespace-only values. |
+| Setup status transitions | `src/aoi/database.py` (`_calculate_setup_status`) | `Shipped` | `not_ready`, `in_progress`, and `review_ready` are all exercised. |
 
 ### 1.2 Frontend: Setup Orchestration
-| Requirement | Verification Point (Code) | Happy Path | Negative/Edge Path |
-| :--- | :--- | :---: | :---: |
-| **Setup Mode Trigger**| `web/src/App.jsx` (`showSetupMode`) | [x] Show for `SETUP` runs | [x] Persistence after refresh |
-| **Step Progression** | `web/src/App.jsx` (`setupSteps`) | [x] Sequential activation | [ ] Backward nav logic |
-| **Image Upload** | `web/src/App.jsx` (`handleImageUpload`) | [x] Success previews image | [x] Bad type stays in setup with error |
-| **Model Saving** | `web/src/App.jsx` (`handleSaveModel`) | [x] Persistence on success | [ ] Network failure handling |
-| **Rework/Revisit** | `src/aoi/database.py` (`update_run`), `web/src/App.jsx` (`showSetupMode`) | [x] Edit completed steps | [x] Invalidation of children |
 
----
+| Requirement | Verification Point | Status | Notes |
+| :--- | :--- | :---: | :--- |
+| Setup mode trigger | `web/src/App.jsx` (`showSetupMode`) | `Shipped` | Setup mode appears for incomplete runs and survives refresh via persisted selection. |
+| Step progression | `web/src/App.jsx` (`setupSteps`) | `Shipped` | Sequential activation exists, with auto-focus on the next actionable step. |
+| Backward navigation and revisit | `web/src/App.jsx` (`manualStepId`) | `Shipped` | Completed steps can be revisited without rebuilding the run. |
+| Image upload | `web/src/App.jsx` (`handleImageUpload`) | `Shipped` | Success and invalid file handling are present. |
+| Model saving | `web/src/App.jsx` (`handleSaveModel`) | `Partial` | Persistence works, but network-failure behavior should be treated as a UX hardening area. |
+| Rework and revisit behavior | `src/aoi/database.py` (`update_run`) | `Shipped` | Model or requirement changes correctly reset dependent setup artifacts. |
 
-## Phase 2: Automated Fiducial Detection
-Goal: Registration alignment with manual correction.
+## Phase 2: Fiducial Detection
+
+Goal: alignment flow exists in product terms, but automation is still synthetic.
 
 ### 2.1 Detection Flow
-- [x] **Trigger**: `POST /runs/<id>/fiducials/detect` returns `200 OK`.
-- [x] **State `running`**: UI shows spinner/progress in the Fiducial step card.
-- [x] **State `needs_review`**: UI renders detected boxes with confidence scores.
-- [ ] **Negative Path**: Detection finds 0 fiducials -> State moves to `failed` -> UI offers manual placement.
-- [x] **Verification**: `src/aoi/database.py` (`fiducial_status` transitions).
 
----
+| Requirement | Verification Point | Status | Notes |
+| :--- | :--- | :---: | :--- |
+| Detect endpoint exists | `POST /runs/<id>/fiducials/detect` | `Shipped` | Endpoint and status transitions are implemented. |
+| Running/reviewable setup UI exists | `web/src/App.jsx` | `Shipped` | Review step, preview, and confirm CTA are present. |
+| Detection data source is real CV output | `src/aoi/database.py` (`detect_fiducials`) | `Mocked` | Uses `_build_mock_fiducials(...)`, not image analysis. |
+| Zero-result failure path | UI + backend detect flow | `Missing` | No explicit "0 fiducials found" operator path yet. |
+| Manual correction fallback | UI fiducial step | `Missing` | Operator can confirm mock results, but cannot place/edit fiducials manually. |
+| Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify state transitions, not real detection accuracy. |
 
-## Phase 3: Automated Barcode Detection
-Goal: Board identification and serial mapping.
+## Phase 3: Barcode Detection
+
+Goal: identification flow exists in product terms, but automation is still synthetic.
 
 ### 3.1 Validation Flow
-- [x] **Trigger**: `POST /runs/<id>/barcode/detect` returns `200 OK`.
-- [ ] **State `done`**: High-confidence decode automatically marks step complete.
-- [x] **State `needs_review`**: Low-confidence decode or multiple barcodes found.
-- [ ] **Negative Path**: Decode failure -> UI allows manual serial entry.
-- [x] **Verification**: `src/aoi/database.py` (`barcode_status` transitions).
 
----
+| Requirement | Verification Point | Status | Notes |
+| :--- | :--- | :---: | :--- |
+| Detect endpoint exists | `POST /runs/<id>/barcode/detect` | `Shipped` | Endpoint and state transitions are implemented. |
+| Needs-review flow exists | `web/src/App.jsx` | `Shipped` | Preview and confirm UI are present. |
+| Detection/decoding data source is real | `src/aoi/database.py` (`detect_barcode`) | `Mocked` | Uses `_build_mock_barcode(...)`, not barcode localization/decoding. |
+| Auto-complete on high confidence | Backend + UI | `Missing` | Current flow still routes through confirm. |
+| Decode-failure/manual serial entry path | UI + backend | `Missing` | No complete operator fallback for unreadable barcodes yet. |
+| Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify workflow transitions, not real barcode robustness. |
 
-## End-to-End Robustness Scenarios (The "Operator Stress Test")
-Verify these multi-step behaviors before signing off on Phase 1:
+## End-To-End Operator Stress Tests
 
-1. [x] **The "Dirty Exit"**: Create run, upload scan, close browser. Re-open -> Setup should resume at Step 3.
-2. [x] **The "Model Swap"**: Complete setup -> Go back to Step 3 -> Change model. Dependent steps (Fiducials/Barcode) should reset to `ready` or `blocked`.
-3. [x] **The "Bad Upload"**: Upload a corrupted or non-image file. System must show error message and remain in Step 2.
-4. [x] **The "Ghost Run"**: Delete a run while it is selected in setup mode. UI must gracefully clear and return to empty Step 1.
-5. [x] **The "Readiness Lock"**: Attempt to "Continue to Review" while a required step is still `ready` (not `done`). Button must be disabled.
+These are the scenarios that matter most for signoff on the current workflow.
 
----
+| Scenario | Status | Notes |
+| :--- | :---: | :--- |
+| Dirty exit: create run, upload scan, close browser, resume later | `Shipped` | Selection/setup persistence exists in the frontend. |
+| Model swap after completion resets dependent setup | `Shipped` | Covered in database and service tests. |
+| Bad upload stays in setup with an error | `Shipped` | Current upload path preserves setup mode on failure. |
+| Delete selected run clears setup state cleanly | `Shipped` | Backend delete exists and UI handles the ghost-run case. |
+| Continue-to-review remains locked while setup is incomplete | `Shipped` | Derived readiness gating is present in the UI. |
+| Detection failure can be recovered manually | `Missing` | This is the biggest operator-path gap left in setup. |
 
-## Traceability Links
-- **Logic**: `src/aoi/database.py` -> Look for `_calculate_setup_status`
-- **Logic**: `src/aoi/database.py` -> Look for `update_run` for model-change and requirement-toggle resets
-- **UI**: `web/src/App.jsx` -> Look for `const setupSteps = useMemo(...)`, `const showSetupMode = ...`, `handleImageUpload`, and the localStorage-backed selected run state
-- **UI**: `web/src/App.jsx` -> Look for `const setupSteps = useMemo(...)`, `const showSetupMode = ...`, `handleImageUpload`, and the localStorage-backed selected run/image state
-- **Tests**: `tests/test_database.py`, `tests/test_service.py`
+## Recommended Next Milestone
+
+The next milestone should not be "more setup UI." The workflow shell is already in place.
+
+The next milestone should be:
+
+### Milestone: Replace Mock Detection With Recoverable Real Detection
+
+Scope:
+
+- replace `_build_mock_fiducials(...)` with a real detection integration
+- replace `_build_mock_barcode(...)` with a real localization/decode integration
+- add explicit failure states for "nothing found" and "decode failed"
+- add manual fiducial placement/editing
+- add manual barcode/serial entry override
+- keep the current setup-state machine and reuse the existing setup UI
+
+Success criteria:
+
+- setup remains usable even when automation fails
+- setup can complete without synthetic data
+- tests distinguish workflow-state coverage from detection-engine coverage
+
+## Traceability
+
+### Core backend logic
+
+- `src/aoi/database.py`
+- look for `_calculate_setup_status`
+- look for `update_run`
+- look for `detect_fiducials`
+- look for `detect_barcode`
+
+### Core backend routes
+
+- `src/aoi/service.py`
+- look for `_handle_create_run`
+- look for `_handle_patch_run`
+- look for `_handle_detect_fiducials`
+- look for `_handle_detect_barcode`
+
+### Core frontend logic
+
+- `web/src/App.jsx`
+- look for `setupSteps`
+- look for `showSetupMode`
+- look for `handleImageUpload`
+- look for `handleSaveModel`
+
+### Tests backing current status
+
+- `tests/test_database.py`
+- `tests/test_service.py`
