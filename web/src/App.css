@@ -547,6 +547,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: hidden;
 }
 
 .setup-panel-header {
@@ -557,6 +558,10 @@
 .setup-panel-body {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  display: grid;
+  align-content: start;
 }
 
 .setup-action-card,
@@ -610,9 +615,26 @@
   gap: 10px;
 }
 
+.manual-setup-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
 .manual-setup-item {
   display: grid;
   gap: 8px;
+}
+
+.manual-setup-item.compact {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.manual-setup-item.compact span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
 }
 
 .manual-setup-fields {
@@ -993,6 +1015,54 @@ textarea {
   position: absolute;
   border: 2px solid var(--accent);
   background: rgba(83, 155, 245, 0.14);
+}
+
+.editable-preview {
+  user-select: none;
+}
+
+.editable-box {
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.editable-box:active {
+  cursor: grabbing;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: currentColor;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.resize-nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.resize-ne {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+
+.resize-sw {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+
+.resize-se {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
 }
 
 .fiducial-box span {

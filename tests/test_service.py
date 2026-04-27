@@ -1,11 +1,46 @@
 import json
 import threading
+from pathlib import Path
 from urllib import error, request
+
+from PIL import Image, ImageDraw
 
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
 from aoi.schema import InferenceEvent, InspectionResult
 from aoi.service import IngestionServer
+
+
+def _create_fiducial_board_image(path: Path, *, size: tuple[int, int] = (1600, 900), include_marks: bool = True) -> Path:
+    image = Image.new("RGB", size, color=(26, 150, 98))
+    draw = ImageDraw.Draw(image)
+
+    draw.rectangle((30, 30, size[0] - 30, size[1] - 30), outline=(230, 245, 235), width=8)
+    draw.rectangle((size[0] * 0.32, size[1] * 0.24, size[0] * 0.68, size[1] * 0.74), outline=(190, 220, 210), width=5)
+
+    if include_marks:
+        radii = max(18, min(size) // 28)
+        centers = [
+            (int(size[0] * 0.09), int(size[1] * 0.12)),
+            (int(size[0] * 0.89), int(size[1] * 0.14)),
+            (int(size[0] * 0.12), int(size[1] * 0.84)),
+            (int(size[0] * 0.88), int(size[1] * 0.86)),
+        ]
+        for center_x, center_y in centers:
+            draw.ellipse(
+                (center_x - radii, center_y - radii, center_x + radii, center_y + radii),
+                fill=(215, 176, 56),
+                outline=(245, 235, 185),
+                width=max(3, radii // 5),
+            )
+            inner = max(6, radii // 2)
+            draw.ellipse(
+                (center_x - inner, center_y - inner, center_x + inner, center_y + inner),
+                fill=(26, 150, 98),
+            )
+
+    image.save(path)
+    return path
 
 
 def test_health_endpoint_returns_ok(tmp_path) -> None:
@@ -381,13 +416,16 @@ def test_patch_run_endpoint_model_change_forces_setup_reentry(tmp_path) -> None:
     db_path = tmp_path / "aoi.db"
     database = DatabaseManager(db_path)
     run = database.create_run(pcb_id="PCB-REWORK")
+    image_path = _create_fiducial_board_image(tmp_path / "rework-endpoint-board.png")
+    with Image.open(image_path) as image:
+        width, height = image.size
     with database._connect() as connection:
         connection.execute(
             """
             INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("img-1", run["id"], "/runs/rework/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+            ("img-1", run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
         )
     database.update_run(run["id"], model_name="MODEL-A", requires_fiducials=True, requires_barcode=True)
     database.detect_fiducials(run["id"])
@@ -429,13 +467,16 @@ def test_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:
     db_path = tmp_path / "aoi.db"
     database = DatabaseManager(db_path)
     run = database.create_run(pcb_id="PCB-FID")
+    image_path = _create_fiducial_board_image(tmp_path / "fid-endpoint-board.png")
+    with Image.open(image_path) as image:
+        width, height = image.size
     with database._connect() as connection:
         connection.execute(
             """
             INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+            ("img-1", run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
         )
     database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
     server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)
@@ -476,13 +517,16 @@ def test_fiducial_detection_failure_and_manual_recovery_endpoints(tmp_path) -> N
     db_path = tmp_path / "aoi.db"
     database = DatabaseManager(db_path)
     run = database.create_run(pcb_id="PCB-FID-FAIL")
+    image_path = _create_fiducial_board_image(tmp_path / "fid-endpoint-fail-board.png", size=(900, 700), include_marks=False)
+    with Image.open(image_path) as image:
+        width, height = image.size
     with database._connect() as connection:
         connection.execute(
             """
             INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 640, 480, 0, run["timestamp"]),
+            ("img-1", run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
         )
     database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
     server = IngestionServer(("127.0.0.1", 0), LogManager(log_path), database)

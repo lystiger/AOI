@@ -20,6 +20,12 @@ def test_inference_event_serializes_expected_fields() -> None:
         "defect_type": "MISALIGNMENT",
         "confidence_score": 0.82,
         "inference_latency_ms": 42,
+        "run_image_index": None,
+        "overlay_x": None,
+        "overlay_y": None,
+        "overlay_width": None,
+        "overlay_height": None,
+        "overlay_shape": None,
     }
 
 
@@ -37,4 +43,3 @@ def test_inference_event_rejects_invalid_confidence() -> None:
         assert "confidence_score" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
-

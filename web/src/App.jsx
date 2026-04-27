@@ -92,6 +92,36 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+function toNormalizedNumber(value, fallback = 0) {
+  const parsed = Number(value)
+  if (Number.isNaN(parsed)) {
+    return fallback
+  }
+  return clamp(parsed, 0, 1)
+}
+
+function toPositiveNormalizedNumber(value, fallback = 0.05) {
+  const parsed = Number(value)
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return fallback
+  }
+  return clamp(parsed, 0.001, 1)
+}
+
+function normalizeEditableBox(box, fallbackWidth = 0.05, fallbackHeight = 0.05) {
+  const width = clamp(toPositiveNormalizedNumber(box.width, fallbackWidth), 0.001, 1)
+  const height = clamp(toPositiveNormalizedNumber(box.height, fallbackHeight), 0.001, 1)
+  const x = clamp(toNormalizedNumber(box.x), 0, 1 - width)
+  const y = clamp(toNormalizedNumber(box.y), 0, 1 - height)
+  return {
+    ...box,
+    x,
+    y,
+    width,
+    height,
+  }
+}
+
 function FilterField({ label, value, onChange, type = 'text', options, compact = false }) {
   return (
     <label className={`field${compact ? ' compact' : ''}`}>
@@ -128,9 +158,137 @@ function EmptyStateMessage({ title, body }) {
   )
 }
 
-function FiducialPreview({ image, fiducials }) {
+function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }) {
+  const previewRef = useRef(null)
+  const [editState, setEditState] = useState(null)
+
+  useEffect(() => {
+    if (!editState) {
+      return undefined
+    }
+
+    function handlePointerMove(event) {
+      if (!previewRef.current) {
+        return
+      }
+      const bounds = previewRef.current.getBoundingClientRect()
+      if (!bounds.width || !bounds.height) {
+        return
+      }
+      const deltaX = (event.clientX - editState.startX) / bounds.width
+      const deltaY = (event.clientY - editState.startY) / bounds.height
+      const minSize = 0.01
+
+      let nextBox = {
+        x: editState.originX,
+        y: editState.originY,
+        width: editState.originWidth,
+        height: editState.originHeight,
+      }
+
+      if (editState.mode === 'move') {
+        nextBox.x = clamp(editState.originX + deltaX, 0, 1 - editState.originWidth)
+        nextBox.y = clamp(editState.originY + deltaY, 0, 1 - editState.originHeight)
+      } else if (editState.mode === 'resize-se') {
+        nextBox.width = clamp(editState.originWidth + deltaX, minSize, 1 - editState.originX)
+        nextBox.height = clamp(editState.originHeight + deltaY, minSize, 1 - editState.originY)
+      } else if (editState.mode === 'resize-sw') {
+        const nextX = clamp(editState.originX + deltaX, 0, editState.originX + editState.originWidth - minSize)
+        nextBox.x = nextX
+        nextBox.width = clamp(editState.originWidth + (editState.originX - nextX), minSize, 1 - nextX)
+        nextBox.height = clamp(editState.originHeight + deltaY, minSize, 1 - editState.originY)
+      } else if (editState.mode === 'resize-ne') {
+        const nextY = clamp(editState.originY + deltaY, 0, editState.originY + editState.originHeight - minSize)
+        nextBox.y = nextY
+        nextBox.width = clamp(editState.originWidth + deltaX, minSize, 1 - editState.originX)
+        nextBox.height = clamp(editState.originHeight + (editState.originY - nextY), minSize, 1 - nextY)
+      } else if (editState.mode === 'resize-nw') {
+        const nextX = clamp(editState.originX + deltaX, 0, editState.originX + editState.originWidth - minSize)
+        const nextY = clamp(editState.originY + deltaY, 0, editState.originY + editState.originHeight - minSize)
+        nextBox.x = nextX
+        nextBox.y = nextY
+        nextBox.width = clamp(editState.originWidth + (editState.originX - nextX), minSize, 1 - nextX)
+        nextBox.height = clamp(editState.originHeight + (editState.originY - nextY), minSize, 1 - nextY)
+      }
+
+      onChange?.(editState.id, normalizeEditableBox(nextBox, minSize, minSize))
+    }
+
+    function handlePointerUp() {
+      setEditState(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [editState, onChange])
+
+  return (
+    <div ref={previewRef} className="fiducial-preview editable-preview">
+      <img src={image.image_path} alt={`${kind} preview`} />
+      {overlays.map((overlay) => (
+        <button
+          key={overlay.id}
+          type="button"
+          className={`${kind === 'barcode' ? 'barcode-box' : 'fiducial-box'} editable-box`}
+          style={{
+            left: `${overlay.x * 100}%`,
+            top: `${overlay.y * 100}%`,
+            width: `${overlay.width * 100}%`,
+            height: `${overlay.height * 100}%`,
+          }}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setEditState({
+              id: overlay.id,
+              mode: 'move',
+              startX: event.clientX,
+              startY: event.clientY,
+              originX: overlay.x,
+              originY: overlay.y,
+              originWidth: overlay.width,
+              originHeight: overlay.height,
+            })
+          }}
+        >
+          <span>{overlay.label}</span>
+          {['nw', 'ne', 'sw', 'se'].map((handle) => (
+            <span
+              key={handle}
+              className={`resize-handle resize-${handle}`}
+              onPointerDown={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                setEditState({
+                  id: overlay.id,
+                  mode: `resize-${handle}`,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  originX: overlay.x,
+                  originY: overlay.y,
+                  originWidth: overlay.width,
+                  originHeight: overlay.height,
+                })
+              }}
+            />
+          ))}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function FiducialPreview({ image, fiducials, editableFiducials, onChangeFiducial }) {
   if (!image) {
     return <div className="empty-state">Upload a scan to preview fiducial detection.</div>
+  }
+
+  if (editableFiducials?.length && onChangeFiducial) {
+    return <EditableOverlayPreview image={image} overlays={editableFiducials} onChange={onChangeFiducial} kind="fiducial" />
   }
 
   return (
@@ -154,9 +312,12 @@ function FiducialPreview({ image, fiducials }) {
   )
 }
 
-function BarcodePreview({ image, barcode }) {
+function BarcodePreview({ image, barcode, editableBarcode, onChangeBarcode }) {
   if (!image) {
     return <div className="empty-state">Upload a scan to preview barcode detection.</div>
+  }
+  if (editableBarcode && onChangeBarcode) {
+    return <EditableOverlayPreview image={image} overlays={[editableBarcode]} onChange={onChangeBarcode} kind="barcode" />
   }
   if (!barcode) {
     return <div className="empty-state">Run barcode detection to preview the detected region.</div>
@@ -487,6 +648,26 @@ function SetupFlow({
   manualFiducialsDraft,
   manualBarcodeDraft,
 }) {
+  const editableFiducials = manualFiducialsDraft.map((fiducial, index) => ({
+    id: fiducial.id || `fid-${index + 1}`,
+    x: toNormalizedNumber(fiducial.x),
+    y: toNormalizedNumber(fiducial.y),
+    width: toPositiveNormalizedNumber(fiducial.width, 0.035),
+    height: toPositiveNormalizedNumber(fiducial.height, 0.035),
+    label: fiducial.id || `fid-${index + 1}`,
+  }))
+  const editableBarcode =
+    manualBarcodeDraft
+      ? {
+          id: 'barcode-1',
+          x: toNormalizedNumber(manualBarcodeDraft.x, 0.72),
+          y: toNormalizedNumber(manualBarcodeDraft.y, 0.78),
+          width: toPositiveNormalizedNumber(manualBarcodeDraft.width, 0.16),
+          height: toPositiveNormalizedNumber(manualBarcodeDraft.height, 0.08),
+          label: manualBarcodeDraft.decoded_value || 'barcode',
+        }
+      : null
+
   return (
     <div className="setup-shell">
       <aside className="setup-steps">
@@ -611,28 +792,15 @@ function SetupFlow({
                   </div>
                   <div className="manual-setup-card">
                     <strong>Manual Fiducial Recovery</strong>
-                    <div className="manual-setup-grid">
-                      {manualFiducialsDraft.map((fiducial, index) => (
-                        <div key={fiducial.id || index} className="manual-setup-item">
-                          <strong>{fiducial.id || `fid-${index + 1}`}</strong>
-                          <div className="manual-setup-fields">
-                            <label className="field compact">
-                              <span>X</span>
-                              <input value={fiducial.x} onChange={(event) => onManualFiducialsChange(index, 'x', event.target.value)} />
-                            </label>
-                            <label className="field compact">
-                              <span>Y</span>
-                              <input value={fiducial.y} onChange={(event) => onManualFiducialsChange(index, 'y', event.target.value)} />
-                            </label>
-                            <label className="field compact">
-                              <span>W</span>
-                              <input value={fiducial.width} onChange={(event) => onManualFiducialsChange(index, 'width', event.target.value)} />
-                            </label>
-                            <label className="field compact">
-                              <span>H</span>
-                              <input value={fiducial.height} onChange={(event) => onManualFiducialsChange(index, 'height', event.target.value)} />
-                            </label>
-                          </div>
+                    <p>Drag each recovery box onto the fiducial mark, then save the adjusted positions.</p>
+                    <FiducialPreview image={selectedImage} editableFiducials={editableFiducials} onChangeFiducial={onManualFiducialsChange} />
+                    <div className="manual-setup-grid compact">
+                      {editableFiducials.map((fiducial) => (
+                        <div key={fiducial.id} className="manual-setup-item compact">
+                          <strong>{fiducial.id}</strong>
+                          <span>
+                            x {fiducial.x.toFixed(3)} y {fiducial.y.toFixed(3)} w {fiducial.width.toFixed(3)} h {fiducial.height.toFixed(3)}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -687,27 +855,21 @@ function SetupFlow({
                   </div>
                   <div className="manual-setup-card">
                     <strong>Manual Barcode Recovery</strong>
+                    <p>Drag the barcode box to the correct region, update the decoded value if needed, then save.</p>
+                    <BarcodePreview image={selectedImage} editableBarcode={editableBarcode} onChangeBarcode={onManualBarcodeChange} />
                     <div className="manual-setup-fields">
                       <label className="field compact">
                         <span>Decoded</span>
                         <input value={manualBarcodeDraft.decoded_value} onChange={(event) => onManualBarcodeChange('decoded_value', event.target.value)} />
                       </label>
-                      <label className="field compact">
-                        <span>X</span>
-                        <input value={manualBarcodeDraft.x} onChange={(event) => onManualBarcodeChange('x', event.target.value)} />
-                      </label>
-                      <label className="field compact">
-                        <span>Y</span>
-                        <input value={manualBarcodeDraft.y} onChange={(event) => onManualBarcodeChange('y', event.target.value)} />
-                      </label>
-                      <label className="field compact">
-                        <span>W</span>
-                        <input value={manualBarcodeDraft.width} onChange={(event) => onManualBarcodeChange('width', event.target.value)} />
-                      </label>
-                      <label className="field compact">
-                        <span>H</span>
-                        <input value={manualBarcodeDraft.height} onChange={(event) => onManualBarcodeChange('height', event.target.value)} />
-                      </label>
+                    </div>
+                    <div className="manual-setup-grid compact">
+                      <div className="manual-setup-item compact">
+                        <strong>barcode-1</strong>
+                        <span>
+                          x {editableBarcode?.x.toFixed(3)} y {editableBarcode?.y.toFixed(3)} w {editableBarcode?.width.toFixed(3)} h {editableBarcode?.height.toFixed(3)}
+                        </span>
+                      </div>
                     </div>
                     <button type="button" className="ghost-button" onClick={onSaveManualBarcode} disabled={isSavingManualBarcode || !selectedImage}>
                       {isSavingManualBarcode ? 'Saving Manual Barcode...' : 'Save Manual Barcode'}
@@ -998,6 +1160,7 @@ function App() {
         event_count: selectedRun?.event_count || 0,
       }
       setSelectedRun(nextRun)
+      setManualFiducialsDraft(buildManualFiducialsDraft(nextRun))
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
       setFiducialError(`Fiducial Detection Error: ${err.message}`)
@@ -1028,15 +1191,26 @@ function App() {
         event_count: selectedRun?.event_count || 0,
       }
       setSelectedRun(nextRun)
+      setManualBarcodeDraft(buildManualBarcodeDraft(nextRun))
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
       setFiducialError(`Fiducial Confirm Error: ${err.message}`)
     }
   }
 
-  function handleManualFiducialChange(index, key, value) {
+  function handleManualFiducialChange(fiducialId, nextBox) {
     setManualFiducialsDraft((current) =>
-      current.map((fiducial, draftIndex) => (draftIndex === index ? { ...fiducial, [key]: value } : fiducial)),
+      current.map((fiducial, index) =>
+        (fiducial.id || `fid-${index + 1}`) === fiducialId
+          ? {
+              ...fiducial,
+              x: nextBox.x.toFixed(4),
+              y: nextBox.y.toFixed(4),
+              width: nextBox.width.toFixed(4),
+              height: nextBox.height.toFixed(4),
+            }
+          : fiducial,
+      ),
     )
   }
 
@@ -1071,6 +1245,7 @@ function App() {
         event_count: selectedRun?.event_count || 0,
       }
       setSelectedRun(nextRun)
+      setManualFiducialsDraft(buildManualFiducialsDraft(nextRun))
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
       setFiducialError(`Manual Fiducial Save Error: ${err.message}`)
@@ -1142,6 +1317,24 @@ function App() {
     setManualBarcodeDraft((current) => ({ ...current, [key]: value }))
   }
 
+  function handleManualBarcodeChange(nextKeyOrId, nextValue) {
+    if (typeof nextKeyOrId === 'string' && typeof nextValue === 'string') {
+      setManualBarcodeDraft((current) => ({ ...current, [nextKeyOrId]: nextValue }))
+      return
+    }
+    const nextBox = nextValue
+    if (!nextBox) {
+      return
+    }
+    setManualBarcodeDraft((current) => ({
+      ...current,
+      x: nextBox.x.toFixed(4),
+      y: nextBox.y.toFixed(4),
+      width: nextBox.width.toFixed(4),
+      height: nextBox.height.toFixed(4),
+    }))
+  }
+
   async function handleSaveManualBarcode() {
     if (!selectedRunId) {
       return
@@ -1173,6 +1366,7 @@ function App() {
         event_count: selectedRun?.event_count || 0,
       }
       setSelectedRun(nextRun)
+      setManualBarcodeDraft(buildManualBarcodeDraft(nextRun))
       setRuns((currentRuns) => currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)))
     } catch (err) {
       setBarcodeError(`Manual Barcode Save Error: ${err.message}`)
@@ -1825,11 +2019,12 @@ function App() {
               onSaveModel={handleSaveModel}
               onDetectFiducials={handleDetectFiducials}
               onConfirmFiducials={handleConfirmFiducials}
-              onManualFiducialsChange={handleManualFiducialChange}
+              onManualFiducialsMove={handleManualFiducialMove}
               onSaveManualFiducials={handleSaveManualFiducials}
               onDetectBarcode={handleDetectBarcode}
               onConfirmBarcode={handleConfirmBarcode}
               onManualBarcodeChange={handleManualBarcodeChange}
+              onManualBarcodeMove={handleManualBarcodeMove}
               onSaveManualBarcode={handleSaveManualBarcode}
               onContinueToReview={handleContinueToReview}
               onStepClick={setManualStepId}

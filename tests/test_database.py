@@ -1,5 +1,55 @@
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
 from aoi.database import DatabaseManager
 from aoi.schema import InferenceEvent, InspectionResult, RunImageInput
+
+
+def _create_fiducial_board_image(path: Path, *, size: tuple[int, int] = (1600, 900), include_marks: bool = True) -> Path:
+    image = Image.new("RGB", size, color=(26, 150, 98))
+    draw = ImageDraw.Draw(image)
+
+    draw.rectangle((30, 30, size[0] - 30, size[1] - 30), outline=(230, 245, 235), width=8)
+    draw.rectangle((size[0] * 0.32, size[1] * 0.24, size[0] * 0.68, size[1] * 0.74), outline=(190, 220, 210), width=5)
+
+    if include_marks:
+        radii = max(18, min(size) // 28)
+        centers = [
+            (int(size[0] * 0.09), int(size[1] * 0.12)),
+            (int(size[0] * 0.89), int(size[1] * 0.14)),
+            (int(size[0] * 0.12), int(size[1] * 0.84)),
+            (int(size[0] * 0.88), int(size[1] * 0.86)),
+        ]
+        for center_x, center_y in centers:
+            draw.ellipse(
+                (center_x - radii, center_y - radii, center_x + radii, center_y + radii),
+                fill=(215, 176, 56),
+                outline=(245, 235, 185),
+                width=max(3, radii // 5),
+            )
+            inner = max(6, radii // 2)
+            draw.ellipse(
+                (center_x - inner, center_y - inner, center_x + inner, center_y + inner),
+                fill=(26, 150, 98),
+            )
+
+    image.save(path)
+    return path
+
+
+def _insert_run_image(database: DatabaseManager, run: dict[str, object], image_path: Path, *, image_id: str = "img-1") -> None:
+    with Image.open(image_path) as image:
+        width, height = image.size
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (image_id, run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
+        )
 
 
 def test_persist_events_creates_run_and_defect_logs(tmp_path) -> None:
@@ -126,15 +176,8 @@ def test_update_run_marks_review_ready_once_model_and_image_exist(tmp_path) -> N
 def test_detect_and_confirm_fiducials_updates_run_state(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-FID")
-
-    with database._connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
-        )
+    image_path = _create_fiducial_board_image(tmp_path / "fid-board.png")
+    _insert_run_image(database, run, image_path)
 
     updated_run = database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
     assert updated_run is not None
@@ -155,22 +198,15 @@ def test_detect_and_confirm_fiducials_updates_run_state(tmp_path) -> None:
 def test_detect_fiducials_can_fail_and_manual_save_recovers_run(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-FID-FAIL")
-
-    with database._connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("img-1", run["id"], "/runs/fid-fail/images/img-1", "full_board", 640, 480, 0, run["timestamp"]),
-        )
+    image_path = _create_fiducial_board_image(tmp_path / "fid-fail-board.png", size=(900, 700), include_marks=False)
+    _insert_run_image(database, run, image_path)
 
     database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
 
     try:
         database.detect_fiducials(run["id"])
     except ValueError as exc:
-        assert "resolution is too small" in str(exc)
+        assert "found fewer than 3 fiducial candidates" in str(exc)
     else:
         raise AssertionError("expected fiducial detection to fail")
 
@@ -264,15 +300,8 @@ def test_detect_barcode_can_fail_and_manual_save_recovers_run(tmp_path) -> None:
 def test_update_run_model_change_clears_confirmed_setup_artifacts(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-REWORK")
-
-    with database._connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("img-1", run["id"], "/runs/rework/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
-        )
+    image_path = _create_fiducial_board_image(tmp_path / "rework-board.png")
+    _insert_run_image(database, run, image_path)
 
     database.update_run(run["id"], model_name="MODEL-A", requires_fiducials=True, requires_barcode=True)
     database.detect_fiducials(run["id"])
@@ -294,15 +323,8 @@ def test_update_run_model_change_clears_confirmed_setup_artifacts(tmp_path) -> N
 def test_update_run_targeted_requirement_toggle_only_resets_affected_step(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-TOGGLE")
-
-    with database._connect() as connection:
-        connection.execute(
-            """
-            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("img-1", run["id"], "/runs/toggle/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
-        )
+    image_path = _create_fiducial_board_image(tmp_path / "toggle-board.png")
+    _insert_run_image(database, run, image_path)
 
     database.update_run(run["id"], model_name="MODEL-T", requires_fiducials=True, requires_barcode=True)
     database.detect_fiducials(run["id"])

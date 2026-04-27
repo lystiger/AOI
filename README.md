@@ -2,6 +2,27 @@
 
 Initial scaffold for the AOI logging and monitoring pipeline.
 
+## Python Setup
+
+Create a local virtual environment and install dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+This installs:
+
+- runtime dependencies from `requirements.txt`
+- test dependencies from `requirements-dev.txt`
+
+Run the test suite with:
+
+```bash
+pytest
+```
+
 ## Current Scope
 
 This repository currently implements the first milestone from `docs/priority.md`:

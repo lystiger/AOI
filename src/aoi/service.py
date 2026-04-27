@@ -580,6 +580,7 @@ class IngestionServer(ThreadingHTTPServer):
         self.database_manager = database_manager
         self.storage_path = storage_path or (database_manager.db_path.parent / "run-assets")
         self.storage_path.mkdir(parents=True, exist_ok=True)
+        self.database_manager.storage_path = self.storage_path
 
 
 def run_server(*, host: str, port: int, log_path: Path, db_path: Path, storage_path: Path) -> None:
