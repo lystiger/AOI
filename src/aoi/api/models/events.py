@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
 from aoi.schema import InferenceEvent, InspectionResult, RunImageInput
 
@@ -11,6 +11,11 @@ def _require_non_empty_string(value: str, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
     return value
+
+
+def _first_pydantic_error_message(exc: ValidationError) -> str:
+    first_error = exc.errors()[0]
+    return str(first_error.get("msg") or "validation error")
 
 
 class RunImageInputIn(BaseModel):
@@ -123,3 +128,27 @@ class PostEventsRequest(BaseModel):
         if value is not None and not value:
             raise ValueError("images must be a non-empty list when provided")
         return value
+
+
+event_list_adapter = TypeAdapter(list[EventIn])
+event_adapter = TypeAdapter(EventIn)
+
+
+def parse_post_events_payload(payload: object) -> tuple[list[EventIn], str | None, list[RunImageInputIn] | None]:
+    try:
+        if isinstance(payload, list):
+            events = event_list_adapter.validate_python(payload)
+            if not events:
+                raise ValueError("events payload must contain at least one event")
+            return events, None, None
+
+        if isinstance(payload, dict) and "events" not in payload and "images" not in payload and "model_version" not in payload:
+            event = event_adapter.validate_python(payload)
+            return [event], None, None
+
+        request_model = PostEventsRequest.model_validate(payload)
+        return request_model.events, request_model.model_version, request_model.images
+    except ValidationError as exc:
+        raise ValueError(_first_pydantic_error_message(exc)) from exc
+    except TypeError as exc:
+        raise ValueError("payload must be an event object or a list of event objects") from exc

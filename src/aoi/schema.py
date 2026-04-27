@@ -18,15 +18,18 @@ class RunImageInput:
     image_height: int
 
     @classmethod
-    def from_dict(cls, payload: dict[str, object]) -> "RunImageInput":
-        image_path = cls._require_string(payload, "image_path")
-        image_role = cls._require_string(payload, "image_role")
-        image_width = int(payload.get("image_width", 0))
-        image_height = int(payload.get("image_height", 0))
-        if image_width < 1:
-            raise ValueError("image_width must be a positive integer")
-        if image_height < 1:
-            raise ValueError("image_height must be a positive integer")
+    def create(
+        cls,
+        *,
+        image_path: str,
+        image_role: str,
+        image_width: int,
+        image_height: int,
+    ) -> "RunImageInput":
+        cls._require_non_empty_string(image_path, "image_path")
+        cls._require_non_empty_string(image_role, "image_role")
+        cls._require_positive_int(image_width, "image_width")
+        cls._require_positive_int(image_height, "image_height")
         return cls(
             image_path=image_path,
             image_role=image_role,
@@ -35,10 +38,15 @@ class RunImageInput:
         )
 
     @staticmethod
-    def _require_string(payload: dict[str, object], field_name: str) -> str:
-        value = payload.get(field_name)
+    def _require_non_empty_string(value: object, field_name: str) -> str:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{field_name} must be a non-empty string")
+        return value
+
+    @staticmethod
+    def _require_positive_int(value: int, field_name: str) -> int:
+        if value < 1:
+            raise ValueError(f"{field_name} must be a positive integer")
         return value
 
 
@@ -76,13 +84,18 @@ class InferenceEvent:
         overlay_height: float | None = None,
         overlay_shape: str | None = None,
     ) -> "InferenceEvent":
-        cls._validate(
-            pcb_id=pcb_id,
-            component_id=component_id,
-            defect_type=defect_type,
-            confidence_score=confidence_score,
-            inference_latency_ms=inference_latency_ms,
-        )
+        cls._require_non_empty_string(pcb_id, "pcb_id", empty_message="pcb_id must not be empty")
+        cls._require_non_empty_string(component_id, "component_id", empty_message="component_id must not be empty")
+        cls._require_non_empty_string(defect_type, "defect_type", empty_message="defect_type must not be empty")
+        cls._require_confidence_score(confidence_score)
+        cls._require_non_negative_int(inference_latency_ms, "inference_latency_ms")
+        cls._validate_optional_timestamp(timestamp)
+        cls._validate_optional_non_negative_int(run_image_index, "run_image_index")
+        cls._validate_optional_normalized_float(overlay_x, "overlay_x")
+        cls._validate_optional_normalized_float(overlay_y, "overlay_y")
+        cls._validate_optional_normalized_float(overlay_width, "overlay_width")
+        cls._validate_optional_normalized_float(overlay_height, "overlay_height")
+        cls._validate_optional_string(overlay_shape, "overlay_shape")
         event_timestamp = timestamp or datetime.now(timezone.utc).isoformat()
         return cls(
             timestamp=event_timestamp,
@@ -100,103 +113,21 @@ class InferenceEvent:
             overlay_shape=overlay_shape,
         )
 
-    @classmethod
-    def from_dict(cls, payload: dict[str, object]) -> "InferenceEvent":
-        raw_result = payload.get("inspection_result")
-        if raw_result is None:
-            raise ValueError("inspection_result is required")
-
-        timestamp = payload.get("timestamp")
-        if timestamp is None:
-            event_timestamp = None
-        elif isinstance(timestamp, str) and timestamp.strip():
-            event_timestamp = timestamp
-            cls._validate_timestamp(event_timestamp)
-        else:
-            raise ValueError("timestamp must be a non-empty ISO8601 string")
-
-        try:
-            inspection_result = InspectionResult(str(raw_result))
-        except ValueError as exc:
-            raise ValueError("inspection_result must be PASS or FAIL") from exc
-
-        confidence_score = payload.get("confidence_score")
-        inference_latency_ms = payload.get("inference_latency_ms")
-        if confidence_score is None:
-            raise ValueError("confidence_score is required")
-        if inference_latency_ms is None:
-            raise ValueError("inference_latency_ms is required")
-
-        return cls.create(
-            timestamp=event_timestamp,
-            pcb_id=cls._require_string(payload, "pcb_id"),
-            component_id=cls._require_string(payload, "component_id"),
-            inspection_result=inspection_result,
-            defect_type=cls._require_string(payload, "defect_type"),
-            confidence_score=float(confidence_score),
-            inference_latency_ms=int(inference_latency_ms),
-            run_image_index=cls._get_optional_non_negative_int(payload, "run_image_index"),
-            overlay_x=cls._get_optional_normalized_float(payload, "overlay_x"),
-            overlay_y=cls._get_optional_normalized_float(payload, "overlay_y"),
-            overlay_width=cls._get_optional_normalized_float(payload, "overlay_width"),
-            overlay_height=cls._get_optional_normalized_float(payload, "overlay_height"),
-            overlay_shape=cls._get_optional_string(payload, "overlay_shape"),
-        )
-
     @staticmethod
-    def _validate(
-        *,
-        pcb_id: str,
-        component_id: str,
-        defect_type: str,
-        confidence_score: float,
-        inference_latency_ms: int,
-    ) -> None:
-        if not pcb_id.strip():
-            raise ValueError("pcb_id must not be empty")
-        if not component_id.strip():
-            raise ValueError("component_id must not be empty")
-        if not defect_type.strip():
-            raise ValueError("defect_type must not be empty")
-        if not 0.0 <= confidence_score <= 1.0:
-            raise ValueError("confidence_score must be between 0.0 and 1.0")
-        if inference_latency_ms < 0:
-            raise ValueError("inference_latency_ms must be non-negative")
-
-    @staticmethod
-    def _get_optional_non_negative_int(payload: dict[str, object], field_name: str) -> int | None:
-        value = payload.get(field_name)
-        if value is None:
-            return None
-        parsed = int(value)
-        if parsed < 0:
-            raise ValueError(f"{field_name} must be a non-negative integer")
-        return parsed
-
-    @staticmethod
-    def _get_optional_normalized_float(payload: dict[str, object], field_name: str) -> float | None:
-        value = payload.get(field_name)
-        if value is None:
-            return None
-        parsed = float(value)
-        if not 0.0 <= parsed <= 1.0:
-            raise ValueError(f"{field_name} must be between 0.0 and 1.0")
-        return parsed
-
-    @staticmethod
-    def _get_optional_string(payload: dict[str, object], field_name: str) -> str | None:
-        value = payload.get(field_name)
-        if value is None:
-            return None
+    def _require_non_empty_string(value: object, field_name: str, *, empty_message: str | None = None) -> str:
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{field_name} must be a non-empty string")
+            raise ValueError(empty_message or f"{field_name} must be a non-empty string")
         return value
 
     @staticmethod
-    def _require_string(payload: dict[str, object], field_name: str) -> str:
-        value = payload.get(field_name)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{field_name} must be a non-empty string")
+    def _require_confidence_score(confidence_score: float) -> None:
+        if not 0.0 <= confidence_score <= 1.0:
+            raise ValueError("confidence_score must be between 0.0 and 1.0")
+
+    @staticmethod
+    def _require_non_negative_int(value: int, field_name: str) -> int:
+        if value < 0:
+            raise ValueError(f"{field_name} must be non-negative")
         return value
 
     @staticmethod
@@ -206,6 +137,35 @@ class InferenceEvent:
             datetime.fromisoformat(candidate)
         except ValueError as exc:
             raise ValueError("timestamp must be a valid ISO8601 string") from exc
+
+    @staticmethod
+    def _validate_optional_timestamp(timestamp: object) -> str | None:
+        if timestamp is None:
+            return None
+        if not isinstance(timestamp, str) or not timestamp.strip():
+            raise ValueError("timestamp must be a non-empty ISO8601 string")
+        InferenceEvent._validate_timestamp(timestamp)
+        return timestamp
+
+    @staticmethod
+    def _validate_optional_non_negative_int(value: int | None, field_name: str) -> int | None:
+        if value is None:
+            return None
+        return InferenceEvent._require_non_negative_int(value, field_name)
+
+    @staticmethod
+    def _validate_optional_normalized_float(value: float | None, field_name: str) -> float | None:
+        if value is None:
+            return None
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+        return value
+
+    @staticmethod
+    def _validate_optional_string(value: object, field_name: str) -> str | None:
+        if value is None:
+            return None
+        return InferenceEvent._require_non_empty_string(value, field_name)
 
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)

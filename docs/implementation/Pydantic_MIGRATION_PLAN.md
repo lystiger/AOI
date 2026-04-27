@@ -10,11 +10,11 @@ Completed:
 - run creation and run update request bodies use shared Pydantic v2 request models
 - manual fiducial and manual barcode request bodies use shared Pydantic v2 request models
 - FastAPI validation failures now return the repository's standard error envelope with status `422`
+- `src/aoi/service.py` reuses the shared Pydantic event payload adapter instead of maintaining a second handwritten parser
+- `src/aoi/schema.py` no longer exposes `from_dict()` compatibility constructors; `create()` is now the authoritative domain entry point
 
 Remaining:
 
-- reduce duplicated parsing and validation paths that still live in `src/aoi/schema.py`
-- decide whether `src/aoi/service.py` should stay on handwritten parsing or adopt the same Pydantic models
 - add response models only if response contracts need stricter typing later
 
 ## 1. Recommendation
@@ -49,11 +49,10 @@ In [src/aoi/schema.py](/home/lystiger/projects/AOI/src/aoi/schema.py):
 - `InferenceEvent` is a dataclass
 - `RunImageInput` is a dataclass
 - validation happens in:
-  - `InferenceEvent.from_dict()`
   - `InferenceEvent.create()`
-  - `RunImageInput.from_dict()`
+  - `RunImageInput.create()`
 
-This works, but it means input validation is handwritten and repeated.
+This keeps domain validation centralized without maintaining duplicate dict-parsing entry points.
 
 ### 2.2 API Validation
 
@@ -271,13 +270,12 @@ Once Pydantic handles request validation, simplify the dataclass constructors.
 
 Examples:
 
-- `InferenceEvent.from_dict()` may become unnecessary for API usage
-- `RunImageInput.from_dict()` may become unnecessary for API usage
+- `InferenceEvent.create()` is now the only domain constructor used by API-facing code
+- `RunImageInput.create()` is now the only domain constructor used by API-facing code
 
 Eventually these can be:
 
-- retained only for non-HTTP internal callers, or
-- replaced with simpler constructors if every external path goes through Pydantic first
+- kept as the stable domain constructors if every external path goes through Pydantic first
 
 ## 9. Response Model Plan
 
@@ -411,7 +409,7 @@ Exit criteria:
 
 - no important API path depends on handwritten `from_dict()` parsing
 
-Status: next recommended slice
+Status: complete
 
 ## 13. Acceptance Criteria
 

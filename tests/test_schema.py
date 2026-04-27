@@ -1,4 +1,4 @@
-from aoi.schema import InferenceEvent, InspectionResult
+from aoi.schema import InferenceEvent, InspectionResult, RunImageInput
 
 
 def test_inference_event_serializes_expected_fields() -> None:
@@ -43,3 +43,15 @@ def test_inference_event_rejects_invalid_confidence() -> None:
         assert "confidence_score" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+def test_run_image_input_create_validates_expected_fields() -> None:
+    image = RunImageInput.create(
+        image_path="/runs/PCB-0001/images/top.png",
+        image_role="top_view",
+        image_width=1600,
+        image_height=900,
+    )
+
+    assert image.image_path == "/runs/PCB-0001/images/top.png"
+    assert image.image_role == "top_view"
+    assert image.image_width == 1600
+    assert image.image_height == 900

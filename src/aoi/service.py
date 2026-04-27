@@ -11,9 +11,9 @@ from urllib.parse import parse_qs, urlparse
 
 from PIL import Image, UnidentifiedImageError
 
+from aoi.api.models import parse_post_events_payload
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
-from aoi.schema import InferenceEvent, RunImageInput
 
 
 class IngestionHandler(BaseHTTPRequestHandler):
@@ -410,39 +410,13 @@ class IngestionHandler(BaseHTTPRequestHandler):
 
     def _parse_payload(
         self, payload: object
-    ) -> tuple[list[InferenceEvent], str | None, list[RunImageInput] | None]:
-        model_version: str | None = None
-        images: list[RunImageInput] | None = None
-        if isinstance(payload, dict):
-            raw_model_version = payload.get("model_version")
-            if raw_model_version is not None:
-                if not isinstance(raw_model_version, str) or not raw_model_version.strip():
-                    raise ValueError("model_version must be a non-empty string when provided")
-                model_version = raw_model_version
-            raw_images = payload.get("images")
-            if raw_images is not None:
-                if not isinstance(raw_images, list) or not raw_images:
-                    raise ValueError("images must be a non-empty list when provided")
-                images = []
-                for item in raw_images:
-                    if not isinstance(item, dict):
-                        raise ValueError("each image must be a JSON object")
-                    images.append(RunImageInput.from_dict(item))
-            raw_events = payload.get("events", [payload])
-        elif isinstance(payload, list):
-            raw_events = payload
-        else:
-            raise ValueError("payload must be an event object or a list of event objects")
-
-        if not isinstance(raw_events, list) or not raw_events:
-            raise ValueError("events payload must contain at least one event")
-
-        events: list[InferenceEvent] = []
-        for item in raw_events:
-            if not isinstance(item, dict):
-                raise ValueError("each event must be a JSON object")
-            events.append(InferenceEvent.from_dict(item))
-        return events, model_version, images
+    ) -> tuple[list[object], str | None, list[object] | None]:
+        events, model_version, images = parse_post_events_payload(payload)
+        return (
+            [event.to_domain() for event in events],
+            model_version,
+            [image.to_domain() for image in images] if images is not None else None,
+        )
 
     def _handle_list_runs(self, query_string: str) -> None:
         query = parse_qs(query_string)
