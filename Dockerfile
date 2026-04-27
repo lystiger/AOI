@@ -2,10 +2,10 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY pyproject.toml README.md /app/
+COPY pyproject.toml README.md requirements.txt /app/
 COPY src /app/src
 
-RUN pip install --no-cache-dir pillow
+RUN pip install --no-cache-dir -r requirements.txt
 
 ENV PYTHONPATH=/app/src
 
