@@ -4,6 +4,8 @@
 
 Yes, moving more of the request validation to Pydantic is a good idea for this codebase.
 
+Use **Pydantic v2** for this migration.
+
 It is especially justified now because:
 
 - the backend has already been migrated to FastAPI
@@ -16,6 +18,8 @@ The important constraint is scope:
 - use Pydantic first at the API boundary
 - do not rewrite the database layer and domain behavior at the same time
 - preserve current response shapes and business logic while reducing manual parsing
+
+Pydantic v1 should not be introduced for new code in this repository.
 
 ## 2. Current State
 
@@ -81,6 +85,12 @@ Recommended rule:
 - `DatabaseManager` continues to receive `InferenceEvent` and `RunImageInput` until later
 
 This gives most of the value immediately without forcing a full rewrite.
+
+Implementation standard:
+
+- use Pydantic v2 APIs only
+- use `BaseModel`, `ConfigDict`, `field_validator`, `model_validator`, and `model_dump()`
+- do not introduce new v1-style `@validator`, `@root_validator`, or `.dict()` usage
 
 ## 5. What Should Change First
 
@@ -200,6 +210,8 @@ Use Pydantic field constraints and validators for:
 - non-negative integer checks
 - timestamp validation
 
+Use Pydantic v2 validation style for all of the above.
+
 ### 7.3 Compatibility Concern
 
 The legacy parser currently accepts:
@@ -279,6 +291,7 @@ Action:
 
 - replace `await request.json()` plus `_parse_payload()` with Pydantic-backed parsing
 - keep compatibility support for current payload shapes
+- implement the models with Pydantic v2 APIs only
 
 This is the first file to change.
 
@@ -397,5 +410,6 @@ But the right version of the idea is:
 - keep the current domain model stable
 - migrate `POST /events` first because it gives the highest payoff
 - do not turn it into a simultaneous domain + database rewrite
+- standardize on **Pydantic v2**
 
 That will give you the validation benefits you want without destabilizing the system you just migrated.
