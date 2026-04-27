@@ -1031,38 +1031,13 @@ textarea {
   cursor: grabbing;
 }
 
-.resize-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  background: currentColor;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+.editable-box.selected {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.55);
 }
 
-.resize-nw {
-  top: -6px;
-  left: -6px;
-  cursor: nwse-resize;
-}
-
-.resize-ne {
-  top: -6px;
-  right: -6px;
-  cursor: nesw-resize;
-}
-
-.resize-sw {
-  bottom: -6px;
-  left: -6px;
-  cursor: nesw-resize;
-}
-
-.resize-se {
-  right: -6px;
-  bottom: -6px;
-  cursor: nwse-resize;
+.editable-box:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
 }
 
 .fiducial-box span {

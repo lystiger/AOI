@@ -29,6 +29,10 @@ const DEFAULT_MANUAL_FIDUCIALS = [
   { id: 'fid-3', x: '0.12', y: '0.82', width: '0.035', height: '0.035' },
 ]
 
+function formatFiducialLabel(index) {
+  return `mark-${index + 1}`
+}
+
 function buildManualFiducialsDraft(run) {
   if (run?.fiducials?.length) {
     return run.fiducials.map((fiducial, index) => ({
@@ -161,6 +165,42 @@ function EmptyStateMessage({ title, body }) {
 function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }) {
   const previewRef = useRef(null)
   const [editState, setEditState] = useState(null)
+  const [selectedOverlayId, setSelectedOverlayId] = useState(null)
+
+  function getPointerEditMode(event) {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const edgeThreshold = 12
+    const nearLeft = event.clientX - bounds.left <= edgeThreshold
+    const nearRight = bounds.right - event.clientX <= edgeThreshold
+    const nearTop = event.clientY - bounds.top <= edgeThreshold
+    const nearBottom = bounds.bottom - event.clientY <= edgeThreshold
+
+    if (nearTop && nearLeft) {
+      return 'resize-nw'
+    }
+    if (nearTop && nearRight) {
+      return 'resize-ne'
+    }
+    if (nearBottom && nearLeft) {
+      return 'resize-sw'
+    }
+    if (nearBottom && nearRight) {
+      return 'resize-se'
+    }
+    if (nearLeft) {
+      return 'resize-w'
+    }
+    if (nearRight) {
+      return 'resize-e'
+    }
+    if (nearTop) {
+      return 'resize-n'
+    }
+    if (nearBottom) {
+      return 'resize-s'
+    }
+    return 'move'
+  }
 
   useEffect(() => {
     if (!editState) {
@@ -189,6 +229,18 @@ function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }
       if (editState.mode === 'move') {
         nextBox.x = clamp(editState.originX + deltaX, 0, 1 - editState.originWidth)
         nextBox.y = clamp(editState.originY + deltaY, 0, 1 - editState.originHeight)
+      } else if (editState.mode === 'resize-e') {
+        nextBox.width = clamp(editState.originWidth + deltaX, minSize, 1 - editState.originX)
+      } else if (editState.mode === 'resize-w') {
+        const nextX = clamp(editState.originX + deltaX, 0, editState.originX + editState.originWidth - minSize)
+        nextBox.x = nextX
+        nextBox.width = clamp(editState.originWidth + (editState.originX - nextX), minSize, 1 - nextX)
+      } else if (editState.mode === 'resize-n') {
+        const nextY = clamp(editState.originY + deltaY, 0, editState.originY + editState.originHeight - minSize)
+        nextBox.y = nextY
+        nextBox.height = clamp(editState.originHeight + (editState.originY - nextY), minSize, 1 - nextY)
+      } else if (editState.mode === 'resize-s') {
+        nextBox.height = clamp(editState.originHeight + deltaY, minSize, 1 - editState.originY)
       } else if (editState.mode === 'resize-se') {
         nextBox.width = clamp(editState.originWidth + deltaX, minSize, 1 - editState.originX)
         nextBox.height = clamp(editState.originHeight + deltaY, minSize, 1 - editState.originY)
@@ -229,11 +281,11 @@ function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }
   return (
     <div ref={previewRef} className="fiducial-preview editable-preview">
       <img src={image.image_path} alt={`${kind} preview`} />
-      {overlays.map((overlay) => (
+      {overlays.map((overlay, index) => (
         <button
           key={overlay.id}
           type="button"
-          className={`${kind === 'barcode' ? 'barcode-box' : 'fiducial-box'} editable-box`}
+          className={`${kind === 'barcode' ? 'barcode-box' : 'fiducial-box'} editable-box${selectedOverlayId === overlay.id ? ' selected' : ''}`}
           style={{
             left: `${overlay.x * 100}%`,
             top: `${overlay.y * 100}%`,
@@ -243,9 +295,10 @@ function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }
           onPointerDown={(event) => {
             event.preventDefault()
             event.stopPropagation()
+            setSelectedOverlayId(overlay.id)
             setEditState({
               id: overlay.id,
-              mode: 'move',
+              mode: getPointerEditMode(event),
               startX: event.clientX,
               startY: event.clientY,
               originX: overlay.x,
@@ -254,28 +307,45 @@ function EditableOverlayPreview({ image, overlays, onChange, kind = 'fiducial' }
               originHeight: overlay.height,
             })
           }}
+          onFocus={() => setSelectedOverlayId(overlay.id)}
+          onClick={() => setSelectedOverlayId(overlay.id)}
+          onKeyDown={(event) => {
+            const baseStep = event.shiftKey ? 0.01 : 0.0025
+            const currentBox = normalizeEditableBox(overlay, 0.01, 0.01)
+            let nextBox = { ...currentBox }
+
+            if (event.altKey) {
+              if (event.key === 'ArrowLeft') {
+                nextBox.width = clamp(currentBox.width - baseStep, 0.01, 1 - currentBox.x)
+              } else if (event.key === 'ArrowRight') {
+                nextBox.width = clamp(currentBox.width + baseStep, 0.01, 1 - currentBox.x)
+              } else if (event.key === 'ArrowUp') {
+                nextBox.height = clamp(currentBox.height - baseStep, 0.01, 1 - currentBox.y)
+              } else if (event.key === 'ArrowDown') {
+                nextBox.height = clamp(currentBox.height + baseStep, 0.01, 1 - currentBox.y)
+              } else {
+                return
+              }
+            } else {
+              if (event.key === 'ArrowLeft') {
+                nextBox.x = currentBox.x - baseStep
+              } else if (event.key === 'ArrowRight') {
+                nextBox.x = currentBox.x + baseStep
+              } else if (event.key === 'ArrowUp') {
+                nextBox.y = currentBox.y - baseStep
+              } else if (event.key === 'ArrowDown') {
+                nextBox.y = currentBox.y + baseStep
+              } else {
+                return
+              }
+            }
+
+            event.preventDefault()
+            onChange?.(overlay.id, normalizeEditableBox(nextBox, 0.01, 0.01))
+          }}
+          aria-label={`${kind} ${overlay.label || formatFiducialLabel(index)}`}
         >
           <span>{overlay.label}</span>
-          {['nw', 'ne', 'sw', 'se'].map((handle) => (
-            <span
-              key={handle}
-              className={`resize-handle resize-${handle}`}
-              onPointerDown={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                setEditState({
-                  id: overlay.id,
-                  mode: `resize-${handle}`,
-                  startX: event.clientX,
-                  startY: event.clientY,
-                  originX: overlay.x,
-                  originY: overlay.y,
-                  originWidth: overlay.width,
-                  originHeight: overlay.height,
-                })
-              }}
-            />
-          ))}
         </button>
       ))}
     </div>
@@ -654,7 +724,7 @@ function SetupFlow({
     y: toNormalizedNumber(fiducial.y),
     width: toPositiveNormalizedNumber(fiducial.width, 0.035),
     height: toPositiveNormalizedNumber(fiducial.height, 0.035),
-    label: fiducial.id || `fid-${index + 1}`,
+    label: formatFiducialLabel(index),
   }))
   const editableBarcode =
     manualBarcodeDraft
@@ -792,12 +862,12 @@ function SetupFlow({
                   </div>
                   <div className="manual-setup-card">
                     <strong>Manual Fiducial Recovery</strong>
-                    <p>Drag each recovery box onto the fiducial mark, then save the adjusted positions.</p>
+                    <p>Drag a box to move it. Drag from an edge or corner to resize it. Use arrow keys to nudge, and `Alt` + arrow keys to resize from the keyboard.</p>
                     <FiducialPreview image={selectedImage} editableFiducials={editableFiducials} onChangeFiducial={onManualFiducialsChange} />
                     <div className="manual-setup-grid compact">
                       {editableFiducials.map((fiducial) => (
                         <div key={fiducial.id} className="manual-setup-item compact">
-                          <strong>{fiducial.id}</strong>
+                          <strong>{fiducial.label}</strong>
                           <span>
                             x {fiducial.x.toFixed(3)} y {fiducial.y.toFixed(3)} w {fiducial.width.toFixed(3)} h {fiducial.height.toFixed(3)}
                           </span>
@@ -810,9 +880,9 @@ function SetupFlow({
                   </div>
                   {selectedRun?.fiducials?.length ? (
                     <div className="fiducial-list">
-                      {selectedRun.fiducials.map((fiducial) => (
+                      {selectedRun.fiducials.map((fiducial, index) => (
                         <div key={fiducial.id} className="fiducial-list-item">
-                          <strong>{fiducial.id}</strong>
+                          <strong>{formatFiducialLabel(index)}</strong>
                           <span>{Math.round(fiducial.confidence * 100)}% confidence</span>
                         </div>
                       ))}
@@ -2019,12 +2089,11 @@ function App() {
               onSaveModel={handleSaveModel}
               onDetectFiducials={handleDetectFiducials}
               onConfirmFiducials={handleConfirmFiducials}
-              onManualFiducialsMove={handleManualFiducialMove}
+              onManualFiducialsChange={handleManualFiducialChange}
               onSaveManualFiducials={handleSaveManualFiducials}
               onDetectBarcode={handleDetectBarcode}
               onConfirmBarcode={handleConfirmBarcode}
               onManualBarcodeChange={handleManualBarcodeChange}
-              onManualBarcodeMove={handleManualBarcodeMove}
               onSaveManualBarcode={handleSaveManualBarcode}
               onContinueToReview={handleContinueToReview}
               onStepClick={setManualStepId}
