@@ -3,7 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 import shutil
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
@@ -14,14 +14,8 @@ from aoi.api.models import CreateRunRequest, ManualBarcodeRequest, ManualFiducia
 
 router = APIRouter()
 
-
-def _validate_optional_choice(value: str | None, key: str, allowed: set[str]) -> str | None:
-    if value is None:
-        return None
-    if value not in allowed:
-        allowed_values = ", ".join(sorted(allowed))
-        raise HTTPException(status_code=400, detail=f"{key} must be one of: {allowed_values}")
-    return value
+RunStatusFilter = Literal["PASS", "FAIL"]
+SeverityFilter = Literal["none", "minor", "major", "critical"]
 
 
 def _read_image_size(image_data: bytes) -> tuple[int, int]:
@@ -50,15 +44,14 @@ def list_runs(
     database_manager: DatabaseManagerDep,
     limit: Annotated[int, Query(ge=1)] = 20,
     pcb_id: str | None = None,
-    status: str | None = None,
+    status: RunStatusFilter | None = None,
     model_version: str | None = None,
     defect_type: str | None = None,
 ) -> dict[str, object]:
-    validated_status = _validate_optional_choice(status, "status", {"PASS", "FAIL"})
     runs = database_manager.list_runs(
         limit=limit,
         pcb_id=pcb_id or None,
-        status=validated_status,
+        status=status,
         model_version=model_version or None,
         defect_type=defect_type or None,
     )
@@ -71,17 +64,15 @@ def get_run(
     database_manager: DatabaseManagerDep,
     component_id: str | None = None,
     defect_type: str | None = None,
-    severity: str | None = None,
-    inspection_result: str | None = None,
+    severity: SeverityFilter | None = None,
+    inspection_result: RunStatusFilter | None = None,
 ) -> dict[str, object]:
-    validated_severity = _validate_optional_choice(severity, "severity", {"none", "minor", "major", "critical"})
-    validated_result = _validate_optional_choice(inspection_result, "inspection_result", {"PASS", "FAIL"})
     run = database_manager.fetch_run_with_defects(
         run_id,
         component_id=component_id or None,
         defect_type=defect_type or None,
-        severity=validated_severity,
-        inspection_result=validated_result,
+        severity=severity,
+        inspection_result=inspection_result,
     )
     if run is None:
         raise HTTPException(status_code=404, detail="run not found")
@@ -94,11 +85,9 @@ def get_run_defects(
     database_manager: DatabaseManagerDep,
     component_id: str | None = None,
     defect_type: str | None = None,
-    severity: str | None = None,
-    inspection_result: str | None = None,
+    severity: SeverityFilter | None = None,
+    inspection_result: RunStatusFilter | None = None,
 ) -> dict[str, object]:
-    validated_severity = _validate_optional_choice(severity, "severity", {"none", "minor", "major", "critical"})
-    validated_result = _validate_optional_choice(inspection_result, "inspection_result", {"PASS", "FAIL"})
     run = database_manager.fetch_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="run not found")
@@ -106,8 +95,8 @@ def get_run_defects(
         run_id,
         component_id=component_id or None,
         defect_type=defect_type or None,
-        severity=validated_severity,
-        inspection_result=validated_result,
+        severity=severity,
+        inspection_result=inspection_result,
     )
     return {"status": "ok", "run_id": run_id, "count": len(defect_logs), "defect_logs": defect_logs}
 

@@ -176,6 +176,20 @@ def test_fastapi_create_run_rejects_unexpected_fields_with_standard_validation_e
     assert response.json() == {"status": "error", "message": "Extra inputs are not permitted"}
 
 
+def test_fastapi_list_runs_rejects_invalid_status_query_with_standard_validation_error(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.get("/runs", params={"status": "BROKEN"})
+
+    assert response.status_code == 422
+    assert "Input should be 'PASS' or 'FAIL'" in response.json()["message"]
+
+
 def test_fastapi_list_runs_returns_recent_runs(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     persisted_run = database.persist_events(
