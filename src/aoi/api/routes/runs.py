@@ -29,6 +29,18 @@ class UpdateRunRequest(BaseModel):
     requires_barcode: bool | None = None
 
 
+class ManualFiducialsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fiducials: list[dict[str, object]]
+
+
+class ManualBarcodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    barcode: dict[str, object]
+
+
 def _validate_optional_choice(value: str | None, key: str, allowed: set[str]) -> str | None:
     if value is None:
         return None
@@ -239,3 +251,89 @@ def get_run_image(
             media_type = "image/png" if candidate.suffix == ".png" else "image/jpeg"
             return FileResponse(candidate, media_type=media_type)
     raise HTTPException(status_code=404, detail="image not found")
+
+
+@router.post("/runs/{run_id}/fiducials/detect")
+def detect_fiducials(
+    run_id: str,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.detect_fiducials(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}
+
+
+@router.post("/runs/{run_id}/fiducials/confirm")
+def confirm_fiducials(
+    run_id: str,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.confirm_fiducials(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}
+
+
+@router.post("/runs/{run_id}/fiducials/manual")
+def save_manual_fiducials(
+    run_id: str,
+    payload: ManualFiducialsRequest,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.save_manual_fiducials(run_id, payload.fiducials)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}
+
+
+@router.post("/runs/{run_id}/barcode/detect")
+def detect_barcode(
+    run_id: str,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.detect_barcode(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}
+
+
+@router.post("/runs/{run_id}/barcode/confirm")
+def confirm_barcode(
+    run_id: str,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.confirm_barcode(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}
+
+
+@router.post("/runs/{run_id}/barcode/manual")
+def save_manual_barcode(
+    run_id: str,
+    payload: ManualBarcodeRequest,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = database_manager.save_manual_barcode(run_id, payload.barcode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"status": "ok", "run": run}

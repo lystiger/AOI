@@ -1,11 +1,42 @@
 from io import BytesIO
 
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from aoi.api import create_app
 from aoi.database import DatabaseManager
 from aoi.schema import InferenceEvent, InspectionResult
+
+
+def _create_fiducial_board_image(path, *, size=(1600, 900), include_marks=True):
+    image = Image.new("RGB", size, color=(26, 150, 98))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((30, 30, size[0] - 30, size[1] - 30), outline=(230, 245, 235), width=8)
+    draw.rectangle((size[0] * 0.32, size[1] * 0.24, size[0] * 0.68, size[1] * 0.74), outline=(190, 220, 210), width=5)
+
+    if include_marks:
+        radii = max(18, min(size) // 28)
+        centers = [
+            (int(size[0] * 0.09), int(size[1] * 0.12)),
+            (int(size[0] * 0.89), int(size[1] * 0.14)),
+            (int(size[0] * 0.12), int(size[1] * 0.84)),
+            (int(size[0] * 0.88), int(size[1] * 0.86)),
+        ]
+        for center_x, center_y in centers:
+            draw.ellipse(
+                (center_x - radii, center_y - radii, center_x + radii, center_y + radii),
+                fill=(215, 176, 56),
+                outline=(245, 235, 185),
+                width=max(3, radii // 5),
+            )
+            inner = max(6, radii // 2)
+            draw.ellipse(
+                (center_x - inner, center_y - inner, center_x + inner, center_y + inner),
+                fill=(26, 150, 98),
+            )
+
+    image.save(path)
+    return path
 
 
 def test_fastapi_health_endpoint_returns_ok(tmp_path) -> None:
@@ -287,3 +318,158 @@ def test_fastapi_get_run_image_returns_uploaded_asset(tmp_path) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.content == image_bytes
+
+
+def test_fastapi_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FID")
+    image_path = _create_fiducial_board_image(tmp_path / "fid-fastapi-board.png")
+    with Image.open(image_path) as image:
+        width, height = image.size
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    detect_response = client.post(f"/runs/{run['id']}/fiducials/detect", json={})
+    confirm_response = client.post(f"/runs/{run['id']}/fiducials/confirm", json={})
+
+    assert detect_response.status_code == 200
+    assert confirm_response.status_code == 200
+    detect_payload = detect_response.json()
+    confirm_payload = confirm_response.json()
+    assert detect_payload["run"]["fiducial_status"] == "needs_review"
+    assert len(detect_payload["run"]["fiducials"]) == 3
+    assert confirm_payload["run"]["fiducial_status"] == "confirmed"
+    assert confirm_payload["run"]["setup_status"] == "review_ready"
+
+
+def test_fastapi_fiducial_detection_failure_and_manual_recovery_endpoints(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FID-FAIL")
+    image_path = _create_fiducial_board_image(tmp_path / "fid-fastapi-fail-board.png", size=(900, 700), include_marks=False)
+    with Image.open(image_path) as image:
+        width, height = image.size
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], str(image_path), "full_board", width, height, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    detect_response = client.post(f"/runs/{run['id']}/fiducials/detect", json={})
+    failed_run = database.fetch_run(run["id"])
+    manual_response = client.post(
+        f"/runs/{run['id']}/fiducials/manual",
+        json={
+            "fiducials": [
+                {"x": 0.08, "y": 0.1, "width": 0.035, "height": 0.035},
+                {"x": 0.86, "y": 0.12, "width": 0.035, "height": 0.035},
+                {"x": 0.12, "y": 0.82, "width": 0.035, "height": 0.035},
+            ]
+        },
+    )
+
+    assert detect_response.status_code == 400
+    assert detect_response.json()["message"].startswith("fiducial detection failed")
+    assert failed_run is not None
+    assert failed_run["fiducial_status"] == "failed"
+    assert manual_response.status_code == 200
+    assert manual_response.json()["run"]["fiducial_status"] == "confirmed"
+    assert manual_response.json()["run"]["setup_status"] == "review_ready"
+
+
+def test_fastapi_barcode_detection_and_confirmation_endpoints(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-BAR")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    detect_response = client.post(f"/runs/{run['id']}/barcode/detect", json={})
+    confirm_response = client.post(f"/runs/{run['id']}/barcode/confirm", json={})
+
+    assert detect_response.status_code == 200
+    assert confirm_response.status_code == 200
+    detect_payload = detect_response.json()
+    confirm_payload = confirm_response.json()
+    assert detect_payload["run"]["barcode_status"] == "needs_review"
+    assert detect_payload["run"]["barcode"]["decoded_value"] == "PCB-BAR-LOT-01"
+    assert confirm_payload["run"]["barcode_status"] == "confirmed"
+    assert confirm_payload["run"]["setup_status"] == "review_ready"
+
+
+def test_fastapi_barcode_detection_failure_and_manual_recovery_endpoints(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-BAR-FAIL")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar/images/img-1", "full_board", 800, 420, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    detect_response = client.post(f"/runs/{run['id']}/barcode/detect", json={})
+    failed_run = database.fetch_run(run["id"])
+    manual_response = client.post(
+        f"/runs/{run['id']}/barcode/manual",
+        json={
+            "barcode": {
+                "x": 0.72,
+                "y": 0.78,
+                "width": 0.16,
+                "height": 0.08,
+                "decoded_value": "PCB-BAR-FAIL-LOT-01",
+            }
+        },
+    )
+
+    assert detect_response.status_code == 400
+    assert detect_response.json()["message"].startswith("barcode detection failed")
+    assert failed_run is not None
+    assert failed_run["barcode_status"] == "failed"
+    assert manual_response.status_code == 200
+    assert manual_response.json()["run"]["barcode_status"] == "confirmed"
+    assert manual_response.json()["run"]["barcode"]["decoded_value"] == "PCB-BAR-FAIL-LOT-01"
+    assert manual_response.json()["run"]["setup_status"] == "review_ready"
