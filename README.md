@@ -60,6 +60,12 @@ Use the local package path when running without installation:
 PYTHONPATH=src python3 -m aoi.cli serve-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
 ```
 
+This now starts the FastAPI backend by default. To run the legacy HTTP server during migration:
+
+```bash
+PYTHONPATH=src python3 -m aoi.cli serve-http --legacy-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
+```
+
 Health check:
 
 ```bash

@@ -1,0 +1,106 @@
+from pathlib import Path
+
+import aoi.cli as cli
+
+
+def test_serve_http_uses_fastapi_by_default(monkeypatch, tmp_path) -> None:
+    called: dict[str, object] = {}
+
+    def fake_create_app(*, db_path: Path, log_path: Path, storage_path: Path):
+        called["create_app"] = {
+            "db_path": db_path,
+            "log_path": log_path,
+            "storage_path": storage_path,
+        }
+        return "app-object"
+
+    def fake_uvicorn_run(app, *, host: str, port: int) -> None:
+        called["uvicorn_run"] = {
+            "app": app,
+            "host": host,
+            "port": port,
+        }
+
+    def fail_legacy(**_: object) -> None:
+        raise AssertionError("legacy server should not be used by default")
+
+    monkeypatch.setattr(cli, "create_app", fake_create_app)
+    monkeypatch.setattr(cli.uvicorn, "run", fake_uvicorn_run)
+    monkeypatch.setattr(cli, "run_server", fail_legacy)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "aoi.cli",
+            "serve-http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+            "--output",
+            str(tmp_path / "inference.jsonl"),
+            "--db-path",
+            str(tmp_path / "aoi.db"),
+            "--storage-path",
+            str(tmp_path / "storage"),
+        ],
+    )
+
+    cli.main()
+
+    assert called["create_app"] == {
+        "db_path": tmp_path / "aoi.db",
+        "log_path": tmp_path / "inference.jsonl",
+        "storage_path": tmp_path / "storage",
+    }
+    assert called["uvicorn_run"] == {
+        "app": "app-object",
+        "host": "127.0.0.1",
+        "port": 9000,
+    }
+
+
+def test_serve_http_legacy_flag_uses_legacy_server(monkeypatch, tmp_path) -> None:
+    called: dict[str, object] = {}
+
+    def fail_fastapi(**_: object) -> None:
+        raise AssertionError("FastAPI app should not be created when --legacy-http is set")
+
+    def fake_run_server(*, host: str, port: int, log_path: Path, db_path: Path, storage_path: Path) -> None:
+        called["run_server"] = {
+            "host": host,
+            "port": port,
+            "log_path": log_path,
+            "db_path": db_path,
+            "storage_path": storage_path,
+        }
+
+    monkeypatch.setattr(cli, "create_app", fail_fastapi)
+    monkeypatch.setattr(cli, "run_server", fake_run_server)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "aoi.cli",
+            "serve-http",
+            "--legacy-http",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9001",
+            "--output",
+            str(tmp_path / "inference.jsonl"),
+            "--db-path",
+            str(tmp_path / "aoi.db"),
+            "--storage-path",
+            str(tmp_path / "storage"),
+        ],
+    )
+
+    cli.main()
+
+    assert called["run_server"] == {
+        "host": "127.0.0.1",
+        "port": 9001,
+        "log_path": tmp_path / "inference.jsonl",
+        "db_path": tmp_path / "aoi.db",
+        "storage_path": tmp_path / "storage",
+    }
