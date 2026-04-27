@@ -84,6 +84,84 @@ def test_fastapi_post_events_persists_records(tmp_path) -> None:
     assert (tmp_path / "inference.jsonl").exists()
 
 
+def test_fastapi_post_events_accepts_single_event_object_payload(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/events",
+        json={
+            "pcb_id": "PCB-SINGLE",
+            "component_id": "R101",
+            "inspection_result": "FAIL",
+            "defect_type": "MISALIGNMENT",
+            "confidence_score": 0.88,
+            "inference_latency_ms": 31,
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json()["accepted"] == 1
+
+
+def test_fastapi_post_events_accepts_event_list_payload(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/events",
+        json=[
+            {
+                "pcb_id": "PCB-LIST",
+                "component_id": "R101",
+                "inspection_result": "FAIL",
+                "defect_type": "MISALIGNMENT",
+                "confidence_score": 0.88,
+                "inference_latency_ms": 31,
+            }
+        ],
+    )
+
+    assert response.status_code == 202
+    assert response.json()["accepted"] == 1
+
+
+def test_fastapi_post_events_rejects_invalid_confidence(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/events",
+        json={
+            "events": [
+                {
+                    "pcb_id": "PCB-BAD",
+                    "component_id": "R101",
+                    "inspection_result": "FAIL",
+                    "defect_type": "MISALIGNMENT",
+                    "confidence_score": 1.5,
+                    "inference_latency_ms": 31,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert "less than or equal to 1" in response.json()["message"]
+
+
 def test_fastapi_list_runs_returns_recent_runs(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     persisted_run = database.persist_events(
