@@ -1,5 +1,22 @@
 # Pydantic Migration Plan
 
+## Status
+
+As of 2026-04-27, the migration is partially complete.
+
+Completed:
+
+- `POST /events` validates event payloads with Pydantic v2 models plus a thin compatibility adapter for legacy body shapes
+- run creation and run update request bodies use shared Pydantic v2 request models
+- manual fiducial and manual barcode request bodies use shared Pydantic v2 request models
+- FastAPI validation failures now return the repository's standard error envelope with status `422`
+
+Remaining:
+
+- reduce duplicated parsing and validation paths that still live in `src/aoi/schema.py`
+- decide whether `src/aoi/service.py` should stay on handwritten parsing or adopt the same Pydantic models
+- add response models only if response contracts need stricter typing later
+
 ## 1. Recommendation
 
 Yes, moving more of the request validation to Pydantic is a good idea for this codebase.
@@ -368,6 +385,8 @@ Exit criteria:
 - manual validation logic is substantially reduced in `events.py`
 - event ingestion tests still pass
 
+Status: complete
+
 ### Phase 2
 
 Deliver:
@@ -379,6 +398,8 @@ Exit criteria:
 
 - request validation is centralized
 
+Status: complete
+
 ### Phase 3
 
 Deliver:
@@ -389,6 +410,8 @@ Deliver:
 Exit criteria:
 
 - no important API path depends on handwritten `from_dict()` parsing
+
+Status: next recommended slice
 
 ## 13. Acceptance Criteria
 

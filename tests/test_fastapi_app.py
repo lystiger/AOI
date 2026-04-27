@@ -158,8 +158,22 @@ def test_fastapi_post_events_rejects_invalid_confidence(tmp_path) -> None:
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert "less than or equal to 1" in response.json()["message"]
+
+
+def test_fastapi_create_run_rejects_unexpected_fields_with_standard_validation_error(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post("/runs", json={"unexpected": True})
+
+    assert response.status_code == 422
+    assert response.json() == {"status": "error", "message": "Extra inputs are not permitted"}
 
 
 def test_fastapi_list_runs_returns_recent_runs(tmp_path) -> None:
@@ -564,6 +578,34 @@ def test_fastapi_fiducial_detection_failure_and_manual_recovery_endpoints(tmp_pa
     assert manual_response.json()["run"]["setup_status"] == "review_ready"
 
 
+def test_fastapi_manual_fiducials_rejects_short_payload_at_api_boundary(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FID-SHORT")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/fid/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-FID", requires_fiducials=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        f"/runs/{run['id']}/fiducials/manual",
+        json={"fiducials": [{"x": 0.08, "y": 0.1, "width": 0.035, "height": 0.035}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"status": "error", "message": "Value error, at least 3 fiducials are required"}
+
+
 def test_fastapi_barcode_detection_and_confirmation_endpoints(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-BAR")
@@ -638,3 +680,31 @@ def test_fastapi_barcode_detection_failure_and_manual_recovery_endpoints(tmp_pat
     assert manual_response.json()["run"]["barcode_status"] == "confirmed"
     assert manual_response.json()["run"]["barcode"]["decoded_value"] == "PCB-BAR-FAIL-LOT-01"
     assert manual_response.json()["run"]["setup_status"] == "review_ready"
+
+
+def test_fastapi_manual_barcode_rejects_blank_decoded_value_at_api_boundary(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-BAR-BLANK")
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], "/runs/bar/images/img-1", "full_board", 1600, 900, 0, run["timestamp"]),
+        )
+    database.update_run(run["id"], model_name="MODEL-BAR", requires_barcode=True)
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        f"/runs/{run['id']}/barcode/manual",
+        json={"barcode": {"x": 0.72, "y": 0.78, "width": 0.16, "height": 0.08, "decoded_value": "  "}},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"status": "error", "message": "Value error, decoded_value must be a non-empty string"}

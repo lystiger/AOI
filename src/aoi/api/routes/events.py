@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError, TypeAdapter
 
 from aoi.api.deps import DatabaseManagerDep, LogManagerDep
-from aoi.api.models import EventIn, PostEventsRequest
+from aoi.api.models import EventIn, PostEventsRequest, RunImageInputIn
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ def _first_pydantic_error_message(exc: ValidationError) -> str:
     return str(first_error.get("msg") or "validation error")
 
 
-def _parse_payload(payload: object) -> tuple[list[EventIn], str | None, list[object] | None]:
+def _parse_payload(payload: object) -> tuple[list[EventIn], str | None, list[RunImageInputIn] | None]:
     try:
         if isinstance(payload, list):
             events = event_list_adapter.validate_python(payload)
@@ -51,7 +51,7 @@ async def post_events(
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     domain_events = [event.to_domain() for event in events]
     domain_images = [image.to_domain() for image in images] if images is not None else None

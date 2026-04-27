@@ -8,37 +8,11 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel, ConfigDict
 
 from aoi.api.deps import DatabaseManagerDep, StoragePathDep
+from aoi.api.models import CreateRunRequest, ManualBarcodeRequest, ManualFiducialsRequest, UpdateRunRequest
 
 router = APIRouter()
-
-
-class CreateRunRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    pcb_id: str | None = None
-
-
-class UpdateRunRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    model_name: str | None = None
-    requires_fiducials: bool | None = None
-    requires_barcode: bool | None = None
-
-
-class ManualFiducialsRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    fiducials: list[dict[str, object]]
-
-
-class ManualBarcodeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    barcode: dict[str, object]
 
 
 def _validate_optional_choice(value: str | None, key: str, allowed: set[str]) -> str | None:
@@ -47,14 +21,6 @@ def _validate_optional_choice(value: str | None, key: str, allowed: set[str]) ->
     if value not in allowed:
         allowed_values = ", ".join(sorted(allowed))
         raise HTTPException(status_code=400, detail=f"{key} must be one of: {allowed_values}")
-    return value
-
-
-def _normalize_optional_string(value: str | None, key: str) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str) or not value.strip():
-        raise HTTPException(status_code=400, detail=f"{key} must be a non-empty string")
     return value
 
 
@@ -75,8 +41,7 @@ def create_run(
     payload: CreateRunRequest,
     database_manager: DatabaseManagerDep,
 ) -> dict[str, object]:
-    pcb_id = _normalize_optional_string(payload.pcb_id, "pcb_id")
-    run = database_manager.create_run(pcb_id=pcb_id)
+    run = database_manager.create_run(pcb_id=payload.pcb_id)
     return {"status": "ok", "run": run}
 
 
@@ -153,13 +118,9 @@ def update_run(
     payload: UpdateRunRequest,
     database_manager: DatabaseManagerDep,
 ) -> dict[str, object]:
-    model_name = payload.model_name if "model_name" in payload.model_fields_set else None
-    if "model_name" in payload.model_fields_set:
-        model_name = _normalize_optional_string(model_name, "model_name")
-
     run = database_manager.update_run(
         run_id,
-        model_name=model_name,
+        model_name=payload.model_name if "model_name" in payload.model_fields_set else None,
         requires_fiducials=payload.requires_fiducials if "requires_fiducials" in payload.model_fields_set else None,
         requires_barcode=payload.requires_barcode if "requires_barcode" in payload.model_fields_set else None,
     )
@@ -288,7 +249,10 @@ def save_manual_fiducials(
     database_manager: DatabaseManagerDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.save_manual_fiducials(run_id, payload.fiducials)
+        run = database_manager.save_manual_fiducials(
+            run_id,
+            [fiducial.model_dump(exclude_none=True) for fiducial in payload.fiducials],
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
@@ -331,7 +295,7 @@ def save_manual_barcode(
     database_manager: DatabaseManagerDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.save_manual_barcode(run_id, payload.barcode)
+        run = database_manager.save_manual_barcode(run_id, payload.barcode.model_dump(exclude_none=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
