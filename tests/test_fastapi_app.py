@@ -53,6 +53,37 @@ def test_fastapi_health_endpoint_returns_ok(tmp_path) -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_fastapi_post_events_persists_records(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/events",
+        json={
+            "events": [
+                {
+                    "pcb_id": "PCB-0001",
+                    "component_id": "R101",
+                    "inspection_result": "FAIL",
+                    "defect_type": "MISALIGNMENT",
+                    "confidence_score": 0.88,
+                    "inference_latency_ms": 31,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["accepted"] == 1
+    assert "run_id" in payload
+    assert (tmp_path / "inference.jsonl").exists()
+
+
 def test_fastapi_list_runs_returns_recent_runs(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     persisted_run = database.persist_events(
@@ -116,6 +147,62 @@ def test_fastapi_get_run_returns_embedded_defect_logs(tmp_path) -> None:
     assert payload["run"]["images"] == []
     assert payload["run"]["event_count"] == 1
     assert payload["run"]["defect_logs"][0]["defect_type"] == "LIFTED_LEAD"
+
+
+def test_fastapi_post_events_accepts_explicit_images_and_overlay_metadata(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/events",
+        json={
+            "images": [
+                {
+                    "image_path": "/runs/PCB-IMG/images/top.png",
+                    "image_role": "top_view",
+                    "image_width": 1600,
+                    "image_height": 900,
+                },
+                {
+                    "image_path": "/runs/PCB-IMG/images/crop.png",
+                    "image_role": "crop_view",
+                    "image_width": 800,
+                    "image_height": 800,
+                },
+            ],
+            "events": [
+                {
+                    "pcb_id": "PCB-IMG",
+                    "component_id": "U101",
+                    "inspection_result": "FAIL",
+                    "defect_type": "MISALIGNMENT",
+                    "confidence_score": 0.88,
+                    "inference_latency_ms": 31,
+                    "run_image_index": 1,
+                    "overlay_x": 0.33,
+                    "overlay_y": 0.44,
+                    "overlay_width": 0.07,
+                    "overlay_height": 0.05,
+                    "overlay_shape": "rect",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 202
+    result = response.json()
+    run_response = client.get(f"/runs/{result['run_id']}")
+
+    assert run_response.status_code == 200
+    run_payload = run_response.json()
+    assert len(run_payload["run"]["images"]) == 2
+    assert run_payload["run"]["images"][1]["image_role"] == "crop_view"
+    assert run_payload["run"]["defect_logs"][0]["run_image_id"] == run_payload["run"]["images"][1]["id"]
+    assert run_payload["run"]["defect_logs"][0]["overlay_x"] == 0.33
 
 
 def test_fastapi_get_run_returns_not_found_for_missing_run(tmp_path) -> None:

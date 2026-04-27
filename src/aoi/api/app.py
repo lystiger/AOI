@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from aoi.api.routes import health_router, runs_router
+from aoi.api.routes import events_router, health_router, runs_router
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
 
@@ -24,5 +24,6 @@ def create_app(*, db_path: Path, log_path: Path, storage_path: Path) -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"status": "error", "message": message})
 
     app.include_router(health_router)
+    app.include_router(events_router)
     app.include_router(runs_router)
     return app
