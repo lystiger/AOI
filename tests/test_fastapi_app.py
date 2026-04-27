@@ -1,4 +1,7 @@
+from io import BytesIO
+
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from aoi.api import create_app
 from aoi.database import DatabaseManager
@@ -222,3 +225,65 @@ def test_fastapi_delete_run_removes_run_and_assets(tmp_path) -> None:
     assert response.json() == {"status": "ok", "run_id": run["id"]}
     assert missing_response.status_code == 404
     assert not run_dir.exists()
+
+
+def test_fastapi_upload_run_image_stores_metadata_and_asset(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-UPLOAD")
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+    buffer = BytesIO()
+    Image.new("RGB", (1600, 900), color=(0, 128, 0)).save(buffer, format="PNG")
+
+    response = client.post(
+        f"/runs/{run['id']}/images",
+        content=buffer.getvalue(),
+        headers={"Content-Type": "image/png"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["status"] == "ok"
+    stored_images = database.fetch_run_images(run["id"])
+    assert len(stored_images) == 1
+    assert stored_images[0]["image_width"] == 1600
+    assert stored_images[0]["image_height"] == 900
+    assert (tmp_path / "storage" / run["id"] / "scan.png").exists()
+
+
+def test_fastapi_get_run_image_returns_uploaded_asset(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-IMG")
+    storage_path = tmp_path / "storage"
+    run_dir = storage_path / run["id"]
+    run_dir.mkdir(parents=True)
+    image_path = run_dir / "scan.png"
+    buffer = BytesIO()
+    Image.new("RGB", (400, 300), color=(12, 34, 56)).save(buffer, format="PNG")
+    image_bytes = buffer.getvalue()
+    image_path.write_bytes(image_bytes)
+    database.add_run_image(
+        run["id"],
+        image_id="img-1",
+        image_path=f"/runs/{run['id']}/images/img-1",
+        image_role="full_board",
+        image_width=400,
+        image_height=300,
+        created_at=str(run["timestamp"]),
+    )
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=storage_path,
+    )
+    client = TestClient(app)
+
+    response = client.get(f"/runs/{run['id']}/images/img-1")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == image_bytes

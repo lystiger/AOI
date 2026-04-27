@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from io import BytesIO
 import shutil
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict
 
 from aoi.api.deps import DatabaseManagerDep, StoragePathDep
@@ -40,6 +44,18 @@ def _normalize_optional_string(value: str | None, key: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise HTTPException(status_code=400, detail=f"{key} must be a non-empty string")
     return value
+
+
+def _read_image_size(image_data: bytes) -> tuple[int, int]:
+    try:
+        with Image.open(BytesIO(image_data)) as image:
+            width, height = image.size
+    except UnidentifiedImageError as exc:
+        raise HTTPException(status_code=400, detail="unsupported image format; upload a valid image file") from exc
+
+    if width < 1 or height < 1:
+        raise HTTPException(status_code=400, detail="invalid image dimensions")
+    return width, height
 
 
 @router.post("/runs", status_code=201)
@@ -155,3 +171,71 @@ def delete_run(
         shutil.rmtree(run_dir)
 
     return {"status": "ok", "run_id": run_id}
+
+
+@router.post("/runs/{run_id}/images", status_code=201)
+async def upload_run_image(
+    run_id: str,
+    request: Request,
+    database_manager: DatabaseManagerDep,
+    storage_path: StoragePathDep,
+) -> dict[str, object]:
+    run = database_manager.fetch_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    content_length_str = request.headers.get("content-length", "0")
+    try:
+        content_length = int(content_length_str)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid content length") from exc
+
+    if content_length == 0:
+        raise HTTPException(status_code=400, detail="empty image body")
+
+    image_data = await request.body()
+    if not image_data:
+        raise HTTPException(status_code=400, detail="empty image body")
+
+    image_width, image_height = _read_image_size(image_data)
+    ext = "png"
+    content_type = request.headers.get("content-type", "image/png")
+    if "jpeg" in content_type:
+        ext = "jpg"
+
+    image_filename = f"scan.{ext}"
+    run_dir = storage_path / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    file_path = run_dir / image_filename
+    file_path.write_bytes(image_data)
+
+    image_id = str(uuid.uuid4())
+    updated_run = database_manager.add_run_image(
+        run_id,
+        image_id=image_id,
+        image_path=f"/runs/{run_id}/images/{image_id}",
+        image_role="full_board",
+        image_width=image_width,
+        image_height=image_height,
+        created_at=str(run["timestamp"]),
+    )
+    if updated_run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    return {"status": "ok", "image_id": image_id, "run": updated_run}
+
+
+@router.get("/runs/{run_id}/images/{image_id}")
+def get_run_image(
+    run_id: str,
+    image_id: str,
+    storage_path: StoragePathDep,
+) -> FileResponse:
+    _ = image_id
+    run_dir = storage_path / run_id
+    for ext in ["png", "jpg", "jpeg"]:
+        candidate = run_dir / f"scan.{ext}"
+        if candidate.exists():
+            media_type = "image/png" if candidate.suffix == ".png" else "image/jpeg"
+            return FileResponse(candidate, media_type=media_type)
+    raise HTTPException(status_code=404, detail="image not found")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -16,10 +17,10 @@ def get_log_manager(request: Request) -> LogManager:
     return request.app.state.log_manager
 
 
-def get_storage_path(request: Request):
+def get_storage_path(request: Request) -> Path:
     return request.app.state.storage_path
 
 
 DatabaseManagerDep = Annotated[DatabaseManager, Depends(get_database_manager)]
 LogManagerDep = Annotated[LogManager, Depends(get_log_manager)]
-StoragePathDep = Annotated[object, Depends(get_storage_path)]
+StoragePathDep = Annotated[Path, Depends(get_storage_path)]
