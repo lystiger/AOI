@@ -20,7 +20,10 @@ function App() {
   }, [workspace.error, toast, workspace])
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-theme={workspace.isIndustrialTheme ? 'industrial' : 'editorial-light'}
+    >
       <WorkspaceTopbar
         summary={workspace.summary}
         isRunRailOpen={workspace.isRunRailOpen}
@@ -38,6 +41,8 @@ function App() {
         onClose={() => workspace.setIsSettingsOpen(false)}
         hudGhostOpacity={workspace.hudGhostOpacity}
         onHudGhostOpacityChange={workspace.setHudGhostOpacity}
+        isIndustrialTheme={workspace.isIndustrialTheme}
+        onIndustrialThemeChange={workspace.setIsIndustrialTheme}
         isKbNavEnabled={workspace.isKbNavEnabled}
         onKbNavEnabledChange={workspace.setIsKbNavEnabled}
         kbNavSensitivity={workspace.kbNavSensitivity}

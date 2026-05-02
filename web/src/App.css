@@ -9,6 +9,27 @@
   gap: 8px;
 }
 
+.app-shell[data-theme='editorial-light'] {
+  --bg: #efe6d8;
+  --surface: #f5f0e8;
+  --surface-hover: #fbf7f1;
+  --line: #d5ba99;
+  --ink: #2b221f;
+  --muted: #736257;
+  --accent: #b45b29;
+  --accent-soft: rgba(180, 91, 41, 0.12);
+  --ok: #1f6e4a;
+  --ok-soft: rgba(31, 110, 74, 0.14);
+  --fail: #b44d27;
+  --fail-soft: rgba(222, 129, 92, 0.24);
+  --warn: #9a6a18;
+  --warn-soft: rgba(154, 106, 24, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.5), transparent 32%),
+    linear-gradient(180deg, #f1e8dc 0%, #eadfce 100%);
+  color: var(--ink);
+}
+
 .workspace-title-group {
   display: flex;
   align-items: center;
@@ -38,7 +59,7 @@
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--ink);
 }
 
 .workspace-meta {
@@ -728,6 +749,27 @@
   min-width: 0;
   min-height: 0;
   background: #000;
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar {
+  background: #1d2326;
+  border-bottom-color: #353c41;
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .ghost-button,
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .image-selector {
+  background: #d8d3cc;
+  border-color: #d5ba99;
+  color: #2b221f;
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .ghost-button:hover:not(:disabled) {
+  background: #ece7df;
+  border-color: #e0c7ab;
+}
+
+.app-shell[data-theme='editorial-light'] .zoom-readout {
+  color: #f5f0e8;
 }
 
 .viewer-panel,

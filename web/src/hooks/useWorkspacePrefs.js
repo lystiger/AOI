@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_IMAGE_ID,
   DISMISSED_SETUP_STORAGE_KEY,
+  INDUSTRIAL_THEME_STORAGE_KEY,
   SELECTED_IMAGE_STORAGE_KEY,
   SELECTED_RUN_STORAGE_KEY,
 } from '../app/constants'
@@ -58,6 +59,16 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isFiltersOpen, setIsFiltersOpen] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isIndustrialTheme, setIsIndustrialTheme] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+    const rawValue = window.localStorage.getItem(INDUSTRIAL_THEME_STORAGE_KEY)
+    if (rawValue == null) {
+      return true
+    }
+    return rawValue !== 'false'
+  })
   const [hudGhostOpacity, setHudGhostOpacity] = useState(0.2)
   const [isKbNavEnabled, setIsKbNavEnabled] = useState(true)
   const [kbNavSensitivity, setKbNavSensitivity] = useState(1.0)
@@ -87,6 +98,13 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
   }, [dismissedSetupRuns])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(INDUSTRIAL_THEME_STORAGE_KEY, String(isIndustrialTheme))
+  }, [isIndustrialTheme])
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !selectedRunId) {
       return
     }
@@ -108,6 +126,7 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     fileInputRef,
     hudGhostOpacity,
     isFiltersOpen,
+    isIndustrialTheme,
     isKbNavEnabled,
     isRunRailOpen,
     isSettingsOpen,
@@ -119,6 +138,7 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     setDismissedSetupRuns,
     setHudGhostOpacity,
     setIsFiltersOpen,
+    setIsIndustrialTheme,
     setIsKbNavEnabled,
     setIsRunRailOpen,
     setIsSettingsOpen,

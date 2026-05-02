@@ -170,4 +170,9 @@ class InferenceEvent:
     def to_dict(self) -> dict[str, object]:
         payload = asdict(self)
         payload["inspection_result"] = self.inspection_result.value
+        payload["operator_review"] = self.operator_review.value
+        return payload
+dict[str, object]:
+        payload = asdict(self)
+        payload["inspection_result"] = self.inspection_result.value
         return payload

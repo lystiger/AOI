@@ -3,6 +3,8 @@ export default function SettingsPanel({
   onClose,
   hudGhostOpacity,
   onHudGhostOpacityChange,
+  isIndustrialTheme,
+  onIndustrialThemeChange,
   isKbNavEnabled,
   onKbNavEnabledChange,
   kbNavSensitivity,
@@ -45,7 +47,11 @@ export default function SettingsPanel({
             </div>
             <div className="settings-row">
               <span>Industrial Dark Theme</span>
-              <input type="checkbox" checked readOnly />
+              <input
+                type="checkbox"
+                checked={isIndustrialTheme}
+                onChange={(event) => onIndustrialThemeChange(event.target.checked)}
+              />
             </div>
           </section>
 

@@ -98,6 +98,7 @@ class EventIn(BaseModel):
             overlay_width=self.overlay_width,
             overlay_height=self.overlay_height,
             overlay_shape=self.overlay_shape,
+            operator_review=self.operator_review,
         )
 
 
@@ -152,3 +153,4 @@ def parse_post_events_payload(payload: object) -> tuple[list[EventIn], str | Non
         raise ValueError(_first_pydantic_error_message(exc)) from exc
     except TypeError as exc:
         raise ValueError("payload must be an event object or a list of event objects") from exc
+rom exc
