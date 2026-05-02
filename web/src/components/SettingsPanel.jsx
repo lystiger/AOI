@@ -3,6 +3,10 @@ export default function SettingsPanel({
   onClose,
   hudGhostOpacity,
   onHudGhostOpacityChange,
+  isKbNavEnabled,
+  onKbNavEnabledChange,
+  kbNavSensitivity,
+  onKbNavSensitivityChange,
   openImagePicker,
   isUploading,
   selectedRunId,
@@ -16,7 +20,7 @@ export default function SettingsPanel({
       <div className="settings-panel" onClick={(event) => event.stopPropagation()}>
         <div className="settings-header">
           <h2>System Settings</h2>
-          <button className="ghost-button" onClick={onClose}>Close</button>
+          <button type="button" className="ghost-button" onClick={onClose}>Close</button>
         </div>
         <div className="settings-content">
           <section className="settings-section">
@@ -42,6 +46,36 @@ export default function SettingsPanel({
             <div className="settings-row">
               <span>Industrial Dark Theme</span>
               <input type="checkbox" checked readOnly />
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <p className="eyebrow">Keyboard Navigation</p>
+            <div className="settings-row">
+              <span>Enable Keyboard Roaming</span>
+              <input
+                type="checkbox"
+                checked={isKbNavEnabled}
+                onChange={(event) => onKbNavEnabledChange(event.target.checked)}
+              />
+            </div>
+            <div className="settings-row">
+              <span>Sensitivity</span>
+              <div className="settings-control">
+                <span className="value-label">{kbNavSensitivity.toFixed(1)}x</span>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  value={kbNavSensitivity}
+                  onChange={(event) => onKbNavSensitivityChange(parseFloat(event.target.value))}
+                  disabled={!isKbNavEnabled}
+                />
+              </div>
+            </div>
+            <div className="settings-row">
+              <span className="compact-note">Use Arrow Keys to pan the PCB viewer when focused.</span>
             </div>
           </section>
 

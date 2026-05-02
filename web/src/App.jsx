@@ -38,6 +38,10 @@ function App() {
         onClose={() => workspace.setIsSettingsOpen(false)}
         hudGhostOpacity={workspace.hudGhostOpacity}
         onHudGhostOpacityChange={workspace.setHudGhostOpacity}
+        isKbNavEnabled={workspace.isKbNavEnabled}
+        onKbNavEnabledChange={workspace.setIsKbNavEnabled}
+        kbNavSensitivity={workspace.kbNavSensitivity}
+        onKbNavSensitivityChange={workspace.setKbNavSensitivity}
         openImagePicker={workspace.openImagePicker}
         isUploading={workspace.isUploading}
         selectedRunId={workspace.selectedRunId}

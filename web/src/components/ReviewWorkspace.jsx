@@ -282,9 +282,12 @@ export default function ReviewWorkspace({ workspace }) {
                   defects={visibleDefects}
                   selectedDefect={selectedDefect}
                   hoveredDefectId={hoveredDefectId}
+                  isKbNavEnabled={workspace.isKbNavEnabled}
+                  kbNavSensitivity={workspace.kbNavSensitivity}
                   onHover={setHoveredDefectId}
                   onSelectDefect={setSelectedDefectId}
                 />
+
                 {selectedDefect ? (
                   <div className="floating-inspector" style={{ '--ghost-opacity': hudGhostOpacity }}>
                     <div className="inspector-header">

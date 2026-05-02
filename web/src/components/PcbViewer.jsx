@@ -8,6 +8,8 @@ export default function PcbViewer({
   defects,
   selectedDefect,
   hoveredDefectId,
+  isKbNavEnabled = true,
+  kbNavSensitivity = 1.0,
   onHover,
   onSelectDefect,
 }) {
@@ -70,6 +72,8 @@ export default function PcbViewer({
       offsetX: viewerOffset.x,
       offsetY: viewerOffset.y,
     }
+    // Automatically focus the viewer on click so keyboard nav works immediately
+    viewerRef.current?.focus()
   }
 
   function moveDrag(event) {
@@ -91,6 +95,50 @@ export default function PcbViewer({
     const delta = -event.deltaY
     const scaleFactor = Math.pow(1.1, delta / 100)
     setScale(viewerScale * scaleFactor)
+  }
+
+  function handleKeyDown(event) {
+    if (!isKbNavEnabled) return
+
+    const baseNudge = 20 * kbNavSensitivity
+    // Shift key for faster movement
+    const nudge = event.shiftKey ? baseNudge * 3 : baseNudge
+
+    switch (event.key) {
+      case 'ArrowUp':
+        event.preventDefault()
+        setViewerOffset((prev) => ({ ...prev, offsetY: prev.y + nudge }))
+        setViewerOffset((prev) => ({ ...prev, y: prev.y + nudge }))
+        break
+      case 'ArrowDown':
+        event.preventDefault()
+        setViewerOffset((prev) => ({ ...prev, y: prev.y - nudge }))
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        setViewerOffset((prev) => ({ ...prev, x: prev.x + nudge }))
+        break
+      case 'ArrowRight':
+        event.preventDefault()
+        setViewerOffset((prev) => ({ ...prev, x: prev.x - nudge }))
+        break
+      case '+':
+      case '=':
+        event.preventDefault()
+        setScale(viewerScale * 1.1)
+        break
+      case '-':
+      case '_':
+        event.preventDefault()
+        setScale(viewerScale * 0.9)
+        break
+      case '0':
+        event.preventDefault()
+        resetViewer()
+        break
+      default:
+        break
+    }
   }
 
   useEffect(() => {
@@ -133,11 +181,14 @@ export default function PcbViewer({
       <div
         ref={viewerRef}
         className={`viewer-surface${isDragging ? ' dragging' : ''}`}
+        tabIndex={0}
         onMouseDown={startDrag}
         onMouseMove={moveDrag}
         onMouseUp={stopDrag}
         onMouseLeave={stopDrag}
         onWheel={handleWheel}
+        onKeyDown={handleKeyDown}
+        style={{ outline: 'none' }}
       >
         {image ? (
           <div

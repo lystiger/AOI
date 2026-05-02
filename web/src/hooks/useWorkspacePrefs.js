@@ -59,6 +59,8 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
   const [isFiltersOpen, setIsFiltersOpen] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [hudGhostOpacity, setHudGhostOpacity] = useState(0.2)
+  const [isKbNavEnabled, setIsKbNavEnabled] = useState(true)
+  const [kbNavSensitivity, setKbNavSensitivity] = useState(1.0)
   const fileInputRef = useRef(null)
 
   const selectRun = useCallback((nextRunId) => {
@@ -106,18 +108,22 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     fileInputRef,
     hudGhostOpacity,
     isFiltersOpen,
+    isKbNavEnabled,
     isRunRailOpen,
     isSettingsOpen,
     isSidebarOpen,
+    kbNavSensitivity,
     selectedImageId,
     selectedRunId,
     selectRun,
     setDismissedSetupRuns,
     setHudGhostOpacity,
     setIsFiltersOpen,
+    setIsKbNavEnabled,
     setIsRunRailOpen,
     setIsSettingsOpen,
     setIsSidebarOpen,
+    setKbNavSensitivity,
     setSelectedImageId,
   }
 }
