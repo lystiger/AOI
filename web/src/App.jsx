@@ -1,13 +1,23 @@
+import { useEffect } from 'react'
 import './App.css'
 
 import ReviewWorkspace from './components/ReviewWorkspace'
 import RunRail from './components/RunRail'
 import SettingsPanel from './components/SettingsPanel'
+import { useToast } from './components/Toast'
 import WorkspaceTopbar from './components/WorkspaceTopbar'
 import { useAoiWorkspace } from './hooks/useAoiWorkspace'
 
 function App() {
   const { fileInputRef, ...workspace } = useAoiWorkspace()
+  const toast = useToast()
+
+  useEffect(() => {
+    if (workspace.error) {
+      toast.error(workspace.error)
+      workspace.setError('') // clear after showing toast
+    }
+  }, [workspace.error, toast, workspace])
 
   return (
     <div className="app-shell">
@@ -32,8 +42,6 @@ function App() {
         isUploading={workspace.isUploading}
         selectedRunId={workspace.selectedRunId}
       />
-
-      {workspace.error ? <div className="error-banner">{workspace.error}</div> : null}
 
       <input
         ref={fileInputRef}

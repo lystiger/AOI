@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { buildManualBarcodeDraft, buildManualFiducialsDraft, buildQuery, fetchJson } from '../app/utils'
+import { useToast } from '../components/Toast'
 
 function normalizeRunPayload(run, selectedRun) {
   return {
@@ -25,6 +26,7 @@ export function useSetupActions({
   updateSelectedRun,
 }) {
   const selectedRunRef = useRef(null)
+  const toast = useToast()
   const [createRunError, setCreateRunError] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [modelError, setModelError] = useState('')
@@ -99,8 +101,10 @@ export function useSetupActions({
       setRuns((currentRuns) =>
         currentRuns.map((run) => (run.id === detailPayload.run.id ? { ...run, ...detailPayload.run } : run)),
       )
+      toast.success('PCB scan uploaded successfully')
     } catch (err) {
       setUploadError(`Upload Error: ${err.message}`)
+      toast.error(`Upload failed: ${err.message}`)
     } finally {
       if (event.target) {
         event.target.value = ''
@@ -127,8 +131,10 @@ export function useSetupActions({
       selectRun(payload.run.id)
       updateSelectedRun(nextRun)
       setDismissedSetupRuns((current) => ({ ...current, [payload.run.id]: false }))
+      toast.success('New setup run created')
     } catch (err) {
       setCreateRunError(`Create Run Error: ${err.message}`)
+      toast.error(`Failed to create run: ${err.message}`)
     } finally {
       setIsCreatingRun(false)
     }
@@ -163,8 +169,10 @@ export function useSetupActions({
       setRuns((currentRuns) =>
         currentRuns.map((run) => (run.id === payload.run.id ? { ...run, ...payload.run } : run)),
       )
+      toast.success('Model configuration saved')
     } catch (err) {
       setModelError(`Model Save Error: ${err.message}`)
+      toast.error(`Failed to save model: ${err.message}`)
     } finally {
       setIsSavingModel(false)
     }
@@ -198,8 +206,10 @@ export function useSetupActions({
       })
       updateSelectedRun(null)
       selectRun(null)
+      toast.success('Run deleted successfully')
     } catch (err) {
       setError(`Delete Run Error: ${err.message}`)
+      toast.error(`Failed to delete run: ${err.message}`)
     } finally {
       setIsDeletingRun(false)
     }
@@ -246,10 +256,14 @@ export function useSetupActions({
         'POST',
         {},
         'Fiducial Detection Error',
-        (nextRun) => setManualFiducialsDraft(buildManualFiducialsDraft(nextRun)),
+        (nextRun) => {
+          setManualFiducialsDraft(buildManualFiducialsDraft(nextRun))
+          toast.success('Fiducials detected successfully')
+        },
       )
     } catch (err) {
       setFiducialError(err.message)
+      toast.error(err.message)
     } finally {
       setIsDetectingFiducials(false)
     }
@@ -263,10 +277,14 @@ export function useSetupActions({
         'POST',
         {},
         'Fiducial Confirm Error',
-        (nextRun) => setManualBarcodeDraft(buildManualBarcodeDraft(nextRun)),
+        (nextRun) => {
+          setManualBarcodeDraft(buildManualBarcodeDraft(nextRun))
+          toast.success('Fiducial alignment confirmed')
+        },
       )
     } catch (err) {
       setFiducialError(err.message)
+      toast.error(err.message)
     }
   }
 
@@ -303,10 +321,14 @@ export function useSetupActions({
           })),
         },
         'Manual Fiducial Save Error',
-        (nextRun) => setManualFiducialsDraft(buildManualFiducialsDraft(nextRun)),
+        (nextRun) => {
+          setManualFiducialsDraft(buildManualFiducialsDraft(nextRun))
+          toast.success('Manual fiducials saved')
+        },
       )
     } catch (err) {
       setFiducialError(err.message)
+      toast.error(err.message)
     } finally {
       setIsSavingManualFiducials(false)
     }
@@ -316,9 +338,12 @@ export function useSetupActions({
     setIsDetectingBarcode(true)
     setBarcodeError('')
     try {
-      await updateSetupRun(`/runs/${selectedRunId}/barcode/detect`, 'POST', {}, 'Barcode Detection Error')
+      await updateSetupRun(`/runs/${selectedRunId}/barcode/detect`, 'POST', {}, 'Barcode Detection Error', () => {
+        toast.success('Barcode detected successfully')
+      })
     } catch (err) {
       setBarcodeError(err.message)
+      toast.error(err.message)
     } finally {
       setIsDetectingBarcode(false)
     }
@@ -327,9 +352,12 @@ export function useSetupActions({
   async function handleConfirmBarcode() {
     setBarcodeError('')
     try {
-      await updateSetupRun(`/runs/${selectedRunId}/barcode/confirm`, 'POST', {}, 'Barcode Confirm Error')
+      await updateSetupRun(`/runs/${selectedRunId}/barcode/confirm`, 'POST', {}, 'Barcode Confirm Error', () => {
+        toast.success('Barcode alignment confirmed')
+      })
     } catch (err) {
       setBarcodeError(err.message)
+      toast.error(err.message)
     }
   }
 
@@ -368,10 +396,14 @@ export function useSetupActions({
           },
         },
         'Manual Barcode Save Error',
-        (nextRun) => setManualBarcodeDraft(buildManualBarcodeDraft(nextRun)),
+        (nextRun) => {
+          setManualBarcodeDraft(buildManualBarcodeDraft(nextRun))
+          toast.success('Manual barcode saved')
+        },
       )
     } catch (err) {
       setBarcodeError(err.message)
+      toast.error(err.message)
     } finally {
       setIsSavingManualBarcode(false)
     }
@@ -382,6 +414,7 @@ export function useSetupActions({
       return
     }
     setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: true }))
+    toast.info('Transitioning to normal review mode')
   }
 
   return {
