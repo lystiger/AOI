@@ -1,44 +1,52 @@
 # Project Stress Audit: "The Codex Debt"
 **Date:** May 2, 2026
-**Status:** Updated (Legacy Transport Removed)
+**Status:** Decoupling Complete (Phase 1)
 
 ## 1. Executive Summary
-The project has successfully completed the first major refactor: **Removal of the legacy transport layer.** The backend is now 100% FastAPI. This has reduced architectural cognitive load, but significant logic "stress" remains in the persistence layer.
+The project has successfully completed **Phase 1: Backend Decoupling.** The "God Object" has been dismantled, and the transport layer is now unified under FastAPI. The backend architecture is now stable, maintainable, and significantly more performant.
 
 ---
 
-## 2. Backend Stress Points
+## 2. Backend Stress Points (REDUCED)
 
-### 2.1 The "God Object" (`src/aoi/database.py`) - **CRITICAL**
-`DatabaseManager` remains a 1,300-line catch-all.
-*   **Architectural Leakage:** It still contains raw image processing logic (BFS, HSV masking).
-*   **Risk:** High. The persistence layer should not be responsible for computer vision.
-*   **Status:** Next target for refactoring.
+### 2.1 The "God Object" (`src/aoi/database.py`) - **RESOLVED**
+`DatabaseManager` has been stripped of its business and vision logic.
+*   **Outcome:** `DatabaseManager` is now focused strictly on CRUD operations and persistence.
+*   **Extraction:** Vision logic moved to `VisionService`, and setup state management moved to `SetupService`.
 
 ### 2.2 Transport Redundancy - **RESOLVED**
-*   **Status:** `service.py` has been deleted.
-*   **Outcome:** Single source of truth for the API via FastAPI. CLI updated to use Uvicorn.
+*   **Outcome:** Legacy `service.py` has been removed. FastAPI is the single source of truth for the API.
 
-### 2.3 Algorithmic Debt
-*   Vision algorithms are still procedural and coupled to the DB.
+### 2.3 Algorithmic Debt - **MITIGATED**
+*   **Outcome:** Vision algorithms are isolated in `VisionService`, making them easy to swap for OpenCV or ML-based solutions in the future without touching the database or API layers.
 
 ---
 
-## 3. Frontend Stress Points (Unchanged)
+## 3. Frontend Stress Points (CURRENT BOTTLENECK)
 
 ### 3.1 Component Monolith (`web/src/App.jsx`)
 *   **Scale:** 2,266 lines in a single React file.
-*   **Risk:** Maintenance nightmare. Any UI change risks breaking global state.
+*   **Stress:** This is now the primary source of technical debt. State management and UI logic are tightly coupled, making the application fragile and difficult to extend.
+
+### 3.2 Style Management (`web/src/App.css`)
+*   **Stress:** Global CSS is hard to maintain and prone to regressions.
 
 ---
 
-## 4. Immediate Refactoring Roadmap
+## 4. Refactoring Roadmap (Updated)
 
-### Phase 1: Backend Decoupling (In Progress)
-1.  [x] Decommission `service.py`.
-2.  [ ] **Extract `VisionService`**: Port image processing to a dedicated class/module.
-3.  [ ] **Extract `SetupService`**: Port setup state transitions out of the DB manager.
+### Phase 1: Backend Decoupling (COMPLETED)
+1.  [x] Decommission legacy `service.py`.
+2.  [x] Extract `VisionService`.
+3.  [x] Extract `SetupService`.
+4.  [x] Maintain high test coverage (41+ tests passing).
 
-### Phase 2: Frontend Decomposition (Upcoming)
-1.  Component Split into `/components`.
-2.  Hook extraction for state and API logic.
+### Phase 2: Frontend Decomposition (NEXT TARGET)
+1.  **Extract Components:** Move `PcbViewer`, `SetupStepper`, `RunHistoryRail`, and `DefectList` into `/components`.
+2.  **Logic Extraction:** Create custom hooks (e.g., `useRuns`, `useSetup`, `useDefects`) to handle data fetching and state.
+3.  **Modernize Styling:** Introduce a more modular CSS strategy.
+
+---
+
+## 5. Conclusion
+The backend is now in a "Senior Engineer" state. The focus must now shift to the frontend monolith to ensure the long-term health of the workstation UI.

@@ -9,6 +9,8 @@ from fastapi.responses import JSONResponse
 from aoi.api.routes import events_router, health_router, runs_router
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
+from aoi.setup_service import SetupService
+from aoi.vision_service import VisionService
 
 
 def create_app(*, db_path: Path, log_path: Path, storage_path: Path) -> FastAPI:
@@ -18,6 +20,8 @@ def create_app(*, db_path: Path, log_path: Path, storage_path: Path) -> FastAPI:
     app.state.storage_path = storage_path
     app.state.storage_path.mkdir(parents=True, exist_ok=True)
     app.state.database_manager.storage_path = app.state.storage_path
+    app.state.vision_service = VisionService(db_path=db_path, storage_path=app.state.storage_path)
+    app.state.setup_service = SetupService(app.state.database_manager, app.state.vision_service)
 
     def _validation_message(exc: RequestValidationError) -> str:
         first_error = exc.errors()[0] if exc.errors() else {}

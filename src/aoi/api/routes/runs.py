@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
-from aoi.api.deps import DatabaseManagerDep, StoragePathDep
+from aoi.api.deps import DatabaseManagerDep, SetupServiceDep, StoragePathDep
 from aoi.api.models import CreateRunRequest, ManualBarcodeRequest, ManualFiducialsRequest, UpdateRunRequest
 
 router = APIRouter()
@@ -33,9 +33,9 @@ def _read_image_size(image_data: bytes) -> tuple[int, int]:
 @router.post("/runs", status_code=201)
 def create_run(
     payload: CreateRunRequest,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
-    run = database_manager.create_run(pcb_id=payload.pcb_id)
+    run = setup_service.create_run(pcb_id=payload.pcb_id)
     return {"status": "ok", "run": run}
 
 
@@ -105,9 +105,9 @@ def get_run_defects(
 def update_run(
     run_id: str,
     payload: UpdateRunRequest,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
-    run = database_manager.update_run(
+    run = setup_service.update_run(
         run_id,
         model_name=payload.model_name if "model_name" in payload.model_fields_set else None,
         requires_fiducials=payload.requires_fiducials if "requires_fiducials" in payload.model_fields_set else None,
@@ -140,6 +140,7 @@ async def upload_run_image(
     run_id: str,
     request: Request,
     database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
     storage_path: StoragePathDep,
 ) -> dict[str, object]:
     run = database_manager.fetch_run(run_id)
@@ -172,7 +173,7 @@ async def upload_run_image(
     file_path.write_bytes(image_data)
 
     image_id = str(uuid.uuid4())
-    updated_run = database_manager.add_run_image(
+    updated_run = setup_service.add_run_image(
         run_id,
         image_id=image_id,
         image_path=f"/runs/{run_id}/images/{image_id}",
@@ -206,10 +207,10 @@ def get_run_image(
 @router.post("/runs/{run_id}/fiducials/detect")
 def detect_fiducials(
     run_id: str,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.detect_fiducials(run_id)
+        run = setup_service.detect_fiducials(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
@@ -220,10 +221,10 @@ def detect_fiducials(
 @router.post("/runs/{run_id}/fiducials/confirm")
 def confirm_fiducials(
     run_id: str,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.confirm_fiducials(run_id)
+        run = setup_service.confirm_fiducials(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
@@ -235,10 +236,10 @@ def confirm_fiducials(
 def save_manual_fiducials(
     run_id: str,
     payload: ManualFiducialsRequest,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.save_manual_fiducials(
+        run = setup_service.save_manual_fiducials(
             run_id,
             [fiducial.model_dump(exclude_none=True) for fiducial in payload.fiducials],
         )
@@ -252,10 +253,10 @@ def save_manual_fiducials(
 @router.post("/runs/{run_id}/barcode/detect")
 def detect_barcode(
     run_id: str,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.detect_barcode(run_id)
+        run = setup_service.detect_barcode(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
@@ -266,10 +267,10 @@ def detect_barcode(
 @router.post("/runs/{run_id}/barcode/confirm")
 def confirm_barcode(
     run_id: str,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.confirm_barcode(run_id)
+        run = setup_service.confirm_barcode(run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
@@ -281,10 +282,10 @@ def confirm_barcode(
 def save_manual_barcode(
     run_id: str,
     payload: ManualBarcodeRequest,
-    database_manager: DatabaseManagerDep,
+    setup_service: SetupServiceDep,
 ) -> dict[str, object]:
     try:
-        run = database_manager.save_manual_barcode(run_id, payload.barcode.model_dump(exclude_none=True))
+        run = setup_service.save_manual_barcode(run_id, payload.barcode.model_dump(exclude_none=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if run is None:
