@@ -1,0 +1,405 @@
+import EditableOverlayPreview from './EditableOverlayPreview'
+import { formatFiducialLabel, toNormalizedNumber, toPositiveNormalizedNumber } from '../app/utils'
+
+function FiducialPreview({ image, fiducials, editableFiducials, onChangeFiducial }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to preview fiducial detection.</div>
+  }
+
+  if (editableFiducials?.length && onChangeFiducial) {
+    return (
+      <EditableOverlayPreview
+        image={image}
+        overlays={editableFiducials}
+        onChange={onChangeFiducial}
+        kind="fiducial"
+      />
+    )
+  }
+
+  return (
+    <div className="fiducial-preview">
+      <img src={image.image_path} alt="Fiducial preview" />
+      {fiducials.map((fiducial) => (
+        <div
+          key={fiducial.id}
+          className="fiducial-box"
+          style={{
+            left: `${fiducial.x * 100}%`,
+            top: `${fiducial.y * 100}%`,
+            width: `${fiducial.width * 100}%`,
+            height: `${fiducial.height * 100}%`,
+          }}
+        >
+          <span>{Math.round(fiducial.confidence * 100)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function BarcodePreview({ image, barcode, editableBarcode, onChangeBarcode }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to preview barcode detection.</div>
+  }
+  if (editableBarcode && onChangeBarcode) {
+    return (
+      <EditableOverlayPreview
+        image={image}
+        overlays={[editableBarcode]}
+        onChange={onChangeBarcode}
+        kind="barcode"
+      />
+    )
+  }
+  if (!barcode) {
+    return <div className="empty-state">Run barcode detection to preview the detected region.</div>
+  }
+
+  return (
+    <div className="fiducial-preview">
+      <img src={image.image_path} alt="Barcode preview" />
+      <div
+        className="barcode-box"
+        style={{
+          left: `${barcode.x * 100}%`,
+          top: `${barcode.y * 100}%`,
+          width: `${barcode.width * 100}%`,
+          height: `${barcode.height * 100}%`,
+        }}
+      >
+        <span>{barcode.decoded_value}</span>
+      </div>
+    </div>
+  )
+}
+
+export default function SetupFlow({
+  steps,
+  activeStep,
+  selectedRun,
+  selectedImage,
+  modelDraft,
+  requiresFiducialsDraft,
+  requiresBarcodeDraft,
+  onModelDraftChange,
+  onRequiresFiducialsChange,
+  onRequiresBarcodeChange,
+  onCreateRun,
+  onUploadScan,
+  onSaveModel,
+  onDetectFiducials,
+  onConfirmFiducials,
+  onManualFiducialsChange,
+  onSaveManualFiducials,
+  onDetectBarcode,
+  onConfirmBarcode,
+  onManualBarcodeChange,
+  onSaveManualBarcode,
+  onContinueToReview,
+  onStepClick,
+  isContinueReady,
+  isCreatingRun,
+  isUploading,
+  isSavingModel,
+  isDetectingFiducials,
+  isSavingManualFiducials,
+  isDetectingBarcode,
+  isSavingManualBarcode,
+  createRunError,
+  uploadError,
+  modelError,
+  fiducialError,
+  barcodeError,
+  manualFiducialsDraft,
+  manualBarcodeDraft,
+}) {
+  const editableFiducials = manualFiducialsDraft.map((fiducial, index) => ({
+    id: fiducial.id || `fid-${index + 1}`,
+    x: toNormalizedNumber(fiducial.x),
+    y: toNormalizedNumber(fiducial.y),
+    width: toPositiveNormalizedNumber(fiducial.width, 0.035),
+    height: toPositiveNormalizedNumber(fiducial.height, 0.035),
+    label: formatFiducialLabel(index),
+  }))
+  const editableBarcode = manualBarcodeDraft
+    ? {
+        id: 'barcode-1',
+        x: toNormalizedNumber(manualBarcodeDraft.x, 0.72),
+        y: toNormalizedNumber(manualBarcodeDraft.y, 0.78),
+        width: toPositiveNormalizedNumber(manualBarcodeDraft.width, 0.16),
+        height: toPositiveNormalizedNumber(manualBarcodeDraft.height, 0.08),
+        label: manualBarcodeDraft.decoded_value || 'barcode',
+      }
+    : null
+
+  return (
+    <div className="setup-shell">
+      <aside className="setup-steps">
+        <div className="setup-steps-header">
+          <p className="eyebrow">Pre-Program Setup</p>
+          <h2>Prepare This Run</h2>
+        </div>
+        <div className="setup-step-list">
+          {steps.map((step) => (
+            <div
+              key={step.id}
+              className={`setup-step-card ${step.active ? 'active' : ''}`}
+              onClick={() => onStepClick?.(step.id)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="setup-step-index">{step.order}</div>
+              <div className="setup-step-copy">
+                <strong>{step.label}</strong>
+                <p>{step.description}</p>
+              </div>
+              <span className={`setup-step-status ${step.status}`}>{step.statusLabel}</span>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      <section className="setup-panel">
+        <div className="setup-panel-header">
+          <p className="eyebrow">Current Step</p>
+          <h2>{activeStep.label}</h2>
+          <p>{activeStep.description}</p>
+        </div>
+
+        <div className="setup-panel-body">
+          {activeStep.id === 'create-run' ? (
+            <div className="setup-action-card">
+              <p>Create a new setup run before uploading assets or entering model data.</p>
+              {createRunError ? <div className="step-error-message">{createRunError}</div> : null}
+              <button type="button" className="primary-button" onClick={onCreateRun} disabled={isCreatingRun}>
+                {isCreatingRun ? 'Creating Run...' : 'Create Run'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'upload-scan' ? (
+            <div className="setup-action-card">
+              <p>
+                Attach one PCB scan to <strong>{selectedRun?.pcb_id || 'the current run'}</strong>. Fiducial and
+                barcode setup cannot start until an image exists.
+              </p>
+              {uploadError ? <div className="step-error-message">{uploadError}</div> : null}
+              <button type="button" className="primary-button" onClick={onUploadScan} disabled={isUploading}>
+                {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'enter-model' ? (
+            <div className="setup-action-card">
+              <label className="field">
+                <span>Model Name</span>
+                <input value={modelDraft} onChange={(event) => onModelDraftChange(event.target.value)} />
+              </label>
+              <label className="setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={requiresFiducialsDraft}
+                  onChange={(event) => onRequiresFiducialsChange(event.target.checked)}
+                />
+                <span>Require fiducial alignment for this product</span>
+              </label>
+              <label className="setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={requiresBarcodeDraft}
+                  onChange={(event) => onRequiresBarcodeChange(event.target.checked)}
+                />
+                <span>Require barcode validation for this product</span>
+              </label>
+              <p>Set the model name now so later steps can decide whether fiducials or barcode validation are required.</p>
+              {modelError ? <div className="step-error-message">{modelError}</div> : null}
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onSaveModel}
+                disabled={isSavingModel || !modelDraft.trim()}
+              >
+                {isSavingModel ? 'Saving Model...' : 'Save Model Name'}
+              </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'fiducials' ? (
+            <div className="setup-action-card">
+              {!selectedRun?.requires_fiducials ? (
+                <p>Fiducials are not required for this product. Enable them in the model step if the product needs alignment marks.</p>
+              ) : (
+                <>
+                  <p>
+                    Run automated fiducial search, review the overlay results, then confirm when the locations look
+                    correct. If detection fails, enter the fiducial boxes manually and save them to recover setup.
+                  </p>
+                  {fiducialError ? <div className="step-error-message">{fiducialError}</div> : null}
+                  <FiducialPreview image={selectedImage} fiducials={selectedRun?.fiducials || []} />
+                  <div className="setup-button-row">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={onDetectFiducials}
+                      disabled={isDetectingFiducials || !selectedImage}
+                    >
+                      {isDetectingFiducials ? 'Detecting...' : 'Detect Fiducials'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onConfirmFiducials}
+                      disabled={selectedRun?.fiducial_status !== 'needs_review'}
+                    >
+                      Confirm Fiducials
+                    </button>
+                  </div>
+                  <div className="manual-setup-card">
+                    <strong>Manual Fiducial Recovery</strong>
+                    <p>Drag a box to move it. Drag from an edge or corner to resize it. Use arrow keys to nudge, and `Alt` + arrow keys to resize from the keyboard.</p>
+                    <FiducialPreview
+                      image={selectedImage}
+                      editableFiducials={editableFiducials}
+                      onChangeFiducial={onManualFiducialsChange}
+                    />
+                    <div className="manual-setup-grid compact">
+                      {editableFiducials.map((fiducial) => (
+                        <div key={fiducial.id} className="manual-setup-item compact">
+                          <strong>{fiducial.label}</strong>
+                          <span>
+                            x {fiducial.x.toFixed(3)} y {fiducial.y.toFixed(3)} w {fiducial.width.toFixed(3)} h {fiducial.height.toFixed(3)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onSaveManualFiducials}
+                      disabled={isSavingManualFiducials || !selectedImage}
+                    >
+                      {isSavingManualFiducials ? 'Saving Manual Fiducials...' : 'Save Manual Fiducials'}
+                    </button>
+                  </div>
+                  {selectedRun?.fiducials?.length ? (
+                    <div className="fiducial-list">
+                      {selectedRun.fiducials.map((fiducial, index) => (
+                        <div key={fiducial.id} className="fiducial-list-item">
+                          <strong>{formatFiducialLabel(index)}</strong>
+                          <span>{Math.round(fiducial.confidence * 100)}% confidence</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {activeStep.id === 'barcode' ? (
+            <div className="setup-action-card">
+              {!selectedRun?.requires_barcode ? (
+                <p>Barcode validation is not required for this product. Enable it in the model step if the product needs barcode confirmation.</p>
+              ) : (
+                <>
+                  <p>
+                    Run automated barcode search, review the decoded result, then confirm when the location and value
+                    are correct. If detection fails, enter the barcode box and decoded value manually.
+                  </p>
+                  {barcodeError ? <div className="step-error-message">{barcodeError}</div> : null}
+                  <BarcodePreview image={selectedImage} barcode={selectedRun?.barcode} />
+                  <div className="setup-button-row">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={onDetectBarcode}
+                      disabled={isDetectingBarcode || !selectedImage}
+                    >
+                      {isDetectingBarcode ? 'Detecting...' : 'Detect Barcode'}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onConfirmBarcode}
+                      disabled={selectedRun?.barcode_status !== 'needs_review'}
+                    >
+                      Confirm Barcode
+                    </button>
+                  </div>
+                  <div className="manual-setup-card">
+                    <strong>Manual Barcode Recovery</strong>
+                    <p>Drag the barcode box to the correct region, update the decoded value if needed, then save.</p>
+                    <BarcodePreview image={selectedImage} editableBarcode={editableBarcode} onChangeBarcode={onManualBarcodeChange} />
+                    <div className="manual-setup-fields">
+                      <label className="field compact">
+                        <span>Decoded</span>
+                        <input
+                          value={manualBarcodeDraft.decoded_value}
+                          onChange={(event) => onManualBarcodeChange('decoded_value', event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="manual-setup-grid compact">
+                      <div className="manual-setup-item compact">
+                        <strong>barcode-1</strong>
+                        <span>
+                          x {editableBarcode?.x.toFixed(3)} y {editableBarcode?.y.toFixed(3)} w {editableBarcode?.width.toFixed(3)} h {editableBarcode?.height.toFixed(3)}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={onSaveManualBarcode}
+                      disabled={isSavingManualBarcode || !selectedImage}
+                    >
+                      {isSavingManualBarcode ? 'Saving Manual Barcode...' : 'Save Manual Barcode'}
+                    </button>
+                  </div>
+                  {selectedRun?.barcode ? (
+                    <div className="fiducial-list">
+                      <div className="fiducial-list-item">
+                        <strong>{selectedRun.barcode.id}</strong>
+                        <span>{selectedRun.barcode.decoded_value}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {activeStep.id === 'continue-review' ? (
+            <div className="setup-action-card">
+              <p>Required setup is complete. Continue to the standard PCB review surface for this run.</p>
+              <button type="button" className="primary-button" onClick={onContinueToReview} disabled={!isContinueReady}>
+                Continue To Review
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <aside className="setup-summary">
+        <div className="setup-summary-card">
+          <p className="eyebrow">Run Summary</p>
+          <div className="setup-summary-grid">
+            <span>Run</span>
+            <strong>{selectedRun?.pcb_id || 'Not created'}</strong>
+            <span>Scan</span>
+            <strong>{selectedRun?.images?.length ? 'Attached' : 'Missing'}</strong>
+            <span>Model</span>
+            <strong>{selectedRun?.model_name || 'Unset'}</strong>
+            <span>Fiducials</span>
+            <strong>{selectedRun?.requires_fiducials ? selectedRun?.fiducial_status || 'Required' : 'Not required'}</strong>
+            <span>Barcode</span>
+            <strong>{selectedRun?.requires_barcode ? selectedRun?.barcode_status || 'Required' : 'Not required'}</strong>
+            <span>Setup</span>
+            <strong>{selectedRun?.setup_status || 'Not started'}</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
+  )
+}
