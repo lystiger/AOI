@@ -67,6 +67,9 @@ export function DefectListItem({ defect, active, hovered, onSelect, onHover }) {
       <div className="defect-list-meta">
         <span>{defect.defect_type}</span>
         <StatusChip value={defect.inspection_result} />
+        {defect.operator_review && defect.operator_review !== 'NONE' ? (
+          <span title={`Reviewed as ${defect.operator_review}`} style={{ color: 'var(--ok)' }}>✓</span>
+        ) : null}
         <span>{Number(defect.confidence_score ?? 0).toFixed(2)}</span>
       </div>
     </button>

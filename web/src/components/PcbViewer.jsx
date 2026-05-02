@@ -10,8 +10,11 @@ export default function PcbViewer({
   hoveredDefectId,
   isKbNavEnabled = true,
   kbNavSensitivity = 1.0,
+  isZenMode = false,
   onHover,
   onSelectDefect,
+  onSaveReview,
+  onNextDefect,
 }) {
   const [viewerScale, setViewerScale] = useState(1)
   const [viewerOffset, setViewerOffset] = useState({ x: 0, y: 0 })
@@ -97,17 +100,31 @@ export default function PcbViewer({
     setScale(viewerScale * scaleFactor)
   }
 
-  function handleKeyDown(event) {
+  async function handleKeyDown(event) {
     if (!isKbNavEnabled) return
 
     const baseNudge = 20 * kbNavSensitivity
     // Shift key for faster movement
     const nudge = event.shiftKey ? baseNudge * 3 : baseNudge
 
+    if (isZenMode && selectedDefect) {
+      if (event.key.toLowerCase() === 'p') {
+        event.preventDefault()
+        const success = await onSaveReview(selectedDefect.id, 'CONFIRMED_PASS')
+        if (success) onNextDefect()
+        return
+      }
+      if (event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        const success = await onSaveReview(selectedDefect.id, 'CONFIRMED_FAIL')
+        if (success) onNextDefect()
+        return
+      }
+    }
+
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault()
-        setViewerOffset((prev) => ({ ...prev, offsetY: prev.y + nudge }))
         setViewerOffset((prev) => ({ ...prev, y: prev.y + nudge }))
         break
       case 'ArrowDown':
@@ -151,6 +168,12 @@ export default function PcbViewer({
     return undefined
   }, [image?.id, imageDimensions.width, imageDimensions.height, resetViewer])
 
+  useEffect(() => {
+    if (isZenMode) {
+      viewerRef.current?.focus()
+    }
+  }, [isZenMode, selectedDefect?.id])
+
   return (
     <section className="viewer-panel">
       <div className="viewer-toolbar">
@@ -180,7 +203,7 @@ export default function PcbViewer({
 
       <div
         ref={viewerRef}
-        className={`viewer-surface${isDragging ? ' dragging' : ''}`}
+        className={`viewer-surface${isDragging ? ' dragging' : ''} ${isZenMode ? 'zen-mode-active' : ''}`}
         tabIndex={0}
         onMouseDown={startDrag}
         onMouseMove={moveDrag}

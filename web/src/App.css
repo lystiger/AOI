@@ -366,6 +366,20 @@
 .chip.status.pass { background: var(--ok-soft); color: var(--ok); }
 .chip.status.fail { background: var(--fail-soft); color: var(--fail); }
 
+.chip.status.confirmed_pass,
+.chip.status.overruled_pass {
+  background: var(--ok-soft);
+  color: var(--ok);
+  border: 1px solid var(--ok);
+}
+
+.chip.status.confirmed_fail,
+.chip.status.overruled_fail {
+  background: var(--fail-soft);
+  color: var(--fail);
+  border: 1px solid var(--fail);
+}
+
 .chip.severity.none { background: var(--surface-hover); color: var(--muted); }
 .chip.severity.minor { background: var(--warn-soft); color: var(--warn); }
 .chip.severity.major,
@@ -863,6 +877,16 @@
 
 .overlay-selected { border-color: var(--accent); z-index: 10; border-width: 2px; }
 .overlay-selected span { color: #fff; background: var(--accent); }
+
+.viewer-surface.zen-mode-active .overlay-box:not(.overlay-selected) {
+  opacity: 0.15;
+  filter: grayscale(1);
+}
+
+.viewer-surface.zen-mode-active .overlay-selected {
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
 
 button,
 input,

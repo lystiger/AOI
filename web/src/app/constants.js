@@ -5,6 +5,7 @@ export const SELECTED_RUN_STORAGE_KEY = 'aoi:selected-run-id'
 export const DISMISSED_SETUP_STORAGE_KEY = 'aoi:dismissed-setup-runs'
 export const SELECTED_IMAGE_STORAGE_KEY = 'aoi:selected-images'
 export const INDUSTRIAL_THEME_STORAGE_KEY = 'aoi:industrial-theme-enabled'
+export const ZEN_MODE_STORAGE_KEY = 'aoi:zen-mode-enabled'
 
 export const RUN_FILTER_DEFAULTS = {
   limit: '15',

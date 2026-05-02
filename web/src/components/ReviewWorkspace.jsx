@@ -284,10 +284,12 @@ export default function ReviewWorkspace({ workspace }) {
                   hoveredDefectId={hoveredDefectId}
                   isKbNavEnabled={workspace.isKbNavEnabled}
                   kbNavSensitivity={workspace.kbNavSensitivity}
+                  isZenMode={workspace.isZenMode}
                   onHover={setHoveredDefectId}
                   onSelectDefect={setSelectedDefectId}
+                  onSaveReview={workspace.saveDefectReview}
+                  onNextDefect={() => workspace.stepDefect(1)}
                 />
-
                 {selectedDefect ? (
                   <div className="floating-inspector" style={{ '--ghost-opacity': hudGhostOpacity }}>
                     <div className="inspector-header">
@@ -311,6 +313,12 @@ export default function ReviewWorkspace({ workspace }) {
                         <span className="eyebrow">Confidence</span>
                         <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
                       </div>
+                      {selectedDefect.operator_review && selectedDefect.operator_review !== 'NONE' ? (
+                        <div className="inspector-item" style={{ gridColumn: 'span 2', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                          <span className="eyebrow">Human Review</span>
+                          <StatusChip value={selectedDefect.operator_review} />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

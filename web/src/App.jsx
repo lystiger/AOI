@@ -4,8 +4,8 @@ import './App.css'
 import ReviewWorkspace from './components/ReviewWorkspace'
 import RunRail from './components/RunRail'
 import SettingsPanel from './components/SettingsPanel'
-import { useToast } from './components/Toast'
 import WorkspaceTopbar from './components/WorkspaceTopbar'
+import { useToast } from './components/toastContext'
 import { useAoiWorkspace } from './hooks/useAoiWorkspace'
 
 function App() {
@@ -30,10 +30,24 @@ function App() {
         isSidebarOpen={workspace.isSidebarOpen}
         isFiltersOpen={workspace.isFiltersOpen}
         isSettingsOpen={workspace.isSettingsOpen}
+        isZenMode={workspace.isZenMode}
         onToggleRunRail={() => workspace.setIsRunRailOpen((current) => !current)}
         onToggleSidebar={() => workspace.setIsSidebarOpen((current) => !current)}
         onToggleFilters={() => workspace.setIsFiltersOpen((current) => !current)}
         onToggleSettings={() => workspace.setIsSettingsOpen((current) => !current)}
+        onToggleZenMode={() => {
+          const next = !workspace.isZenMode
+          workspace.setIsZenMode(next)
+          if (next) {
+            workspace.setIsRunRailOpen(false)
+            workspace.setIsSidebarOpen(false)
+            workspace.setIsFiltersOpen(false)
+            workspace.setIsSettingsOpen(false)
+          } else {
+            workspace.setIsRunRailOpen(true)
+            workspace.setIsSidebarOpen(true)
+          }
+        }}
       />
 
       <SettingsPanel

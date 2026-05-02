@@ -10,6 +10,14 @@ class InspectionResult(StrEnum):
     FAIL = "FAIL"
 
 
+class OperatorReview(StrEnum):
+    NONE = "NONE"
+    CONFIRMED_PASS = "CONFIRMED_PASS"
+    CONFIRMED_FAIL = "CONFIRMED_FAIL"
+    OVERRULED_PASS = "OVERRULED_PASS"
+    OVERRULED_FAIL = "OVERRULED_FAIL"
+
+
 @dataclass(slots=True)
 class RunImageInput:
     image_path: str
@@ -65,6 +73,7 @@ class InferenceEvent:
     overlay_width: float | None = None
     overlay_height: float | None = None
     overlay_shape: str | None = None
+    operator_review: OperatorReview = OperatorReview.NONE
 
     @classmethod
     def create(
@@ -83,6 +92,7 @@ class InferenceEvent:
         overlay_width: float | None = None,
         overlay_height: float | None = None,
         overlay_shape: str | None = None,
+        operator_review: OperatorReview | None = None,
     ) -> "InferenceEvent":
         cls._require_non_empty_string(pcb_id, "pcb_id", empty_message="pcb_id must not be empty")
         cls._require_non_empty_string(component_id, "component_id", empty_message="component_id must not be empty")
@@ -97,6 +107,7 @@ class InferenceEvent:
         cls._validate_optional_normalized_float(overlay_height, "overlay_height")
         cls._validate_optional_string(overlay_shape, "overlay_shape")
         event_timestamp = timestamp or datetime.now(timezone.utc).isoformat()
+        review = operator_review or OperatorReview.NONE
         return cls(
             timestamp=event_timestamp,
             pcb_id=pcb_id,
@@ -111,6 +122,7 @@ class InferenceEvent:
             overlay_width=overlay_width,
             overlay_height=overlay_height,
             overlay_shape=overlay_shape,
+            operator_review=review,
         )
 
     @staticmethod
@@ -171,8 +183,4 @@ class InferenceEvent:
         payload = asdict(self)
         payload["inspection_result"] = self.inspection_result.value
         payload["operator_review"] = self.operator_review.value
-        return payload
-dict[str, object]:
-        payload = asdict(self)
-        payload["inspection_result"] = self.inspection_result.value
         return payload

@@ -722,3 +722,49 @@ def test_fastapi_manual_barcode_rejects_blank_decoded_value_at_api_boundary(tmp_
 
     assert response.status_code == 422
     assert response.json() == {"status": "error", "message": "Value error, decoded_value must be a non-empty string"}
+
+
+def test_fastapi_review_defect_patch(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+
+    # 1. Create a run with a defect
+    post_resp = client.post(
+        "/events",
+        json={
+            "pcb_id": "PCB-REVIEW",
+            "component_id": "C202",
+            "inspection_result": "FAIL",
+            "defect_type": "SHORT",
+            "confidence_score": 0.95,
+            "inference_latency_ms": 10,
+        },
+    )
+    run_id = post_resp.json()["run_id"]
+
+    # 2. Get the defect ID
+    run_resp = client.get(f"/runs/{run_id}")
+    defect_id = run_resp.json()["run"]["defect_logs"][0]["id"]
+
+    # 3. Patch the review
+    patch_resp = client.patch(
+        f"/runs/{run_id}/defects/{defect_id}/review",
+        json={"status": "CONFIRMED_FAIL"},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["operator_review"] == "CONFIRMED_FAIL"
+
+    # 4. Verify in run detail
+    final_run_resp = client.get(f"/runs/{run_id}")
+    assert final_run_resp.json()["run"]["defect_logs"][0]["operator_review"] == "CONFIRMED_FAIL"
+
+    # 5. Non-existent defect
+    bad_patch = client.patch(
+        f"/runs/{run_id}/defects/9999/review",
+        json={"status": "OVERRULED_PASS"},
+    )
+    assert bad_patch.status_code == 404

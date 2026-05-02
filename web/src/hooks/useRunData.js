@@ -156,6 +156,37 @@ export function useRunData({
     setSelectedDefectId(visibleDefects[nextIndex].id)
   }, [effectiveSelectedDefectId, visibleDefects])
 
+  async function saveDefectReview(defectId, status) {
+    if (!selectedRunId) return
+
+    try {
+      const response = await fetch(`/runs/${selectedRunId}/defects/${defectId}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Review save failed')
+      }
+
+      // Update local state for immediate feedback
+      setSelectedRun((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          defect_logs: current.defect_logs.map((d) =>
+            d.id === defectId ? { ...d, operator_review: status } : d,
+          ),
+        }
+      })
+      return true
+    } catch (err) {
+      setError(`Review Error: ${err.message}`)
+      return false
+    }
+  }
+
   const failCount = defects.filter((defect) => defect.inspection_result === 'FAIL').length
   const hasScan = runImages.length > 0
   const hasModel = Boolean(selectedRun?.model_name?.trim())
@@ -306,5 +337,6 @@ export function useRunData({
     summary,
     visibleDefects,
     hydrateRun,
+    saveDefectReview,
   }
 }

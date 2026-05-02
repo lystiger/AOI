@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
-from aoi.schema import InferenceEvent, InspectionResult, RunImageInput
+from aoi.schema import InferenceEvent, InspectionResult, OperatorReview, RunImageInput
 
 
 def _require_non_empty_string(value: str, field_name: str) -> str:
@@ -56,6 +56,7 @@ class EventIn(BaseModel):
     overlay_width: float | None = Field(default=None, ge=0.0, le=1.0)
     overlay_height: float | None = Field(default=None, ge=0.0, le=1.0)
     overlay_shape: str | None = None
+    operator_review: OperatorReview = OperatorReview.NONE
 
     @field_validator("pcb_id", "component_id", "defect_type")
     @classmethod
@@ -131,6 +132,11 @@ class PostEventsRequest(BaseModel):
         return value
 
 
+class ReviewDefectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: OperatorReview
+
+
 event_list_adapter = TypeAdapter(list[EventIn])
 event_adapter = TypeAdapter(EventIn)
 
@@ -153,4 +159,3 @@ def parse_post_events_payload(payload: object) -> tuple[list[EventIn], str | Non
         raise ValueError(_first_pydantic_error_message(exc)) from exc
     except TypeError as exc:
         raise ValueError("payload must be an event object or a list of event objects") from exc
-rom exc

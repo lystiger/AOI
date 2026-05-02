@@ -26,8 +26,8 @@ def test_inference_event_serializes_expected_fields() -> None:
         "overlay_width": None,
         "overlay_height": None,
         "overlay_shape": None,
-    }
-
+        "operator_review": "NONE",
+        }
 
 def test_inference_event_rejects_invalid_confidence() -> None:
     try:

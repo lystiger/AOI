@@ -6,6 +6,7 @@ import {
   INDUSTRIAL_THEME_STORAGE_KEY,
   SELECTED_IMAGE_STORAGE_KEY,
   SELECTED_RUN_STORAGE_KEY,
+  ZEN_MODE_STORAGE_KEY,
 } from '../app/constants'
 
 function readSelectedImageForRun(runId) {
@@ -59,6 +60,12 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isFiltersOpen, setIsFiltersOpen] = useState(true)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isZenMode, setIsZenMode] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return window.localStorage.getItem(ZEN_MODE_STORAGE_KEY) === 'true'
+  })
   const [isIndustrialTheme, setIsIndustrialTheme] = useState(() => {
     if (typeof window === 'undefined') {
       return true
@@ -105,6 +112,13 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
   }, [isIndustrialTheme])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(ZEN_MODE_STORAGE_KEY, String(isZenMode))
+  }, [isZenMode])
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !selectedRunId) {
       return
     }
@@ -131,6 +145,7 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     isRunRailOpen,
     isSettingsOpen,
     isSidebarOpen,
+    isZenMode,
     kbNavSensitivity,
     selectedImageId,
     selectedRunId,
@@ -143,6 +158,7 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     setIsRunRailOpen,
     setIsSettingsOpen,
     setIsSidebarOpen,
+    setIsZenMode,
     setKbNavSensitivity,
     setSelectedImageId,
   }

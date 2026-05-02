@@ -10,7 +10,13 @@ from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
 from aoi.api.deps import DatabaseManagerDep, SetupServiceDep, StoragePathDep
-from aoi.api.models import CreateRunRequest, ManualBarcodeRequest, ManualFiducialsRequest, UpdateRunRequest
+from aoi.api.models import (
+    CreateRunRequest,
+    ManualBarcodeRequest,
+    ManualFiducialsRequest,
+    ReviewDefectRequest,
+    UpdateRunRequest,
+)
 
 router = APIRouter()
 
@@ -291,3 +297,20 @@ def save_manual_barcode(
     if run is None:
         raise HTTPException(status_code=404, detail="run not found")
     return {"status": "ok", "run": run}
+
+
+@router.patch("/runs/{run_id}/defects/{defect_id}/review")
+def review_defect(
+    run_id: str,
+    defect_id: int,
+    payload: ReviewDefectRequest,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    updated = database_manager.update_defect_review(
+        run_id,
+        defect_id,
+        payload.status.value,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="defect not found for this run")
+    return {"status": "ok", "run_id": run_id, "defect_id": defect_id, "operator_review": payload.status}

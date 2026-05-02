@@ -150,6 +150,12 @@ class DatabaseManager:
             self._ensure_column(
                 connection,
                 table_name="defect_logs",
+                column_name="operator_review",
+                definition="TEXT NOT NULL DEFAULT 'NONE'",
+            )
+            self._ensure_column(
+                connection,
+                table_name="defect_logs",
                 column_name="overlay_shape",
                 definition="TEXT",
             )
@@ -226,6 +232,7 @@ class DatabaseManager:
                     confidence_score,
                     inference_latency_ms,
                     inspection_result,
+                    operator_review,
                     timestamp,
                     overlay_x,
                     overlay_y,
@@ -233,7 +240,7 @@ class DatabaseManager:
                     overlay_height,
                     overlay_shape
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -247,6 +254,7 @@ class DatabaseManager:
                         event.confidence_score,
                         event.inference_latency_ms,
                         event.inspection_result.value,
+                        event.operator_review.value,
                         event.timestamp,
                         *self._resolve_overlay(event, index),
                     )
@@ -357,6 +365,23 @@ class DatabaseManager:
             setup_status=setup_status,
         )
 
+    def update_defect_review(
+        self,
+        run_id: str,
+        defect_id: int,
+        review_status: str,
+    ) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE defect_logs
+                SET operator_review = ?
+                WHERE id = ? AND run_id = ?
+                """,
+                (review_status, defect_id, run_id),
+            )
+            return cursor.rowcount > 0
+
     def fetch_run(self, run_id: str) -> dict[str, object] | None:
         with self._connect() as connection:
             row = connection.execute(
@@ -388,6 +413,7 @@ class DatabaseManager:
         defect_type: str | None = None,
         severity: str | None = None,
         inspection_result: str | None = None,
+        operator_review: str | None = None,
     ) -> list[dict[str, object]]:
         clauses = ["run_id = ?"]
         params: list[object] = [run_id]
@@ -403,13 +429,16 @@ class DatabaseManager:
         if inspection_result is not None:
             clauses.append("inspection_result = ?")
             params.append(inspection_result)
+        if operator_review is not None:
+            clauses.append("operator_review = ?")
+            params.append(operator_review)
 
         where_clause = " AND ".join(clauses)
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
                 SELECT id, run_id, run_image_id, component_id, defect_type, severity, confidence_score,
-                       inference_latency_ms, inspection_result, timestamp, overlay_x, overlay_y,
+                       inference_latency_ms, inspection_result, operator_review, timestamp, overlay_x, overlay_y,
                        overlay_width, overlay_height, overlay_shape
                 FROM defect_logs
                 WHERE {where_clause}
