@@ -50,9 +50,9 @@ Goal: remove setup dead ends and provide a robust manual path into review.
 | :--- | :--- | :---: | :--- |
 | Schema integrity for setup fields | `src/aoi/database.py` (`_initialize`) | `Shipped` | Setup columns exist and are exercised by tests. |
 | Migration fallback for older databases | `src/aoi/database.py` | `Shipped` | Legacy column-add paths exist; keep regression coverage on upgraded DBs. |
-| Run creation | `POST /runs` -> `src/aoi/service.py` (`_handle_create_run`) | `Shipped` | Empty setup run with generated PCB ID is covered in `tests/test_service.py`. |
-| Run updates | `PATCH /runs/<run_id>` -> `src/aoi/service.py` (`_handle_patch_run`) | `Shipped` | Partial update path and missing-run handling are covered. |
-| Model validation | `src/aoi/service.py` (`_handle_patch_run`) | `Shipped` | Rejects non-string and whitespace-only values. |
+| Run creation | `POST /runs` -> `src/aoi/api/routes/runs.py` (`create_run`) | `Shipped` | Empty setup run with generated PCB ID is covered in `tests/test_fastapi_app.py`. |
+| Run updates | `PATCH /runs/<run_id>` -> `src/aoi/api/routes/runs.py` (`update_run`) | `Shipped` | Partial update path and missing-run handling are covered. |
+| Model validation | `src/aoi/api/models/runs.py` + `src/aoi/api/routes/runs.py` | `Shipped` | Rejects invalid update payloads through FastAPI and shared request models. |
 | Setup status transitions | `src/aoi/database.py` (`_calculate_setup_status`) | `Shipped` | `not_ready`, `in_progress`, and `review_ready` are all exercised. |
 
 ### 1.2 Frontend: Setup Orchestration
@@ -79,7 +79,7 @@ Goal: alignment flow exists in product terms, but automation is still synthetic.
 | Detection data source is real CV output | `src/aoi/database.py` (`detect_fiducials`) | `Mocked` | Uses `_build_mock_fiducials(...)`, not image analysis. |
 | Failure path | UI + backend detect flow | `Partial` | Failed detection is now represented explicitly, but the trigger is still heuristic rather than CV-driven. |
 | Manual correction fallback | UI fiducial step | `Partial` | Operator can recover by entering numeric boxes manually, but interactive placement/editing is still missing. |
-| Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify state transitions, not real detection accuracy. |
+| Verification coverage | `tests/test_database.py`, `tests/test_fastapi_app.py` | `Shipped` | Current tests verify state transitions, not real detection accuracy. |
 
 ## Phase 3: Barcode Detection
 
@@ -94,7 +94,7 @@ Goal: identification flow exists in product terms, but automation is still synth
 | Detection/decoding data source is real | `src/aoi/database.py` (`detect_barcode`) | `Mocked` | Uses `_build_mock_barcode(...)`, not barcode localization/decoding. |
 | Auto-complete on high confidence | Backend + UI | `Missing` | Current flow still routes through confirm. |
 | Decode-failure/manual serial entry path | UI + backend | `Shipped` | Operator can recover with a manual decoded value and normalized barcode box. |
-| Verification coverage | `tests/test_database.py`, `tests/test_service.py` | `Shipped` | Current tests verify workflow transitions, not real barcode robustness. |
+| Verification coverage | `tests/test_database.py`, `tests/test_fastapi_app.py` | `Shipped` | Current tests verify workflow transitions, not real barcode robustness. |
 
 ## End-To-End Operator Stress Tests
 
@@ -103,7 +103,7 @@ These are the scenarios that matter most for signoff on the current workflow.
 | Scenario | Status | Notes |
 | :--- | :---: | :--- |
 | Dirty exit: create run, upload scan, close browser, resume later | `Shipped` | Selection/setup persistence exists in the frontend. |
-| Model swap after completion resets dependent setup | `Shipped` | Covered in database and service tests. |
+| Model swap after completion resets dependent setup | `Shipped` | Covered in database and FastAPI tests. |
 | Bad upload stays in setup with an error | `Shipped` | Current upload path preserves setup mode on failure. |
 | Delete selected run clears setup state cleanly | `Shipped` | Backend delete exists and UI handles the ghost-run case. |
 | Continue-to-review remains locked while setup is incomplete | `Shipped` | Derived readiness gating is present in the UI. |
@@ -144,11 +144,11 @@ Success criteria:
 
 ### Core backend routes
 
-- `src/aoi/service.py`
-- look for `_handle_create_run`
-- look for `_handle_patch_run`
-- look for `_handle_detect_fiducials`
-- look for `_handle_detect_barcode`
+- `src/aoi/api/routes/runs.py`
+- look for `create_run`
+- look for `update_run`
+- look for `detect_fiducials`
+- look for `detect_barcode`
 
 ### Core frontend logic
 
@@ -161,4 +161,4 @@ Success criteria:
 ### Tests backing current status
 
 - `tests/test_database.py`
-- `tests/test_service.py`
+- `tests/test_fastapi_app.py`

@@ -12,7 +12,6 @@ import uvicorn
 from aoi.api import create_app
 from aoi.log_manager import LogManager
 from aoi.mock_inference import generate_mock_events
-from aoi.service import run_server
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,11 +58,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("data/storage"),
         help="path to store uploaded run assets",
     )
-    serve.add_argument(
-        "--legacy-http",
-        action="store_true",
-        help="run the legacy BaseHTTPRequestHandler server instead of FastAPI",
-    )
 
     sender = subparsers.add_parser("send-mock-events", help="send mock events to the HTTP service")
     sender.add_argument("--batch-size", type=int, default=5, help="events sent per cycle")
@@ -103,16 +97,6 @@ def main() -> None:
         return
 
     if args.command == "serve-http":
-        if args.legacy_http:
-            run_server(
-                host=args.host,
-                port=args.port,
-                log_path=args.output,
-                db_path=args.db_path,
-                storage_path=args.storage_path,
-            )
-            return
-
         app = create_app(
             db_path=args.db_path,
             log_path=args.output,

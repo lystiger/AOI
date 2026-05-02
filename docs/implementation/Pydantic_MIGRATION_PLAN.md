@@ -10,7 +10,7 @@ Completed:
 - run creation and run update request bodies use shared Pydantic v2 request models
 - manual fiducial and manual barcode request bodies use shared Pydantic v2 request models
 - FastAPI validation failures now return the repository's standard error envelope with status `422`
-- `src/aoi/service.py` reuses the shared Pydantic event payload adapter instead of maintaining a second handwritten parser
+- the legacy `src/aoi/service.py` transport layer has been removed, eliminating the second handwritten parser path
 - `src/aoi/schema.py` no longer exposes `from_dict()` compatibility constructors; `create()` is now the authoritative domain entry point
 
 Remaining:

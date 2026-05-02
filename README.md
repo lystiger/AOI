@@ -29,14 +29,14 @@ This repository currently implements the first milestone from `docs/priority.md`
 
 - structured inference event schema
 - JSONL log writer
-- HTTP ingestion service for inference events
+- FastAPI ingestion service for inference events
 - SQLite persistence for `inspection_runs` and `defect_logs`
 - setup-oriented run creation and pre-review workflow
 - mock-backed fiducial and barcode setup flow
 - dedicated Vite + React frontend in `web/`
 - optional mock event sender for development traffic
 - local file-backed logging flow behind the ingestion API
-- automated tests for schema, persistence, and service behavior
+- automated tests for schema, persistence, and FastAPI behavior
 
 ## Project Layout
 
@@ -46,24 +46,18 @@ src/aoi/
   log_manager.py
   mock_inference.py
   cli.py
-  service.py
+  api/
 web/
   src/
 tests/
 ```
 
-## Run Local HTTP Service
+## Run Local API Service
 
 Use the local package path when running without installation:
 
 ```bash
 PYTHONPATH=src python3 -m aoi.cli serve-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
-```
-
-This now starts the FastAPI backend by default. To run the legacy HTTP server during migration:
-
-```bash
-PYTHONPATH=src python3 -m aoi.cli serve-http --legacy-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
 ```
 
 Health check:
@@ -305,8 +299,8 @@ Run the full Python test suite:
 PYTHONPATH=src .venv/bin/python -m pytest -q
 ```
 
-Run the setup-related backend and service verification used by the current checklist:
+Run the setup-related backend verification used by the current checklist:
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_database.py tests/test_service.py
+PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_database.py tests/test_fastapi_app.py
 ```

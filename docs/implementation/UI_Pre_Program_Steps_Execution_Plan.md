@@ -382,7 +382,7 @@ Suggested method responsibilities:
 
 ### 6.4 Service Layer Changes
 
-In `src/aoi/service.py`:
+In `src/aoi/api/routes/runs.py`:
 
 - add `POST /runs`
 - add `PATCH /runs/<run_id>`
@@ -518,7 +518,7 @@ Recommendation:
   - add run creation/update methods
   - extend fetch/list queries
 
-- `src/aoi/service.py`
+- `src/aoi/api/routes/runs.py`
   - add `POST /runs`
   - add `PATCH /runs/<run_id>`
   - include setup fields in responses
@@ -529,7 +529,7 @@ Recommendation:
 - `tests/test_database.py`
   - add run creation/update coverage
 
-- `tests/test_service.py`
+- `tests/test_fastapi_app.py`
   - add endpoint coverage for `POST /runs` and `PATCH /runs/<run_id>`
 
 ### Frontend
