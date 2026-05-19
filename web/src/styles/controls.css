@@ -2,11 +2,11 @@
 .meta-link {
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 10px;
+  min-height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
   font-size: 0.75rem;
   font-family: var(--font-mono);
 }
@@ -20,36 +20,78 @@
 .meta-link {
   color: var(--accent);
   font-weight: 600;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
 }
 
 .meta-link:hover {
   background: var(--surface-hover);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.meta-pill {
+  gap: 10px;
+  padding-right: 14px;
+}
+
+.meta-pill strong {
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+
+.meta-label {
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .dock-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
   color: var(--muted);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .dock-button:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
 }
 
 .dock-button.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dock-button-warn:hover,
+.dock-button-warn.active {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.dock-button-warn.active {
+  background: var(--warn-soft);
 }
 
 .field {
