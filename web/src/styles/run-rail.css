@@ -198,6 +198,27 @@
   gap: 3px;
 }
 
+.defect-list-titleblock {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.defect-list-type {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .run-card-id {
   font-family: var(--font-mono);
   font-size: 0.66rem;
@@ -211,6 +232,44 @@
   font-size: 0.7rem;
   color: var(--muted);
   font-family: var(--font-mono);
+}
+
+.defect-list-item {
+  gap: 10px;
+}
+
+.defect-list-meta {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.defect-confidence {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  color: var(--ink);
+  font-size: 0.66rem;
+}
+
+.defect-reviewed {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ok) 26%, transparent);
+  background: color-mix(in srgb, var(--ok-soft) 70%, transparent);
+  color: var(--ok);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .run-card-bottom {

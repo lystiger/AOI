@@ -4,6 +4,7 @@
   min-width: 0;
   min-height: 0;
   background: #04070d;
+  overflow: hidden;
 }
 
 .viewer-panel,
@@ -18,6 +19,8 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
+  border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  overflow: hidden;
 }
 
 .viewer-empty {
@@ -34,7 +37,7 @@
 }
 
 .viewer-toolbar {
-  padding: 10px 12px;
+  padding: 8px 12px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 82%, white 18%) 0%, var(--surface) 100%);
   border-bottom: 1px solid var(--line);
@@ -59,7 +62,7 @@
 
 .viewer-toolbar-block {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .viewer-toolbar-block-end {
@@ -89,7 +92,7 @@
 }
 
 .viewer-toolbar-button {
-  height: 36px;
+  height: 34px;
 }
 
 .viewer-zoom-controls {
@@ -97,8 +100,8 @@
 }
 
 .viewer-zoom-button {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   justify-content: center;
 }
@@ -106,21 +109,21 @@
 .viewer-toolbar-stat {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 9px;
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .zoom-readout {
   min-width: 64px;
-  min-height: 36px;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -148,6 +151,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 18px;
 }
 
 .viewer-surface.dragging {
@@ -160,12 +164,17 @@
   box-shadow:
     0 0 0 1px rgba(94, 131, 202, 0.08),
     0 0 60px rgba(0, 0, 0, 0.8);
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .viewer-image {
   display: block;
   user-select: none;
   pointer-events: none;
+  max-width: min(100%, 1180px);
+  max-height: calc(100vh - 280px);
+  object-fit: contain;
 }
 
 .overlay-box {

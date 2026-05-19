@@ -207,36 +207,62 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 2px;
-  font-size: 0.65rem;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  line-height: 1;
 }
 
-.chip.status.pass { background: var(--ok-soft); color: var(--ok); }
-.chip.status.fail { background: var(--fail-soft); color: var(--fail); }
+.chip.status.pass {
+  background: color-mix(in srgb, var(--ok-soft) 82%, transparent);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 24%, transparent);
+}
+
+.chip.status.fail {
+  background: color-mix(in srgb, var(--fail-soft) 82%, transparent);
+  color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 26%, transparent);
+}
 
 .chip.status.confirmed_pass,
 .chip.status.overruled_pass {
-  background: var(--ok-soft);
+  background: color-mix(in srgb, var(--ok-soft) 86%, transparent);
   color: var(--ok);
-  border: 1px solid var(--ok);
+  border-color: var(--ok);
 }
 
 .chip.status.confirmed_fail,
 .chip.status.overruled_fail {
-  background: var(--fail-soft);
+  background: color-mix(in srgb, var(--fail-soft) 86%, transparent);
   color: var(--fail);
-  border: 1px solid var(--fail);
+  border-color: var(--fail);
 }
 
-.chip.severity.none { background: var(--surface-hover); color: var(--muted); }
-.chip.severity.minor { background: var(--warn-soft); color: var(--warn); }
+.chip.severity.none {
+  background: color-mix(in srgb, var(--surface-hover) 78%, transparent);
+  color: var(--muted);
+  border-color: color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.chip.severity.minor {
+  background: color-mix(in srgb, var(--warn-soft) 82%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 24%, transparent);
+}
+
 .chip.severity.major,
-.chip.severity.critical { background: var(--fail-soft); color: var(--fail); }
+.chip.severity.critical {
+  background: color-mix(in srgb, var(--fail-soft) 82%, transparent);
+  color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 24%, transparent);
+}
 
 .step-error-message,
 .error-banner {

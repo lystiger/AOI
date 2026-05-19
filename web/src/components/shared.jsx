@@ -64,16 +64,20 @@ export function DefectListItem({ defect, active, hovered, onSelect, onHover }) {
       onMouseLeave={() => onHover(null)}
     >
       <div className="defect-list-top">
-        <strong>{defect.component_id}</strong>
+        <div className="defect-list-titleblock">
+          <strong>{defect.component_id}</strong>
+          <span className="defect-list-type">{defect.defect_type}</span>
+        </div>
         <StatusChip value={defect.severity} kind="severity" />
       </div>
       <div className="defect-list-meta">
-        <span>{defect.defect_type}</span>
         <StatusChip value={defect.inspection_result} />
+        <span className="defect-confidence">{Number(defect.confidence_score ?? 0).toFixed(2)}</span>
         {defect.operator_review && defect.operator_review !== 'NONE' ? (
-          <span title={`Reviewed as ${defect.operator_review}`} style={{ color: 'var(--ok)' }}>✓</span>
+          <span className="defect-reviewed" title={`Reviewed as ${defect.operator_review}`}>
+            Reviewed
+          </span>
         ) : null}
-        <span>{Number(defect.confidence_score ?? 0).toFixed(2)}</span>
       </div>
     </button>
   )

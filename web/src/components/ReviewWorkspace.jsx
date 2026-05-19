@@ -65,6 +65,8 @@ export default function ReviewWorkspace({ workspace }) {
     hudGhostOpacity,
     setDismissedSetupRuns,
   } = workspace
+  const hasVisibleDefects = visibleDefects.length > 0
+  const isDefectListEmpty = !selectedRunId || !hasVisibleDefects
 
   return (
     <section className="panel review-panel">
@@ -242,7 +244,7 @@ export default function ReviewWorkspace({ workspace }) {
               </section>
             ) : null}
 
-            <section className="review-card defect-list-card">
+            <section className={`review-card defect-list-card${isDefectListEmpty ? ' is-empty' : ''}`}>
               <div className="review-card-header">
                 <div className="review-card-heading">
                   <p className="eyebrow">Defects</p>
@@ -256,7 +258,7 @@ export default function ReviewWorkspace({ workspace }) {
                     title="No defect list yet"
                     body="Choose a run from History first. Defects are loaded per run, so this panel stays empty until one is selected."
                   />
-                ) : visibleDefects.length ? (
+                ) : hasVisibleDefects ? (
                   visibleDefects.map((defect) => (
                     <DefectListItem
                       key={defect.id}
@@ -268,7 +270,7 @@ export default function ReviewWorkspace({ workspace }) {
                     />
                   ))
                 ) : (
-                  <div className="empty-state">No defects matched the current filters.</div>
+                  <div className="empty-state review-empty-inline">No defects matched the current filters.</div>
                 )}
               </div>
             </section>

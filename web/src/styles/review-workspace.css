@@ -15,12 +15,12 @@
 }
 
 .review-topbar {
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 86%, white 14%) 0%, var(--surface) 100%);
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
 }
 
 .review-controls {
@@ -31,7 +31,7 @@
 
 .review-context {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -55,14 +55,13 @@
 
 .review-runline-main strong {
   font-family: var(--font-mono);
-  font-size: 1.1rem;
+  font-size: 1rem;
   letter-spacing: 0.01em;
 }
 
 .review-shell {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  transition: grid-template-columns 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  grid-template-columns: 248px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -79,8 +78,8 @@
 .review-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 8px;
   border-right: 1px solid var(--line);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg) 72%, black 28%) 0%, var(--bg) 100%);
@@ -88,8 +87,8 @@
 }
 
 .review-card {
-  padding: 12px;
-  border-radius: 16px;
+  padding: 11px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 90%, white 10%) 0%, var(--surface) 100%);
@@ -112,7 +111,7 @@
 .sidebar-filters {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .defect-list-card {
@@ -120,6 +119,11 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+
+.defect-list-card.is-empty {
+  flex: 0 0 auto;
 }
 
 .defect-list {
@@ -128,6 +132,13 @@
   gap: 8px;
   overflow-y: auto;
   align-content: start;
+}
+
+.review-empty-inline {
+  padding: 8px 2px 2px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
 }
 
 .setup-edit-button {
@@ -142,8 +153,8 @@
 .review-selectors,
 .review-actions {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -152,18 +163,18 @@
 }
 
 .review-image-select {
-  min-width: 180px;
+  min-width: 168px;
 }
 
 .review-image-select .image-selector {
-  min-width: 180px;
+  min-width: 168px;
 }
 
 .upload-button {
   width: auto;
-  min-width: 172px;
-  height: 42px !important;
-  font-size: 0.84rem !important;
+  min-width: 156px;
+  height: 40px !important;
+  font-size: 0.8rem !important;
   background: color-mix(in srgb, var(--surface) 88%, black 12%) !important;
   border-color: var(--accent) !important;
   color: var(--accent) !important;
@@ -178,7 +189,7 @@
 }
 
 .delete-button {
-  min-width: 160px;
+  min-width: 144px;
   border-radius: 12px !important;
 }
 
@@ -190,8 +201,8 @@
 }
 
 .review-nav-button {
-  min-width: 38px;
-  height: 38px;
+  min-width: 36px;
+  height: 36px;
   border-radius: 12px;
 }
 
