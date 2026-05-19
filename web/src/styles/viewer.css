@@ -1,0 +1,216 @@
+.viewer-container {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #000;
+}
+
+.viewer-panel,
+.viewer-empty {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  background: var(--bg);
+}
+
+.viewer-panel {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.viewer-empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-toolbar,
+.viewer-toolbar-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.viewer-toolbar {
+  padding: 6px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar {
+  background: #1d2326;
+  border-bottom-color: #353c41;
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .ghost-button,
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .image-selector {
+  background: #d8d3cc;
+  border-color: #d5ba99;
+  color: #2b221f;
+}
+
+.app-shell[data-theme='editorial-light'] .viewer-toolbar .ghost-button:hover:not(:disabled) {
+  background: #ece7df;
+  border-color: #e0c7ab;
+}
+
+.zoom-readout {
+  min-width: 48px;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.app-shell[data-theme='editorial-light'] .zoom-readout {
+  color: #f5f0e8;
+}
+
+.viewer-surface {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewer-surface.dragging {
+  cursor: grabbing;
+}
+
+.viewer-stage {
+  position: relative;
+  transform-origin: center center;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+}
+
+.viewer-image {
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.overlay-box {
+  position: absolute;
+  border: 1.5px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.overlay-box span {
+  position: absolute;
+  top: -18px;
+  left: -1px;
+  white-space: nowrap;
+  background: inherit;
+  padding: 0 4px;
+  font-size: 0.6rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.overlay-pass { border-color: var(--ok); }
+.overlay-pass span { color: var(--ok); background: var(--ok-soft); }
+
+.overlay-fail { border-color: var(--fail); }
+.overlay-fail span { color: var(--fail); background: var(--fail-soft); }
+
+.overlay-hovered { border-color: var(--warn); z-index: 5; }
+.overlay-hovered span { color: var(--warn); background: var(--warn-soft); }
+
+.overlay-selected { border-color: var(--accent); z-index: 10; border-width: 2px; }
+.overlay-selected span { color: #fff; background: var(--accent); }
+
+.viewer-surface.zen-mode-active .overlay-box:not(.overlay-selected) {
+  opacity: 0.15;
+  filter: grayscale(1);
+}
+
+.viewer-surface.zen-mode-active .overlay-selected {
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.floating-inspector {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 260px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: rgba(22, 27, 34, 0.4);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  color: var(--ink);
+  opacity: var(--ghost-opacity, 0.2);
+  transition:
+    opacity 0.2s ease,
+    background 0.3s ease,
+    transform 0.3s ease,
+    backdrop-filter 0.3s ease;
+  z-index: 100;
+}
+
+.floating-inspector:hover {
+  opacity: 0.98 !important;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.inspector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.inspector-item span {
+  display: block;
+}
+
+.inspector-item strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.editable-preview {
+  user-select: none;
+}
+
+.editable-box {
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.editable-box:active {
+  cursor: grabbing;
+}
+
+.editable-box.selected {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.editable-box:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}

@@ -1,0 +1,107 @@
+.run-rail {
+  min-height: 0;
+}
+
+.rail-section {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rail-section:last-child {
+  border-bottom: none;
+}
+
+.rail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail-filters {
+  display: grid;
+  gap: 8px;
+}
+
+.rail-list {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.rail-group {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.rail-group + .rail-group {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.rail-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 4px;
+}
+
+.run-card,
+.defect-list-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.run-card:hover,
+.defect-list-item:hover,
+.defect-list-item.hovered {
+  border-color: var(--muted);
+  background: var(--surface-hover);
+}
+
+.run-card.active,
+.defect-list-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.run-card strong,
+.defect-list-top strong {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.run-card-top,
+.run-card-bottom,
+.defect-list-top,
+.defect-list-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.run-card-bottom,
+.defect-list-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}

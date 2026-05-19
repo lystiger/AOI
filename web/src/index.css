@@ -6,29 +6,11 @@
     sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #c9d1d9;
-  background-color: #0d1117;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Tactical Dark Palette */
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface-hover: #21262d;
-  --line: #30363d;
-  --ink: #c9d1d9;
-  --muted: #8b949e;
-  --accent: #58a6ff;
-  --accent-soft: rgba(88, 166, 255, 0.1);
-  --ok: #3fb950;
-  --ok-soft: rgba(63, 185, 80, 0.15);
-  --fail: #f85149;
-  --fail-soft: rgba(248, 81, 73, 0.15);
-  --warn: #dbab09;
-  --warn-soft: rgba(219, 171, 9, 0.15);
-  --font-mono: "JetBrains Mono", "Roboto Mono", "SF Mono", monospace;
+  --font-mono: 'JetBrains Mono', 'Roboto Mono', 'SF Mono', monospace;
   --radius: 4px;
 }
 
@@ -45,14 +27,16 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--bg);
-  color: var(--ink);
+  background-color: #161514;
+  color: #f0ebe4;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+  color: inherit;
 }
 
 a {

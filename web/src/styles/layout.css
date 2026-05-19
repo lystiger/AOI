@@ -1,0 +1,76 @@
+.app-shell {
+  max-width: 100%;
+  margin: 0;
+  height: 100vh;
+  padding: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 8px;
+  transition: grid-template-columns 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace.rail-collapsed {
+  grid-template-columns: 0px 1fr;
+  gap: 0;
+}
+
+.workspace.rail-collapsed .run-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workspace-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+.workspace-title h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.workspace-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
