@@ -129,6 +129,17 @@
   box-shadow: 0 0 0 1px var(--accent-soft);
 }
 
+.field.compact span {
+  font-size: 0.6rem;
+}
+
+.field.compact input,
+.field.compact select {
+  height: 38px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+}
+
 .ghost-button {
   height: 28px;
   padding: 0 10px;

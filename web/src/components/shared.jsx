@@ -40,7 +40,10 @@ export function RunCard({ run, active, onSelect }) {
       onClick={() => onSelect(run.id)}
     >
       <div className="run-card-top">
-        <strong>{run.pcb_id}</strong>
+        <div className="run-card-titleblock">
+          <strong>{run.pcb_id}</strong>
+          <span className="run-card-id">{run.id}</span>
+        </div>
         <StatusChip value={run.status} />
       </div>
       <div className="run-card-bottom">

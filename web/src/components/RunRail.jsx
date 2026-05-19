@@ -18,9 +18,10 @@ export default function RunRail({ workspace }) {
   return (
     <aside className="panel run-rail">
       <div className="rail-section rail-header">
-        <div>
+        <div className="rail-heading">
           <p className="eyebrow">Run browser</p>
           <h2>History</h2>
+          <p className="rail-subtitle">Review recent inspection runs, queue unfinished setups, and narrow the feed fast.</p>
         </div>
         <div className="rail-header-actions">
           <button
@@ -31,12 +32,16 @@ export default function RunRail({ workspace }) {
           >
             {isCreatingRun ? '...' : 'New Run'}
           </button>
-          <button type="button" className="ghost-button" onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}>
+          <button type="button" className="ghost-button rail-reset-button" onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}>
             Reset
           </button>
         </div>
       </div>
       <div className="rail-section rail-filters">
+        <div className="rail-filter-header">
+          <p className="eyebrow">Filters</p>
+          <span className="section-note">Live query controls</span>
+        </div>
         <FilterField
           compact
           label="Limit"
@@ -76,7 +81,7 @@ export default function RunRail({ workspace }) {
       </div>
       <div className="rail-section rail-list">
         {runsLoading ? (
-          <div className="empty-state">Loading runs…</div>
+          <div className="empty-state rail-loading-state">Loading runs…</div>
         ) : runs.length ? (
           <>
             {pendingRuns.length ? (

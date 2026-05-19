@@ -1,9 +1,11 @@
 .run-rail {
   min-height: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, white 6%) 0%, var(--surface) 100%);
 }
 
 .rail-section {
-  padding: 10px;
+  padding: 14px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -14,8 +16,25 @@
 .rail-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.rail-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.rail-heading h2 {
+  font-size: 1.15rem;
+}
+
+.rail-subtitle {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 .rail-header-actions {
@@ -24,29 +43,44 @@
   gap: 8px;
 }
 
+.rail-reset-button {
+  min-width: 72px;
+}
+
 .rail-filters {
   display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  background: color-mix(in srgb, var(--bg) 18%, transparent);
+}
+
+.rail-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
 }
 
 .rail-list {
   flex: 1;
   display: grid;
-  gap: 4px;
-  padding: 8px;
+  gap: 10px;
+  padding: 12px;
   overflow-y: auto;
   align-content: start;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 10%, transparent) 0%, transparent 100%);
 }
 
 .rail-group {
   display: grid;
-  gap: 4px;
-  padding-bottom: 8px;
+  gap: 8px;
+  padding-bottom: 10px;
 }
 
 .rail-group + .rail-group {
-  margin-top: 6px;
-  padding-top: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
@@ -55,19 +89,24 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 2px 2px 4px;
+  padding: 2px 2px 2px;
 }
 
 .run-card,
 .defect-list-item {
   width: 100%;
   text-align: left;
-  padding: 8px 10px;
-  border-radius: var(--radius);
+  padding: 12px 12px 11px;
+  border-radius: 16px;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 90%, white 10%) 0%, var(--bg) 100%);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .run-card:hover,
@@ -75,18 +114,22 @@
 .defect-list-item.hovered {
   border-color: var(--muted);
   background: var(--surface-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.07);
 }
 
 .run-card.active,
 .defect-list-item.active {
   border-color: var(--accent);
-  background: var(--accent-soft);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 92%, white 8%) 0%, var(--accent-soft) 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .run-card strong,
 .defect-list-top strong {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
+  font-size: 0.84rem;
 }
 
 .run-card-top,
@@ -99,9 +142,47 @@
   align-items: center;
 }
 
+.run-card-top {
+  align-items: flex-start;
+}
+
+.run-card-titleblock {
+  display: grid;
+  gap: 3px;
+}
+
+.run-card-id {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .run-card-bottom,
 .defect-list-meta {
   font-size: 0.7rem;
   color: var(--muted);
   font-family: var(--font-mono);
+}
+
+.run-card-bottom {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.rail-loading-state {
+  min-height: 140px;
+  place-items: center;
+}
+
+@media (max-width: 1180px) {
+  .rail-header {
+    flex-direction: column;
+  }
+
+  .rail-header-actions {
+    width: 100%;
+  }
 }
