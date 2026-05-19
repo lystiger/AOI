@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920">
+<title>AOI Review Workstation — TR7500 Series</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap');
+
+  :root {
+    --bg-0: #0a0c0f;
+    --bg-1: #0f1217;
+    --bg-2: #141820;
+    --bg-3: #1a2030;
+    --border: #1e2740;
+    --border-bright: #2a3558;
+    --text-primary: #e8eaf2;
+    --text-secondary: #7a8aaa;
+    --text-dim: #3a4a6a;
+    --accent-blue: #1a8fff;
+    --accent-blue-dim: #0f5fbb;
+    --accent-cyan: #00d4ff;
+    --accent-green: #00e878;
+    --accent-green-dim: #00a050;
+    --accent-red: #ff3b4e;
+    --accent-red-dim: #aa1f2d;
+    --accent-amber: #ffb520;
+    --accent-amber-dim: #a06800;
+    --grid-line: rgba(26,143,255,0.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-0);
+    color: var(--text-primary);
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ─── TOP NAV BAR ─── */
+  .topbar {
+    height: 52px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border-bright);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 0;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 100;
+  }
+
+  .topbar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 20px;
+    border-right: 1px solid var(--border);
+    margin-right: 20px;
+  }
+
+  .logo-box {
+    width: 32px; height: 32px;
+    background: var(--accent-blue);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: 14px;
+    color: white;
+    clip-path: polygon(0 0, 85% 0, 100% 15%, 100% 100%, 15% 100%, 0 85%);
+  }
+
+  .logo-text { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.05em; color: var(--text-primary); }
+  .logo-sub { font-size: 10px; color: var(--text-secondary); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  .topbar-status-pills {
+    display: flex; align-items: center; gap: 8px;
+    padding-right: 20px; border-right: 1px solid var(--border); margin-right: 20px;
+  }
+
+  .pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    border: 1px solid;
+    cursor: default;
+  }
+
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  .pill-ok { background: rgba(0,232,120,0.08); border-color: rgba(0,232,120,0.3); color: var(--accent-green); }
+  .pill-ok .pill-dot { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); animation: pulse 2s ease-in-out infinite; }
+
+  .pill-fail { background: rgba(255,59,78,0.12); border-color: rgba(255,59,78,0.5); color: var(--accent-red); }
+  .pill-fail .pill-dot { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red); animation: pulse-red 1s ease-in-out infinite; }
+
+  .pill-neutral { background: rgba(122,138,170,0.08); border-color: rgba(122,138,170,0.2); color: var(--text-secondary); }
+  .pill-neutral .pill-dot { background: var(--text-secondary); }
+
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  @keyframes pulse-red { 0%,100% { opacity:1; box-shadow: 0 0 8px var(--accent-red); } 50% { opacity:0.6; box-shadow: 0 0 3px var(--accent-red); } }
+
+  .topbar-machine {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 12px;
+    color: var(--text-secondary); letter-spacing: 0.08em;
+  }
+  .topbar-machine span { color: var(--accent-cyan); font-weight: 600; }
+
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-secondary); font-size: 14px;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+  .clock {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500;
+    color: var(--text-primary); padding-left: 16px; border-left: 1px solid var(--border);
+    margin-left: 8px;
+  }
+
+  /* ─── ALERT BANNER ─── */
+  .alert-none { display: none; }
+  .alert-banner {
+    height: 36px; background: rgba(255,59,78,0.15); border-bottom: 1px solid rgba(255,59,78,0.4);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px;
+    flex-shrink: 0; animation: flash-border 1s ease-in-out infinite;
+  }
+  .alert-banner .alert-icon { color: var(--accent-red); font-size: 16px; }
+  .alert-banner .alert-text { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.06em; color: var(--accent-red); }
+  .alert-banner .alert-detail { color: rgba(255,59,78,0.7); font-size: 12px; }
+  @keyframes flash-border { 0%,100% { border-bottom-color: rgba(255,59,78,0.4); } 50% { border-bottom-color: rgba(255,59,78,0.8); } }
+
+  /* ─── MAIN CONTENT AREA ─── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ─── LEFT SIDEBAR ─── */
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+  }
+
+  .sidebar-label {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim);
+    padding: 0 12px 6px;
+  }
+
+  .filter-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px;
+  }
+  .filter-label { font-size: 11px; color: var(--text-secondary); width: 52px; flex-shrink: 0; }
+  .filter-input {
+    flex: 1; height: 26px;
+    background: var(--bg-0); border: 1px solid var(--border);
+    border-radius: 2px; color: var(--text-primary);
+    padding: 0 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  }
+  .filter-select {
+    flex: 1; height: 26px;
+    background: var(--bg-0); border: 1px solid var(--border); border-radius: 2px;
+    color: var(--text-primary); font-size: 11px; padding: 0 4px;
+  }
+
+  .history-list { flex: 1; overflow-y: auto; }
+  .history-list::-webkit-scrollbar { width: 4px; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+  .history-item {
+    padding: 8px 12px; border-bottom: 1px solid var(--bg-0);
+    cursor: pointer; transition: background 0.1s; position: relative;
+  }
+  .history-item:hover { background: var(--bg-2); }
+  .history-item.active { background: rgba(26,143,255,0.08); border-left: 2px solid var(--accent-blue); }
+  .history-item.fail { border-left: 2px solid var(--accent-red); background: rgba(255,59,78,0.05); }
+
+  .hi-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+  .hi-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: var(--text-primary); }
+  .hi-badge {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.08em; padding: 1px 5px; border-radius: 1px;
+  }
+  .badge-pass { background: rgba(0,232,120,0.12); color: var(--accent-green); border: 1px solid rgba(0,232,120,0.25); }
+  .badge-fail { background: rgba(255,59,78,0.12); color: var(--accent-red); border: 1px solid rgba(255,59,78,0.3); }
+  .badge-setup { background: rgba(255,181,32,0.1); color: var(--accent-amber); border: 1px solid rgba(255,181,32,0.25); }
+  .badge-run { background: rgba(0,212,255,0.1); color: var(--accent-cyan); border: 1px solid rgba(0,212,255,0.25); }
+
+  .hi-model { font-size: 10px; color: var(--text-secondary); margin-bottom: 2px; }
+  .hi-meta { font-size: 10px; color: var(--text-dim); display: flex; justify-content: space-between; }
+
+  .hi-defect-count {
+    font-size: 10px; color: var(--accent-red); font-weight: 600;
+  }
+
+  /* ─── CENTER MAIN PANEL ─── */
+  .center {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* PCB Image Panel */
+  .pcb-panel {
+    flex: 1; position: relative; overflow: hidden;
+    background: #060810;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .pcb-canvas-wrap {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .pcb-board {
+    position: relative;
+    width: 680px; height: 460px;
+    background: #1a3d2a;
+    border: 2px solid #2a6040;
+    border-radius: 4px;
+    box-shadow: 0 0 60px rgba(0,100,40,0.3), 0 0 120px rgba(0,100,40,0.1);
+  }
+
+  /* PCB traces/circuit pattern */
+  .pcb-board::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(50,200,100,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(50,200,100,0.04) 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: 2px;
+  }
+
+  .pcb-component {
+    position: absolute;
+    background: #0d2a1a;
+    border: 1px solid #2a5035;
+    border-radius: 2px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 8px; color: #3a7050;
+  }
+
+  /* Defect markers */
+  .defect-marker {
+    position: absolute;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+
+  .defect-marker.fail {
+    border: 2px solid var(--accent-red);
+    box-shadow: 0 0 0 1px rgba(255,59,78,0.2), 0 0 12px rgba(255,59,78,0.3);
+    background: rgba(255,59,78,0.08);
+    animation: defect-pulse 2s ease-in-out infinite;
+  }
+
+  .defect-marker.warn {
+    border: 2px solid var(--accent-amber);
+    box-shadow: 0 0 0 1px rgba(255,181,32,0.2), 0 0 8px rgba(255,181,32,0.2);
+    background: rgba(255,181,32,0.06);
+  }
+
+  .defect-marker.active-defect {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.3), 0 0 20px rgba(0,212,255,0.4);
+    background: rgba(0,212,255,0.1);
+    animation: none;
+  }
+
+  @keyframes defect-pulse {
+    0%,100% { box-shadow: 0 0 0 1px rgba(255,59,78,0.2), 0 0 12px rgba(255,59,78,0.3); }
+    50% { box-shadow: 0 0 0 2px rgba(255,59,78,0.3), 0 0 20px rgba(255,59,78,0.5); }
+  }
+
+  .defect-label {
+    position: absolute; top: -20px; left: -1px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 600;
+    background: var(--accent-red); color: white;
+    padding: 1px 5px; border-radius: 1px; white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
+
+  .defect-label.warn-label { background: var(--accent-amber); color: #1a0f00; }
+  .defect-label.active-label { background: var(--accent-cyan); color: #001820; }
+
+  /* crosshair on pcb */
+  .pcb-crosshair-h, .pcb-crosshair-v {
+    position: absolute; background: rgba(0,212,255,0.15); pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .pcb-crosshair-h { height: 1px; left: 0; right: 0; }
+  .pcb-crosshair-v { width: 1px; top: 0; bottom: 0; }
+
+  /* PCB top toolbar */
+  .pcb-toolbar {
+    height: 36px; background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px; gap: 8px; flex-shrink: 0;
+  }
+
+  .toolbar-group { display: flex; gap: 4px; padding-right: 12px; border-right: 1px solid var(--border); margin-right: 4px; }
+
+  .tb-btn {
+    height: 26px; padding: 0 10px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 2px;
+    color: var(--text-secondary); font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer;
+    display: flex; align-items: center; gap: 5px; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tb-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(26,143,255,0.06); }
+  .tb-btn.active { background: rgba(26,143,255,0.12); border-color: var(--accent-blue); color: var(--accent-blue); }
+  .tb-btn.danger:hover { border-color: var(--accent-red); color: var(--accent-red); background: rgba(255,59,78,0.06); }
+  .tb-btn.success { background: rgba(0,232,120,0.1); border-color: rgba(0,232,120,0.4); color: var(--accent-green); }
+  .tb-btn.success:hover { background: rgba(0,232,120,0.18); }
+
+  .pcb-info-strip {
+    margin-left: auto; display: flex; gap: 16px; align-items: center;
+  }
+  .pis-item { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); }
+  .pis-item span { color: var(--accent-cyan); }
+
+  /* ─── PCB overlay overlays ─── */
+  .overlay-badge {
+    position: absolute;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 1px;
+    pointer-events: none;
+  }
+
+  .overlay-run-id {
+    top: 10px; left: 10px;
+    background: rgba(10,12,15,0.8); border: 1px solid var(--border-bright);
+    color: var(--text-secondary);
+    font-size: 10px;
+  }
+
+  .overlay-fail-count {
+    top: 10px; right: 10px;
+    background: rgba(255,59,78,0.15); border: 1px solid rgba(255,59,78,0.5);
+    color: var(--accent-red); font-size: 18px;
+  }
+
+  /* ─── DEFECT STRIP (bottom of center) ─── */
+  .defect-strip {
+    height: 160px; flex-shrink: 0;
+    background: var(--bg-1); border-top: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+
+  .ds-header {
+    height: 32px; display: flex; align-items: center;
+    padding: 0 12px; gap: 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .ds-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary);
+  }
+  .ds-count { background: rgba(255,59,78,0.15); color: var(--accent-red); border: 1px solid rgba(255,59,78,0.3); padding: 1px 7px; border-radius: 1px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+  .ds-body { display: flex; gap: 0; flex: 1; overflow: hidden; }
+
+  .defect-thumb-list {
+    display: flex; gap: 0; overflow-x: auto; flex: 1;
+    align-items: stretch;
+  }
+  .defect-thumb-list::-webkit-scrollbar { height: 3px; }
+  .defect-thumb-list::-webkit-scrollbar-thumb { background: var(--border-bright); }
+
+  .defect-thumb {
+    width: 120px; flex-shrink: 0; border-right: 1px solid var(--border);
+    padding: 8px; cursor: pointer; transition: background 0.1s;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .defect-thumb:hover { background: var(--bg-2); }
+  .defect-thumb.dt-active { background: rgba(26,143,255,0.08); border-top: 2px solid var(--accent-blue); padding-top: 6px; }
+
+  .dt-img {
+    width: 100%; aspect-ratio: 1.5;
+    background: #0a150f; border: 1px solid var(--border);
+    border-radius: 1px; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .dt-img-inner {
+    width: 60%; height: 60%;
+    border-radius: 1px;
+  }
+
+  .dt-fail-box {
+    position: absolute; border: 1.5px solid var(--accent-red);
+    background: rgba(255,59,78,0.1);
+  }
+
+  .dt-meta { display: flex; flex-direction: column; gap: 1px; }
+  .dt-ref { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; color: var(--text-primary); }
+  .dt-type { font-size: 10px; color: var(--accent-red); }
+  .dt-conf { font-size: 9px; color: var(--text-dim); }
+
+  /* ─── RIGHT PANEL ─── */
+  .right-panel {
+    width: 300px; flex-shrink: 0;
+    background: var(--bg-1); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .rp-section {
+    border-bottom: 1px solid var(--border); padding: 10px 12px;
+  }
+
+  .rp-title {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  /* Run Summary */
+  .run-summary-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+
+  .rs-card {
+    background: var(--bg-0); border: 1px solid var(--border); border-radius: 2px;
+    padding: 6px 8px;
+  }
+  .rs-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px; }
+  .rs-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+  .rs-value.ok { color: var(--accent-green); }
+  .rs-value.warn { color: var(--accent-amber); }
+  .rs-value.fail { color: var(--accent-red); }
+  .rs-value.neutral { color: var(--text-secondary); }
+  .rs-value.active { color: var(--accent-cyan); }
+
+  /* Defect detail */
+  .defect-detail-panel { flex: 1; overflow-y: auto; padding: 10px 12px; }
+  .defect-detail-panel::-webkit-scrollbar { width: 3px; }
+  .defect-detail-panel::-webkit-scrollbar-thumb { background: var(--border-bright); }
+
+  .dd-image-area {
+    width: 100%; aspect-ratio: 1.6;
+    background: #060d08; border: 1px solid var(--border); border-radius: 2px;
+    margin-bottom: 8px; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .dd-component-sim {
+    width: 50%; height: 50%;
+    background: #0d2a1a; border: 1px solid #2a5035; border-radius: 1px;
+    position: relative;
+  }
+  .dd-defect-box {
+    position: absolute; top: 20%; left: 15%; width: 30%; height: 35%;
+    border: 2px solid var(--accent-red); background: rgba(255,59,78,0.15);
+    animation: defect-pulse 1.5s ease-in-out infinite;
+  }
+
+  .dd-zoom-label {
+    position: absolute; bottom: 6px; right: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    color: var(--text-dim); background: rgba(0,0,0,0.5); padding: 2px 5px;
+    border-radius: 1px;
+  }
+
+  .dd-crosshair-h { position: absolute; height: 1px; left: 0; right: 0; background: rgba(0,212,255,0.2); }
+  .dd-crosshair-v { position: absolute; width: 1px; top: 0; bottom: 0; background: rgba(0,212,255,0.2); }
+
+  .dd-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .dd-table tr { border-bottom: 1px solid var(--bg-0); }
+  .dd-table td { padding: 4px 0; font-size: 11px; }
+  .dd-table td:first-child { color: var(--text-secondary); width: 90px; }
+  .dd-table td:last-child { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: var(--text-primary); }
+
+  /* 3D height bar */
+  .height-viz {
+    background: var(--bg-0); border: 1px solid var(--border); border-radius: 2px;
+    padding: 8px; margin-bottom: 8px;
+  }
+  .height-viz-label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .height-bars { display: flex; gap: 2px; align-items: flex-end; height: 40px; }
+  .hb { flex: 1; border-radius: 1px 1px 0 0; min-height: 3px; transition: height 0.3s; position: relative; }
+  .hb-ok { background: var(--accent-green-dim); }
+  .hb-fail { background: var(--accent-red); animation: defect-pulse 1s ease-in-out infinite; }
+  .hb-warn { background: var(--accent-amber-dim); }
+  .hb-ref { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(255,255,255,0.2); }
+  .height-legend { display: flex; gap: 8px; margin-top: 4px; }
+  .hl-item { display: flex; align-items: center; gap: 3px; font-size: 9px; color: var(--text-dim); }
+  .hl-dot { width: 6px; height: 6px; border-radius: 1px; }
+
+  /* Action buttons */
+  .action-area {
+    padding: 10px 12px; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+  }
+
+  .action-row { display: flex; gap: 6px; }
+
+  .action-btn {
+    flex: 1; height: 34px;
+    border-radius: 2px; border: 1px solid;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+
+  .btn-confirm {
+    background: rgba(0,232,120,0.12); border-color: rgba(0,232,120,0.4);
+    color: var(--accent-green);
+  }
+  .btn-confirm:hover { background: rgba(0,232,120,0.2); box-shadow: 0 0 16px rgba(0,232,120,0.2); }
+
+  .btn-false-call {
+    background: rgba(255,181,32,0.08); border-color: rgba(255,181,32,0.3);
+    color: var(--accent-amber);
+  }
+  .btn-false-call:hover { background: rgba(255,181,32,0.15); }
+
+  .btn-rework {
+    background: rgba(26,143,255,0.1); border-color: rgba(26,143,255,0.4);
+    color: var(--accent-blue);
+  }
+  .btn-rework:hover { background: rgba(26,143,255,0.18); box-shadow: 0 0 16px rgba(26,143,255,0.2); }
+
+  .btn-reject {
+    background: rgba(255,59,78,0.1); border-color: rgba(255,59,78,0.4);
+    color: var(--accent-red);
+  }
+  .btn-reject:hover { background: rgba(255,59,78,0.18); box-shadow: 0 0 16px rgba(255,59,78,0.2); }
+
+  /* ─── STEP WORKFLOW (replaces center on setup mode) ─── */
+  .setup-overlay {
+    display: none;
+    position: absolute; inset: 0; background: var(--bg-0);
+    z-index: 50; flex-direction: column; align-items: center; justify-content: center;
+  }
+
+  /* ─── SPC MINI CHARTS in right panel ─── */
+  .spc-row {
+    display: flex; gap: 4px; align-items: flex-end;
+    height: 30px; margin-top: 4px;
+  }
+  .spc-bar {
+    flex: 1; border-radius: 1px 1px 0 0; background: rgba(26,143,255,0.3);
+    min-height: 2px; position: relative;
+  }
+  .spc-bar.over-limit { background: rgba(255,59,78,0.6); }
+  .spc-limit-line {
+    position: absolute; top: 0; left: 0; right: 0;
+    border-top: 1px dashed rgba(255,181,32,0.5);
+  }
+  .spc-label { font-size: 9px; color: var(--text-dim); margin-top: 3px; display: flex; justify-content: space-between; }
+
+  /* ─── VIEW TABS ─── */
+  .view-tabs {
+    display: flex; gap: 0; height: 32px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+  }
+  .vtab {
+    height: 100%; padding: 0 14px;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim); cursor: pointer; border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 5px; transition: all 0.15s;
+    border-bottom: 2px solid transparent;
+  }
+  .vtab:hover { color: var(--text-secondary); background: var(--bg-2); }
+  .vtab.vt-active { color: var(--accent-cyan); border-bottom-color: var(--accent-cyan); background: rgba(0,212,255,0.04); }
+
+  .vtab-count {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    background: rgba(255,59,78,0.15); color: var(--accent-red);
+    padding: 1px 4px; border-radius: 1px; min-width: 16px; text-align: center;
+  }
+
+  /* ─── STEP WORKFLOW PANEL (top of right panel when no run selected) ─── */
+  .step-workflow { padding: 10px 12px; }
+  .step-item {
+    display: flex; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--bg-0); cursor: pointer;
+    transition: all 0.15s; align-items: flex-start;
+  }
+  .step-item:last-child { border-bottom: none; }
+  .step-item:hover { padding-left: 4px; }
+
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 700;
+    border: 1px solid;
+  }
+  .sn-ready { border-color: var(--accent-green); color: var(--accent-green); background: rgba(0,232,120,0.08); }
+  .sn-blocked { border-color: var(--text-dim); color: var(--text-dim); background: transparent; }
+  .sn-done { border-color: var(--accent-blue-dim); color: var(--accent-blue); background: rgba(26,143,255,0.08); }
+
+  .step-info { flex: 1; }
+  .step-name { font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+  .step-name.blocked { color: var(--text-dim); }
+  .step-desc { font-size: 10px; color: var(--text-secondary); line-height: 1.4; }
+  .step-desc.blocked { color: var(--text-dim); }
+  .step-status-tag {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 9px; font-weight: 600;
+    letter-spacing: 0.08em; padding: 1px 5px; border-radius: 1px; margin-top: 3px; display: inline-block;
+  }
+  .tag-ready { background: rgba(0,232,120,0.1); color: var(--accent-green); border: 1px solid rgba(0,232,120,0.25); }
+  .tag-blocked { background: rgba(58,74,106,0.3); color: var(--text-dim); border: 1px solid var(--border); }
+  .tag-done { background: rgba(26,143,255,0.08); color: var(--accent-blue); border: 1px solid rgba(26,143,255,0.25); }
+
+  /* scrollbar global */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ─── TOP BAR ─── -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <div class="logo-box">AOI</div>
+    <div>
+      <div class="logo-text">PCB DEFECT REVIEW</div>
+      <div class="logo-sub">TR7500 Series · Review Workstation</div>
+    </div>
+  </div>
+
+  <div class="topbar-status-pills">
+    <div class="pill pill-ok"><div class="pill-dot"></div>MACHINE ONLINE</div>
+    <div class="pill pill-neutral"><div class="pill-dot"></div>RUNS: <b style="margin-left:4px;color:var(--text-primary)">9</b></div>
+    <div class="pill pill-fail" id="fail-pill"><div class="pill-dot"></div>FAIL: <b style="margin-left:4px" id="fail-num">3</b></div>
+    <div class="pill pill-neutral"><div class="pill-dot"></div>EVENTS: 0</div>
+  </div>
+
+  <div class="topbar-machine">
+    LINE&nbsp;&nbsp;<span>SMT-04</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+    STATION&nbsp;&nbsp;<span>AOI-B</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+    SHIFT&nbsp;&nbsp;<span>A</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+    OPERATOR&nbsp;&nbsp;<span>T.NGUYEN</span>
+  </div>
+
+  <div class="topbar-right">
+    <div class="icon-btn" title="Grafana Dashboard">&#9632;</div>
+    <div class="icon-btn" title="API Status">&#9674;</div>
+    <div class="icon-btn" title="Settings">&#9881;</div>
+    <div class="icon-btn" title="Filter">&#9783;</div>
+    <div class="clock" id="clock">14:22:07</div>
+  </div>
+</div>
+
+<!-- ─── FAIL ALERT BANNER (visible when fails > 0) ─── -->
+<div class="alert-banner" id="alert-banner">
+  <span class="alert-icon">&#9650;</span>
+  <span class="alert-text">3 DEFECT RUNS PENDING REVIEW</span>
+  <span class="alert-detail">— Oldest: RUN-A3F2 · 00:04:12 ago · Solder Bridge on U12</span>
+</div>
+
+<!-- ─── MAIN ─── -->
+<div class="main">
+
+  <!-- ─── LEFT SIDEBAR ─── -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filters</div>
+      <div class="filter-row">
+        <span class="filter-label">Limit</span>
+        <input class="filter-input" value="15" style="width:50px;flex:none">
+      </div>
+      <div class="filter-row">
+        <span class="filter-label">PCB</span>
+        <input class="filter-input" placeholder="Model...">
+      </div>
+      <div class="filter-row">
+        <span class="filter-label">Status</span>
+        <select class="filter-select">
+          <option>All</option>
+          <option>FAIL</option>
+          <option>PASS</option>
+          <option>REVIEW</option>
+        </select>
+      </div>
+      <div class="filter-row">
+        <span class="filter-label">Defect</span>
+        <input class="filter-input" placeholder="Type...">
+      </div>
+    </div>
+
+    <div class="sidebar-label" style="padding:10px 12px 4px">Run History &nbsp;<span style="color:var(--text-secondary);font-family:'JetBrains Mono',monospace;font-size:10px">9</span></div>
+
+    <div class="history-list">
+
+      <!-- ACTIVE SELECTED -->
+      <div class="history-item active fail" onclick="selectRun(this,'RUN-A3F2E091','MB-GAMMA-4L','3 defects','FAIL','00:04')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-A3F2</span>
+          <span class="hi-badge badge-fail">FAIL</span>
+        </div>
+        <div class="hi-model">MB-GAMMA-4L</div>
+        <div class="hi-meta"><span>14:18</span><span class="hi-defect-count">3 defects</span></div>
+      </div>
+
+      <div class="history-item fail" onclick="selectRun(this,'RUN-7C1D4421','MB-ALPHA-2S','2 defects','FAIL','00:11')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-7C1D</span>
+          <span class="hi-badge badge-fail">FAIL</span>
+        </div>
+        <div class="hi-model">MB-ALPHA-2S</div>
+        <div class="hi-meta"><span>14:11</span><span class="hi-defect-count">2 defects</span></div>
+      </div>
+
+      <div class="history-item fail" onclick="selectRun(this,'RUN-B8E5C310','SSD-CTRL-V3','1 defect','FAIL','00:22')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-B8E5</span>
+          <span class="hi-badge badge-fail">FAIL</span>
+        </div>
+        <div class="hi-model">SSD-CTRL-V3</div>
+        <div class="hi-meta"><span>14:00</span><span class="hi-defect-count">1 defect</span></div>
+      </div>
+
+      <div class="history-item" onclick="selectRun(this,'RUN-22FA9B80','MB-GAMMA-4L','0 defects','PASS','00:31')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-22FA</span>
+          <span class="hi-badge badge-pass">PASS</span>
+        </div>
+        <div class="hi-model">MB-GAMMA-4L</div>
+        <div class="hi-meta"><span>13:51</span><span style="color:var(--accent-green);font-size:10px">0 defects</span></div>
+      </div>
+
+      <div class="history-item" onclick="selectRun(this,'RUN-D441F032','MB-ALPHA-2S','0 defects','PASS','00:39')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-D441</span>
+          <span class="hi-badge badge-pass">PASS</span>
+        </div>
+        <div class="hi-model">MB-ALPHA-2S</div>
+        <div class="hi-meta"><span>13:43</span><span style="color:var(--accent-green);font-size:10px">0 defects</span></div>
+      </div>
+
+      <div class="history-item" onclick="selectRun(this,'RUN-876CE092','SSD-CTRL-V3','—','SETUP','00:51')">
+        <div class="hi-top">
+          <span class="hi-id">RUN-876C</span>
+          <span class="hi-badge badge-setup">SETUP</span>
+        </div>
+        <div class="hi-model">SSD-CTRL-V3</div>
+        <div class="hi-meta"><span>13:31</span><span style="color:var(--text-dim);font-size:10px">in progress</span></div>
+      </div>
+
+      <div class="history-item">
+        <div class="hi-top">
+          <span class="hi-id">RUN-4F90</span>
+          <span class="hi-badge badge-pass">PASS</span>
+        </div>
+        <div class="hi-model">MB-GAMMA-4L</div>
+        <div class="hi-meta"><span>13:20</span><span style="color:var(--accent-green);font-size:10px">0 defects</span></div>
+      </div>
+
+      <div class="history-item">
+        <div class="hi-top">
+          <span class="hi-id">RUN-9A12</span>
+          <span class="hi-badge badge-pass">PASS</span>
+        </div>
+        <div class="hi-model">MB-ALPHA-2S</div>
+        <div class="hi-meta"><span>13:08</span><span style="color:var(--accent-green);font-size:10px">0 defects</span></div>
+      </div>
+
+      <div class="history-item">
+        <div class="hi-top">
+          <span class="hi-id">RUN-C033</span>
+          <span class="hi-badge badge-pass">PASS</span>
+        </div>
+        <div class="hi-model">SSD-CTRL-V3</div>
+        <div class="hi-meta"><span>12:55</span><span style="color:var(--accent-green);font-size:10px">0 defects</span></div>
+      </div>
+    </div>
+
+    <!-- Bottom: new run btn -->
+    <div style="padding:10px 12px; border-top: 1px solid var(--border); flex-shrink:0;">
+      <button class="action-btn btn-rework" style="width:100%;height:32px;border-radius:2px;">+ NEW RUN</button>
+    </div>
+  </div>
+
+  <!-- ─── CENTER PANEL ─── -->
+  <div class="center">
+
+    <!-- TABS -->
+    <div class="view-tabs">
+      <div class="vtab vt-active">&#9673; Live Scan</div>
+      <div class="vtab">&#9674; 3D View</div>
+      <div class="vtab">&#9632; Component Map</div>
+      <div class="vtab">Defects <span class="vtab-count">3</span></div>
+      <div class="vtab">SPC / Trends</div>
+    </div>
+
+    <!-- PCB TOOLBAR -->
+    <div class="pcb-toolbar">
+      <div class="toolbar-group">
+        <button class="tb-btn active">&#9859; 2D+3D</button>
+        <button class="tb-btn">&#9633; TOP</button>
+        <button class="tb-btn">&#8853; ANGLE</button>
+      </div>
+      <div class="toolbar-group">
+        <button class="tb-btn">&#8853; ZOOM IN</button>
+        <button class="tb-btn">&#8854; ZOOM OUT</button>
+        <button class="tb-btn">&#8633; FIT</button>
+      </div>
+      <div class="toolbar-group">
+        <button class="tb-btn">&#9676; FIDUCIAL</button>
+        <button class="tb-btn">&#9672; BARCODE</button>
+      </div>
+      <button class="tb-btn danger">&#9744; UPLOAD SCAN</button>
+      <div class="pcb-info-strip">
+        <span class="pis-item">RUN <span>A3F2E091</span></span>
+        <span class="pis-item">MODEL <span>MB-GAMMA-4L</span></span>
+        <span class="pis-item">SCAN <span>14:18:33</span></span>
+        <span class="pis-item">RES <span>10μm</span></span>
+      </div>
+    </div>
+
+    <!-- PCB IMAGE PANEL -->
+    <div class="pcb-panel" id="pcb-panel">
+      <div class="pcb-canvas-wrap">
+
+        <!-- Simulated PCB board -->
+        <div class="pcb-board" id="pcb-board">
+
+          <!-- crosshairs -->
+          <div class="pcb-crosshair-h" style="top:50%"></div>
+          <div class="pcb-crosshair-v" style="left:50%"></div>
+
+          <!-- PCB components (decorative layout) -->
+          <div class="pcb-component" style="left:20px;top:20px;width:80px;height:40px;font-size:7px;">U1 — MCU</div>
+          <div class="pcb-component" style="left:120px;top:20px;width:60px;height:30px;">DDR4</div>
+          <div class="pcb-component" style="left:200px;top:20px;width:40px;height:24px;">CLK</div>
+          <div class="pcb-component" style="left:260px;top:15px;width:80px;height:50px;">PCIE x4</div>
+          <div class="pcb-component" style="left:360px;top:20px;width:60px;height:30px;">VRM</div>
+          <div class="pcb-component" style="left:440px;top:20px;width:100px;height:60px;">ETH PHY</div>
+          <div class="pcb-component" style="left:560px;top:20px;width:60px;height:30px;">USB HUB</div>
+
+          <div class="pcb-component" style="left:20px;top:100px;width:120px;height:60px;">CPU Socket</div>
+          <div class="pcb-component" style="left:160px;top:100px;width:50px;height:40px;">PWR</div>
+          <div class="pcb-component" style="left:230px;top:90px;width:70px;height:50px;">FPGA</div>
+          <div class="pcb-component" style="left:320px;top:90px;width:90px;height:60px;">SATA Ctrl</div>
+          <div class="pcb-component" style="left:430px;top:100px;width:50px;height:40px;">LDO</div>
+          <div class="pcb-component" style="left:500px;top:90px;width:80px;height:60px;">NAND Flash</div>
+          <div class="pcb-component" style="left:600px;top:100px;width:40px;height:40px;">OSC</div>
+
+          <!-- tiny resistors/caps row -->
+          <div style="position:absolute;top:180px;left:20px;right:20px;height:20px;display:flex;gap:3px;">
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">C</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">C</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">C</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">C</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">C</div>
+            <div class="pcb-component" style="position:relative;width:18px;height:12px;font-size:6px;top:4px">R</div>
+          </div>
+
+          <div class="pcb-component" style="left:20px;top:220px;width:100px;height:80px;">DDR5 Slot A</div>
+          <div class="pcb-component" style="left:140px;top:220px;width:100px;height:80px;">DDR5 Slot B</div>
+          <div class="pcb-component" style="left:260px;top:220px;width:60px;height:50px;">M.2 NVMe</div>
+          <div class="pcb-component" style="left:340px;top:230px;width:80px;height:40px;">Audio</div>
+          <div class="pcb-component" style="left:440px;top:220px;width:60px;height:60px;">HDMI Tx</div>
+          <div class="pcb-component" style="left:520px;top:220px;width:60px;height:60px;">DP Tx</div>
+          <div class="pcb-component" style="left:600px;top:220px;width:50px;height:50px;">RTC</div>
+
+          <div class="pcb-component" style="left:20px;top:340px;width:200px;height:30px;">PCIe x16 Slot</div>
+          <div class="pcb-component" style="left:240px;top:340px;width:160px;height:30px;">PCIe x4 Slot</div>
+          <div class="pcb-component" style="left:420px;top:340px;width:100px;height:30px;">USB 3.2 Hub</div>
+          <div class="pcb-component" style="left:540px;top:340px;width:80px;height:30px;">BIOS ROM</div>
+
+          <div class="pcb-component" style="left:20px;top:400px;width:60px;height:30px;">24-Pin</div>
+          <div class="pcb-component" style="left:100px;top:400px;width:50px;height:30px;">8-Pin</div>
+          <div class="pcb-component" style="left:170px;top:400px;width:50px;height:30px;">8-Pin</div>
+          <div class="pcb-component" style="left:240px;top:410px;width:40px;height:20px;">FAN</div>
+          <div class="pcb-component" style="left:300px;top:410px;width:40px;height:20px;">FAN</div>
+          <div class="pcb-component" style="left:360px;top:410px;width:40px;height:20px;">FAN</div>
+
+          <!-- ─── DEFECT MARKERS ─── -->
+          <!-- Defect 1: Active/selected - Solder Bridge on U12 -->
+          <div class="defect-marker active-defect" id="dm1"
+               style="left:310px;top:88px;width:50px;height:62px"
+               onclick="selectDefect(0)">
+            <div class="defect-label active-label" style="font-size:9px;">D1 · BRIDGE</div>
+          </div>
+
+          <!-- Defect 2: Fail - Missing component -->
+          <div class="defect-marker fail" id="dm2"
+               style="left:432px;top:218px;width:60px;height:62px"
+               onclick="selectDefect(1)">
+            <div class="defect-label" style="font-size:9px;">D2 · MISSING</div>
+          </div>
+
+          <!-- Defect 3: Warning - Lifted lead -->
+          <div class="defect-marker warn" id="dm3"
+               style="left:20px;top:338px;width:200px;height:32px"
+               onclick="selectDefect(2)">
+            <div class="defect-label warn-label" style="font-size:9px;top:-18px">D3 · LIFTED LEAD</div>
+          </div>
+
+          <!-- Overlay labels -->
+          <div class="overlay-badge overlay-run-id">RUN-A3F2E091 · MB-GAMMA-4L</div>
+          <div class="overlay-badge overlay-fail-count">3 FAIL</div>
+        </div>
+
+      </div>
+    </div><!-- end pcb-panel -->
+
+    <!-- ─── DEFECT STRIP ─── -->
+    <div class="defect-strip">
+      <div class="ds-header">
+        <span class="ds-title">Defect Results</span>
+        <span class="ds-count">3</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-dim);font-family:'Barlow Condensed',sans-serif;letter-spacing:.06em">
+          PASS RATE&nbsp;
+          <span style="color:var(--accent-amber);font-weight:600">66.7%</span>
+          &nbsp;this shift
+        </span>
+      </div>
+      <div class="ds-body">
+        <div class="defect-thumb-list">
+
+          <div class="defect-thumb dt-active" onclick="selectDefect(0)">
+            <div class="dt-img">
+              <div class="dt-img-inner" style="background:#1a3d2a;border:1px solid #2a5035;"></div>
+              <div class="dt-fail-box" style="width:35%;height:45%;left:32%;top:25%;"></div>
+            </div>
+            <div class="dt-meta">
+              <span class="dt-ref">U12 · FPGA</span>
+              <span class="dt-type">Solder Bridge</span>
+              <span class="dt-conf">Confidence: 98.2%</span>
+            </div>
+          </div>
+
+          <div class="defect-thumb" onclick="selectDefect(1)">
+            <div class="dt-img">
+              <div class="dt-img-inner" style="background:#0d1f15;border:1px solid #1a3525;opacity:0.5;"></div>
+              <div class="dt-fail-box" style="width:60%;height:60%;left:20%;top:20%;border-style:dashed;"></div>
+            </div>
+            <div class="dt-meta">
+              <span class="dt-ref">C204 · CAP</span>
+              <span class="dt-type">Missing Part</span>
+              <span class="dt-conf">Confidence: 99.7%</span>
+            </div>
+          </div>
+
+          <div class="defect-thumb" onclick="selectDefect(2)" style="border-top:2px solid transparent">
+            <div class="dt-img" style="border-color:rgba(255,181,32,0.3)">
+              <div class="dt-img-inner" style="background:#1a3d2a;border:1px solid #2a5035;width:80%;height:30%;"></div>
+              <div class="dt-fail-box" style="width:25%;height:80%;left:60%;top:10%;border-color:var(--accent-amber);background:rgba(255,181,32,0.1)"></div>
+            </div>
+            <div class="dt-meta">
+              <span class="dt-ref">J7 · CONN</span>
+              <span class="dt-type" style="color:var(--accent-amber)">Lifted Lead</span>
+              <span class="dt-conf">Confidence: 87.1%</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- mini SPC chart area -->
+        <div style="width:200px;flex-shrink:0;border-left:1px solid var(--border);padding:8px 10px;">
+          <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Defect Rate · Last 10 Runs</div>
+          <div class="spc-row">
+            <div class="spc-bar" style="height:8px"></div>
+            <div class="spc-bar" style="height:5px"></div>
+            <div class="spc-bar" style="height:12px"></div>
+            <div class="spc-bar" style="height:3px"></div>
+            <div class="spc-bar" style="height:0px"></div>
+            <div class="spc-bar" style="height:0px"></div>
+            <div class="spc-bar" style="height:18px"></div>
+            <div class="spc-bar over-limit" style="height:25px"><div class="spc-limit-line"></div></div>
+            <div class="spc-bar" style="height:0px"></div>
+            <div class="spc-bar over-limit" style="height:28px"></div>
+          </div>
+          <div class="spc-label"><span>Oldest</span><span>Now</span></div>
+          <div style="margin-top:6px;font-size:9px;color:var(--text-dim);">UCL: <span style="color:var(--accent-amber)">2 / run</span> &nbsp;|&nbsp; Avg: <span style="color:var(--accent-blue)">0.8</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end center -->
+
+  <!-- ─── RIGHT PANEL ─── -->
+  <div class="right-panel">
+
+    <!-- Run Summary -->
+    <div class="rp-section">
+      <div class="rp-title">Run Summary</div>
+      <div class="run-summary-grid">
+        <div class="rs-card">
+          <div class="rs-label">Run</div>
+          <div class="rs-value active">A3F2E091</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Status</div>
+          <div class="rs-value fail">FAIL</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Scan</div>
+          <div class="rs-value ok">LOADED</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Model</div>
+          <div class="rs-value active" style="font-size:10px">MB-GAMMA-4L</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Fiducials</div>
+          <div class="rs-value ok">LOCKED ✓</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Barcode</div>
+          <div class="rs-value ok">SN-2024-91B</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Defects</div>
+          <div class="rs-value fail" style="font-size:20px">3</div>
+        </div>
+        <div class="rs-card">
+          <div class="rs-label">Cycle Time</div>
+          <div class="rs-value neutral">4m 12s</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Defect Detail -->
+    <div class="defect-detail-panel" id="defect-detail-panel">
+      <div class="rp-title">Selected Defect — D1</div>
+
+      <!-- Zoomed image -->
+      <div class="dd-image-area">
+        <div class="dd-crosshair-h" style="top:50%"></div>
+        <div class="dd-crosshair-v" style="left:50%"></div>
+        <div class="dd-component-sim">
+          <div class="dd-defect-box"></div>
+        </div>
+        <div class="dd-zoom-label">8× · TOP VIEW</div>
+      </div>
+
+      <table class="dd-table">
+        <tr><td>Reference</td><td>U12 — FPGA</td></tr>
+        <tr><td>Defect type</td><td style="color:var(--accent-red)">Solder Bridge</td></tr>
+        <tr><td>Confidence</td><td>98.2%</td></tr>
+        <tr><td>Location</td><td>X: 312.4 / Y: 91.8 mm</td></tr>
+        <tr><td>3D Height</td><td style="color:var(--accent-red)">0.92mm ↑ UCL</td></tr>
+        <tr><td>Solder Vol.</td><td style="color:var(--accent-red)">+38% excess</td></tr>
+        <tr><td>Pin count</td><td>Pins 14–15 bridged</td></tr>
+        <tr><td>Camera</td><td>Left angle + Top</td></tr>
+      </table>
+
+      <!-- 3D height viz -->
+      <div class="height-viz">
+        <div class="height-viz-label">3D Solder Profile · Pin Row</div>
+        <div class="height-bars">
+          <div class="hb hb-ok" style="height:20px"></div>
+          <div class="hb hb-ok" style="height:18px"></div>
+          <div class="hb hb-ok" style="height:22px"></div>
+          <div class="hb hb-fail" style="height:38px"></div>
+          <div class="hb hb-fail" style="height:40px"></div>
+          <div class="hb hb-ok" style="height:21px"></div>
+          <div class="hb hb-ok" style="height:19px"></div>
+          <div class="hb hb-ok" style="height:20px"></div>
+          <div class="hb hb-warn" style="height:28px"></div>
+          <div class="hb hb-ok" style="height:18px"></div>
+          <div class="hb hb-ok" style="height:22px"></div>
+          <div class="hb hb-ok" style="height:20px"></div>
+        </div>
+        <div class="height-legend">
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-green-dim)"></div>Normal</div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-amber-dim)"></div>Warn</div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-red)"></div>Fail</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-area">
+      <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:2px">Disposition — D1/3</div>
+      <div class="action-row">
+        <button class="action-btn btn-false-call">FALSE CALL</button>
+        <button class="action-btn btn-confirm">CONFIRM DEFECT</button>
+      </div>
+      <div class="action-row">
+        <button class="action-btn btn-rework">&#9873; SEND TO REWORK</button>
+        <button class="action-btn btn-reject">&#9746; REJECT BOARD</button>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);text-align:center;margin-top:2px;">
+        Defects 2, 3 pending disposition
+      </div>
+    </div>
+
+  </div><!-- end right panel -->
+
+</div><!-- end main -->
+
+<script>
+  // Live clock
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = h+':'+m+':'+s;
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // Defect selection
+  const defects = [
+    { id:'D1', ref:'U12 — FPGA', type:'Solder Bridge', conf:'98.2%', x:'312.4', y:'91.8', h:'0.92mm ↑ UCL', vol:'+38% excess', pins:'14–15 bridged', cam:'Left angle + Top', color:'var(--accent-red)' },
+    { id:'D2', ref:'C204 — CAP', type:'Missing Part', conf:'99.7%', x:'441.2', y:'224.5', h:'N/A', vol:'0.0% — absent', pins:'N/A', cam:'Top + Right angle', color:'var(--accent-red)' },
+    { id:'D3', ref:'J7 — CONN', type:'Lifted Lead', conf:'87.1%', x:'88.0', y:'342.3', h:'0.45mm lateral', vol:'Normal', pins:'Pin 3 lifted', cam:'Left angle', color:'var(--accent-amber)' },
+  ];
+
+  function selectDefect(idx) {
+    const d = defects[idx];
+    // Update detail panel
+    document.getElementById('defect-detail-panel').innerHTML = `
+      <div class="rp-title">Selected Defect — ${d.id}</div>
+      <div class="dd-image-area">
+        <div class="dd-crosshair-h" style="top:50%"></div>
+        <div class="dd-crosshair-v" style="left:50%"></div>
+        <div class="dd-component-sim">
+          <div class="dd-defect-box" style="border-color:${d.color};background:rgba(255,0,0,0.1)"></div>
+        </div>
+        <div class="dd-zoom-label">8× · TOP VIEW</div>
+      </div>
+      <table class="dd-table">
+        <tr><td>Reference</td><td>${d.ref}</td></tr>
+        <tr><td>Defect type</td><td style="color:${d.color}">${d.type}</td></tr>
+        <tr><td>Confidence</td><td>${d.conf}</td></tr>
+        <tr><td>Location</td><td>X: ${d.x} / Y: ${d.y} mm</td></tr>
+        <tr><td>3D Height</td><td style="color:${d.color}">${d.h}</td></tr>
+        <tr><td>Solder Vol.</td><td>${d.vol}</td></tr>
+        <tr><td>Pin data</td><td>${d.pins}</td></tr>
+        <tr><td>Camera</td><td>${d.cam}</td></tr>
+      </table>
+      <div class="height-viz">
+        <div class="height-viz-label">3D Solder Profile · Pin Row</div>
+        <div class="height-bars">
+          ${[20,18,22,38,40,21,19,20,28,18,22,20].map((h,i)=>`<div class="hb ${i===3||i===4?'hb-fail':i===8?'hb-warn':'hb-ok'}" style="height:${h}px"></div>`).join('')}
+        </div>
+        <div class="height-legend">
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-green-dim)"></div>Normal</div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-amber-dim)"></div>Warn</div>
+          <div class="hl-item"><div class="hl-dot" style="background:var(--accent-red)"></div>Fail</div>
+        </div>
+      </div>
+    `;
+    // Highlight active marker
+    ['dm1','dm2','dm3'].forEach((id,i)=>{
+      const el = document.getElementById(id);
+      el.classList.remove('active-defect');
+      el.querySelectorAll('.defect-label').forEach(l=>{
+        l.classList.remove('active-label');
+        l.style.background = i===2 ? 'var(--accent-amber)' : 'var(--accent-red)';
+        l.style.color = i===2 ? '#1a0f00' : 'white';
+      });
+    });
+    const activeEl = document.getElementById('dm'+(idx+1));
+    activeEl.classList.add('active-defect');
+    activeEl.querySelectorAll('.defect-label').forEach(l=>{
+      l.classList.add('active-label');
+      l.style.background = 'var(--accent-cyan)';
+      l.style.color = '#001820';
+    });
+    // Highlight thumb
+    document.querySelectorAll('.defect-thumb').forEach((t,i)=>{
+      t.classList.toggle('dt-active', i===idx);
+    });
+  }
+
+  // Run selection from history
+  function selectRun(el, runId, model, defects, status, ago) {
+    document.querySelectorAll('.history-item').forEach(i=>i.classList.remove('active'));
+    el.classList.add('active');
+  }
+</script>
+</body>
+</html>

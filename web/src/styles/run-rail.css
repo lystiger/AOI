@@ -25,26 +25,56 @@
   gap: 4px;
 }
 
-.rail-heading h2 {
-  font-size: 1.15rem;
-}
-
-.rail-subtitle {
-  margin: 0;
-  max-width: 28ch;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.rail-header-actions {
+.rail-heading-top {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.rail-reset-button {
-  min-width: 72px;
+.rail-heading h2 {
+  font-size: 1.15rem;
+}
+
+.rail-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.42;
+  cursor: help;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.rail-help-button:hover {
+  opacity: 0.72;
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.rail-action-button {
+  min-width: 104px;
+  height: 38px;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+.rail-action-button-primary {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--bg));
+  color: var(--accent);
+}
+
+.rail-action-button-primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 86%, var(--bg));
 }
 
 .rail-filters {
@@ -57,8 +87,25 @@
 .rail-filter-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+}
+
+.rail-filter-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.rail-filter-reset {
+  min-width: 72px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  border-radius: 999px;
+}
+
+.rail-create-button {
+  width: 100%;
 }
 
 .rail-list {
@@ -182,7 +229,9 @@
     flex-direction: column;
   }
 
-  .rail-header-actions {
+  .rail-filter-header {
     width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

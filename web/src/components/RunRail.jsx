@@ -19,29 +19,46 @@ export default function RunRail({ workspace }) {
     <aside className="panel run-rail">
       <div className="rail-section rail-header">
         <div className="rail-heading">
-          <p className="eyebrow">Run browser</p>
+          <div className="rail-heading-top">
+            <p className="eyebrow">Run browser</p>
+            <button
+              type="button"
+              className="rail-help-button"
+              title="Browse runs, select active history, and filter the queue."
+              aria-label="About run browser"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+                <path d="M12 17h.01" />
+                <path d="M10 21.2a9 9 0 1 1 4 0l-4 1.3z" />
+              </svg>
+            </button>
+          </div>
           <h2>History</h2>
-          <p className="rail-subtitle">Review recent inspection runs, queue unfinished setups, and narrow the feed fast.</p>
-        </div>
-        <div className="rail-header-actions">
-          <button
-            type="button"
-            className="primary-button compact"
-            onClick={handleCreateRun}
-            disabled={isCreatingRun}
-          >
-            {isCreatingRun ? '...' : 'New Run'}
-          </button>
-          <button type="button" className="ghost-button rail-reset-button" onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}>
-            Reset
-          </button>
         </div>
       </div>
       <div className="rail-section rail-filters">
         <div className="rail-filter-header">
-          <p className="eyebrow">Filters</p>
-          <span className="section-note">Live query controls</span>
+          <div className="rail-filter-heading">
+            <p className="eyebrow">Filters</p>
+            <span className="section-note">Live query controls</span>
+          </div>
+          <button
+            type="button"
+            className="ghost-button rail-filter-reset"
+            onClick={() => setRunFilters(RUN_FILTER_DEFAULTS)}
+          >
+            Reset
+          </button>
         </div>
+        <button
+          type="button"
+          className="ghost-button rail-action-button rail-action-button-primary rail-create-button"
+          onClick={handleCreateRun}
+          disabled={isCreatingRun}
+        >
+          {isCreatingRun ? 'Creating...' : 'New Run'}
+        </button>
         <FilterField
           compact
           label="Limit"
