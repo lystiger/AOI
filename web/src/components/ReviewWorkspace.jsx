@@ -309,12 +309,15 @@ export default function ReviewWorkspace({ workspace }) {
                 {selectedDefect ? (
                   <div className="floating-inspector" style={{ '--ghost-opacity': hudGhostOpacity }}>
                     <div className="inspector-header">
-                      <p className="eyebrow">Defect Inspector</p>
+                      <div className="inspector-heading">
+                        <p className="eyebrow">Defect Inspector</p>
+                        <strong>{selectedDefect.component_id}</strong>
+                      </div>
                       <StatusChip value={selectedDefect.inspection_result} />
                     </div>
                     <div className="inspector-grid">
                       <div className="inspector-item">
-                        <span className="eyebrow">Component</span>
+                        <span className="eyebrow">Reference</span>
                         <strong>{selectedDefect.component_id}</strong>
                       </div>
                       <div className="inspector-item">
@@ -330,7 +333,7 @@ export default function ReviewWorkspace({ workspace }) {
                         <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
                       </div>
                       {selectedDefect.operator_review && selectedDefect.operator_review !== 'NONE' ? (
-                        <div className="inspector-item" style={{ gridColumn: 'span 2', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid var(--line)' }}>
+                        <div className="inspector-item inspector-item-wide">
                           <span className="eyebrow">Human Review</span>
                           <StatusChip value={selectedDefect.operator_review} />
                         </div>

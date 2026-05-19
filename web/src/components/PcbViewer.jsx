@@ -178,26 +178,39 @@ export default function PcbViewer({
     <section className="viewer-panel">
       <div className="viewer-toolbar">
         <div className="viewer-toolbar-group">
-          <button type="button" className="ghost-button" onClick={resetViewer}>
-            Reset View
-          </button>
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => selectedDefect && focusDefect(selectedDefect.id)}
-            disabled={!selectedDefect}
-          >
-            Center Defect
-          </button>
+          <div className="viewer-toolbar-block">
+            <p className="eyebrow">Review Canvas</p>
+            <div className="viewer-toolbar-actions">
+              <button type="button" className="ghost-button viewer-toolbar-button" onClick={resetViewer}>
+                Reset View
+              </button>
+              <button
+                type="button"
+                className="ghost-button viewer-toolbar-button"
+                onClick={() => selectedDefect && focusDefect(selectedDefect.id)}
+                disabled={!selectedDefect}
+              >
+                Center Defect
+              </button>
+            </div>
+          </div>
         </div>
         <div className="viewer-toolbar-group">
-          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale * 0.8)}>
-            -
-          </button>
-          <div className="zoom-readout">{Math.round(viewerScale * 100)}%</div>
-          <button type="button" className="ghost-button" onClick={() => setScale(viewerScale * 1.25)}>
-            +
-          </button>
+          <div className="viewer-toolbar-block viewer-toolbar-block-end">
+            <div className="viewer-toolbar-meta">
+              <span className="viewer-toolbar-stat">{defects.length} overlays</span>
+              {isKbNavEnabled ? <span className="viewer-toolbar-stat">Arrows to pan</span> : null}
+            </div>
+            <div className="viewer-zoom-controls">
+              <button type="button" className="ghost-button viewer-zoom-button" onClick={() => setScale(viewerScale * 0.8)}>
+                -
+              </button>
+              <div className="zoom-readout">{Math.round(viewerScale * 100)}%</div>
+              <button type="button" className="ghost-button viewer-zoom-button" onClick={() => setScale(viewerScale * 1.25)}>
+                +
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
