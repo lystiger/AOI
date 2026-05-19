@@ -69,18 +69,23 @@ export default function ReviewWorkspace({ workspace }) {
   return (
     <section className="panel review-panel">
       <div className="review-topbar">
-        <div className="review-runline">
-          <div className="review-runline-main">
-            <strong>{selectedRun?.pcb_id || 'No run selected'}</strong>
+        <div className="review-context">
+          <div className="review-context-head">
+            <p className="eyebrow">Active Review Surface</p>
             {selectedRun ? <StatusChip value={selectedRun.status} /> : null}
-            <span className="compact-meta">{selectedRun ? formatTimestamp(selectedRun.timestamp) : '-'}</span>
-            <span className="compact-meta">{failCount} fail defects</span>
+          </div>
+          <div className="review-runline">
+            <div className="review-runline-main">
+              <strong>{selectedRun?.pcb_id || 'No run selected'}</strong>
+              <span className="compact-meta">{selectedRun ? formatTimestamp(selectedRun.timestamp) : '-'}</span>
+              <span className="compact-meta">{failCount} fail defects</span>
+            </div>
             {detailLoading ? <span className="loading-indicator">Updating...</span> : null}
           </div>
         </div>
         <div className="review-controls">
           {!showSetupMode ? (
-            <>
+            <div className="review-selectors">
               <button
                 type="button"
                 className="ghost-button setup-edit-button"
@@ -89,53 +94,58 @@ export default function ReviewWorkspace({ workspace }) {
               >
                 Edit Setup
               </button>
-              <select
-                className="image-selector"
-                value={effectiveSelectedImageId}
-                onChange={(event) => setSelectedImageId(event.target.value)}
-                disabled={!runImages.length}
-              >
-                {runImages.map((image) => (
-                  <option key={image.id} value={image.id}>
-                    {image.image_role
-                      ? image.image_role
-                          .replaceAll('_', ' ')
-                          .split(' ')
-                          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                          .join(' ')
-                      : image.id}
-                  </option>
-                ))}
-              </select>
-            </>
+              <label className="review-image-select field compact">
+                <span>Surface</span>
+                <select
+                  className="image-selector"
+                  value={effectiveSelectedImageId}
+                  onChange={(event) => setSelectedImageId(event.target.value)}
+                  disabled={!runImages.length}
+                >
+                  {runImages.map((image) => (
+                    <option key={image.id} value={image.id}>
+                      {image.image_role
+                        ? image.image_role
+                            .replaceAll('_', ' ')
+                            .split(' ')
+                            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                            .join(' ')
+                        : image.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           ) : null}
-          <button
-            type="button"
-            className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
-            onClick={openImagePicker}
-            disabled={isUploading || !selectedRunId}
-          >
-            {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
-          </button>
-          <button
-            type="button"
-            className="ghost-button delete-button"
-            onClick={handleDeleteRun}
-            disabled={!selectedRunId || isDeletingRun}
-          >
-            {isDeletingRun ? 'Deleting Run...' : 'Delete Run'}
-          </button>
+          <div className="review-actions">
+            <button
+              type="button"
+              className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
+              onClick={openImagePicker}
+              disabled={isUploading || !selectedRunId}
+            >
+              {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
+            </button>
+            <button
+              type="button"
+              className="ghost-button delete-button"
+              onClick={handleDeleteRun}
+              disabled={!selectedRunId || isDeletingRun}
+            >
+              {isDeletingRun ? 'Deleting Run...' : 'Delete Run'}
+            </button>
+            {!showSetupMode ? (
+              <div className="review-stepper" role="group" aria-label="Step defects">
+                <button type="button" className="ghost-button review-nav-button" onClick={() => stepDefect(-1)}>
+                  &lt;
+                </button>
+                <button type="button" className="ghost-button review-nav-button" onClick={() => stepDefect(1)}>
+                  &gt;
+                </button>
+              </div>
+            ) : null}
+          </div>
           {!selectedRunId ? <span className="upload-helper">Select a run from History to enable upload.</span> : null}
-          {!showSetupMode ? (
-            <>
-              <button type="button" className="ghost-button" onClick={() => stepDefect(-1)}>
-                &lt;
-              </button>
-              <button type="button" className="ghost-button" onClick={() => stepDefect(1)}>
-                &gt;
-              </button>
-            </>
-          ) : null}
         </div>
       </div>
 
@@ -186,7 +196,10 @@ export default function ReviewWorkspace({ workspace }) {
             {isFiltersOpen ? (
               <section className="review-card">
                 <div className="review-card-header">
-                  <p className="eyebrow">Defect filters</p>
+                  <div className="review-card-heading">
+                    <p className="eyebrow">Defect filters</p>
+                    <span className="section-note">Slice the active defect queue</span>
+                  </div>
                 </div>
                 <div className="sidebar-filters">
                   <FilterField
@@ -231,8 +244,11 @@ export default function ReviewWorkspace({ workspace }) {
 
             <section className="review-card defect-list-card">
               <div className="review-card-header">
-                <p className="eyebrow">Defects</p>
-                <span className="section-note">{visibleDefects.length}</span>
+                <div className="review-card-heading">
+                  <p className="eyebrow">Defects</p>
+                  <span className="section-note">Live issue stack</span>
+                </div>
+                <span className="section-note review-count-badge">{visibleDefects.length}</span>
               </div>
               <div className="defect-list">
                 {!selectedRunId ? (
