@@ -35,9 +35,11 @@ web/dist/
 *.sqlite
 *.sqlite3
 run-assets/
+ml/data/
+ml/models/
+ml/notebooks/.ipynb_checkpoints/
 
 # IDE and OS files
 .DS_Store
 .idea/
 .vscode/
-
