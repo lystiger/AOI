@@ -128,16 +128,27 @@ Use the current frontend field names from the existing run detail payload. If th
 
 **Note: Lower implementation priority than §4, but should be featured prominently in any thesis demo or defense.**
 
-The canvas pan/zoom already works. Extend it with defect annotations.
+The canvas pan/zoom already works. Extend the existing overlay system instead of replacing it.
 
 | Item | Status |
 |---|---|
 | Bounding box drawn over PCB image at defect coordinates | `ENHANCE` |
-| Color-coded by severity: red = fail, yellow = warn, green = pass | `FRONTEND ONLY` |
-| Label chip above each box: `{component_id} · {defect_type}` | `FRONTEND ONLY` |
+| Default overlays use thin outline + subtle tint to avoid obscuring the PCB image | `FRONTEND ONLY` |
+| Overlay emphasis states: `default`, `hovered`, `selected` | `ENHANCE` |
+| Color system should map to **inspection severity / review state**, not per-defect-class rainbow colors | `FRONTEND ONLY` |
+| Label chip above selected or hovered box: `{component_id} · {defect_type}` | `FRONTEND ONLY` |
+| Confidence chip should be shown on selected overlay and optionally on hover, not on every box at once | `FRONTEND ONLY` |
 | Crosshair/reticle animation on "Center Defect" | `ENHANCE` |
 | Overlay count badge updates reactively | `ALREADY EXISTS` |
 | Overlays scale and translate correctly with zoom | `ALREADY EXISTS` |
+
+### Visual guidance
+
+- Preserve the current review-first behavior: the uploaded PCB image remains primary, overlays remain secondary
+- Avoid permanent label clutter on dense boards; full annotation should appear on `hovered` and `selected` states first
+- Prefer one semantic color system across the app; do not encode defect type, confidence band, and severity with competing colors at the same time
+- If confidence is shown on-canvas, treat it as a supporting chip rather than the primary visual signal
+- Use the `bbox` design reference as inspiration for selected-state styling, not as a literal always-on layout
 
 > Overlay coordinates are already normalized (0–1). Continue treating them as normalized viewport-relative values; if a future API introduces a bounding-box object, map it to `overlay_x`, `overlay_y`, `overlay_width`, and `overlay_height` at the boundary.
 
@@ -158,6 +169,18 @@ The canvas pan/zoom already works. Extend it with defect annotations.
 | Live update if run is in progress | `FRONTEND ONLY` |
 
 > No charting dependency is currently installed in `web/package.json`. Check existing deps first; if charts are still worth adding, prefer a small library and keep this section optional.
+
+---
+
+## Design Alignment Notes
+
+These notes align the document with the current project structure and the `bbox` design reference.
+
+- The current viewer already supports zoom, pan, selection, and overlay rendering; this document assumes incremental enhancement, not a viewer rewrite
+- The current defect payload uses overlay fields (`overlay_x`, `overlay_y`, `overlay_width`, `overlay_height`) rather than a nested `bbox` object
+- The current UI already has a defect list, run rail, top-bar event count, and confidence field rendering; proposed work should refine these surfaces instead of duplicating them
+- The `bbox` design reference is visually useful for selected and hovered overlays, but its always-visible labels and confidence chips should be treated as demo styling, not the default dense-board behavior
+- Any legend for defect classes or severity should be optional or collapsible so it does not compete with the defect list and run controls during normal review workflows
 
 ---
 
