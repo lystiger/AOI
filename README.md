@@ -1,63 +1,93 @@
-# AOI
+# AOI Review Workstation
 
-Initial scaffold for the AOI logging and monitoring pipeline.
+An Automatic Optical Inspection (AOI) workstation for PCB review, setup validation, and event logging. This repository combines a FastAPI backend, a React review interface, SQLite persistence, and an observability stack for inspecting runs from image upload through defect review.
 
-## Python Setup
+![Python](https://img.shields.io/badge/Python-3.11%2B-1f6feb?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square)
+![React](https://img.shields.io/badge/React-19-20232a?style=flat-square)
+![Vite](https://img.shields.io/badge/Vite-Frontend-646cff?style=flat-square)
+![SQLite](https://img.shields.io/badge/SQLite-Persistence-0f6ab4?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square)
 
-Create a local virtual environment and install dependencies:
+## Overview
+
+The current project state includes:
+
+- A FastAPI service for run creation, image upload, event ingestion, and run review APIs
+- A React-based AOI review workstation with run history, defect filters, image viewer controls, and settings
+- Setup-stage workflow support for model selection, fiducial detection, barcode handling, and review readiness
+- SQLite-backed storage for `inspection_runs`, `defect_logs`, and uploaded scan assets
+- JSONL event logging for downstream observability pipelines
+- A local Docker stack with Grafana, Loki, and Promtail
+
+## Current UI
+
+<p align="center">
+  <img src="docs/pics/currentv2.png" alt="AOI industrial review workspace" width="48%" />
+  <img src="docs/pics/layout/currentlayout.png" alt="AOI editorial light workspace" width="48%" />
+</p>
+
+<p align="center">
+  <em>Current workstation themes: industrial dark mode and editorial light mode.</em>
+</p>
+
+## Workflow Snapshot
+
+![AOI workflow overview](docs/pics/usecase.png)
+
+The operator-facing flow in the repo today is:
+
+1. Create a run
+2. Upload a PCB scan
+3. Configure setup requirements such as fiducials and barcode validation
+4. Review generated or ingested defects in the workstation
+5. Persist events and review history for traceability
+
+## Architecture
+
+### Backend
+
+- `src/aoi/api/`: FastAPI routes for runs, events, health, setup, and image access
+- `src/aoi/setup_service.py`: run setup state transitions and review-readiness logic
+- `src/aoi/vision_service.py`: fiducial detection, normalization, and barcode helpers
+- `src/aoi/database.py`: SQLite schema and persistence operations
+- `src/aoi/log_manager.py`: JSONL event logging
+
+### Frontend
+
+- `web/src/components/`: review workspace, run rail, PCB viewer, setup flow, and settings
+- `web/src/hooks/`: workspace state, run data fetching, and setup actions
+- `web/src/styles/`: layout, viewer, control, and theme styling
+
+### Supporting Stack
+
+- `docker-compose.yml`: local multi-service stack
+- `aoi-mock-sender`: synthetic event generator for development traffic
+- `Grafana + Loki + Promtail`: log aggregation and dashboards
+
+## Repository Layout
+
+```text
+src/aoi/               Python application
+web/                   React frontend
+tests/                 Backend test suite
+docs/                  Architecture notes, UI references, and screenshots
+ml/                    ML-related placeholders and requirements
+docker-compose.yml     Local full-stack environment
+```
+
+## Quick Start
+
+### 1. Backend
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt
-```
-
-This installs:
-
-- runtime dependencies from `requirements.txt`
-- test dependencies from `requirements-dev.txt`
-
-Run the test suite with:
-
-```bash
-pytest
-```
-
-## Current Scope
-
-This repository currently implements the first milestone from `docs/priority.md`:
-
-- structured inference event schema
-- JSONL log writer
-- FastAPI ingestion service for inference events
-- SQLite persistence for `inspection_runs` and `defect_logs`
-- setup-oriented run creation and pre-review workflow
-- mock-backed fiducial and barcode setup flow
-- dedicated Vite + React frontend in `web/`
-- optional mock event sender for development traffic
-- local file-backed logging flow behind the ingestion API
-- automated tests for schema, persistence, and FastAPI behavior
-
-## Project Layout
-
-```text
-src/aoi/
-  schema.py
-  log_manager.py
-  mock_inference.py
-  cli.py
-  api/
-web/
-  src/
-tests/
-```
-
-## Run Local API Service
-
-Use the local package path when running without installation:
-
-```bash
-PYTHONPATH=src python3 -m aoi.cli serve-http --host 127.0.0.1 --port 8000 --output logs/inference.jsonl
+PYTHONPATH=src python3 -m aoi.cli serve-http \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --output logs/inference.jsonl
 ```
 
 Health check:
@@ -66,7 +96,53 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
-Send one event:
+### 2. Frontend
+
+This project uses Node `22`.
+
+```bash
+export NVM_DIR="$HOME/.nvm"
+. "$NVM_DIR/nvm.sh"
+nvm use
+cd web
+npm install
+npm run dev
+```
+
+Frontend URL: `http://127.0.0.1:5173`
+
+### 3. Tests
+
+```bash
+pytest
+```
+
+## API Highlights
+
+### Runs
+
+- `POST /runs` creates a new inspection run
+- `GET /runs` lists runs with filters such as `status`, `pcb_id`, and `defect_type`
+- `GET /runs/{run_id}` returns one run with embedded defect data
+- `PATCH /runs/{run_id}` updates setup-related run fields
+- `DELETE /runs/{run_id}` removes a run and its stored scan assets
+
+### Images and Setup
+
+- `POST /runs/{run_id}/images` uploads the active PCB scan
+- `GET /runs/{run_id}/images/{image_id}` serves the stored scan image
+- `POST /runs/{run_id}/fiducials/detect` runs fiducial detection
+- `POST /runs/{run_id}/fiducials/confirm` confirms detected fiducials
+- `POST /runs/{run_id}/fiducials/manual` stores manually defined fiducials
+- `POST /runs/{run_id}/barcode/detect` and related setup routes support barcode validation
+
+### Events
+
+- `POST /events` ingests inference events
+- accepted payloads are written to `logs/inference.jsonl`
+- accepted batches are also persisted into SQLite for run and defect review
+
+Example event ingestion:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/events \
@@ -74,233 +150,44 @@ curl -X POST http://127.0.0.1:8000/events \
   -d '{"events":[{"pcb_id":"PCB-0001","component_id":"R101","inspection_result":"FAIL","defect_type":"MISALIGNMENT","confidence_score":0.88,"inference_latency_ms":31}]}'
 ```
 
-Send one event with explicit run image metadata and overlay coordinates:
-
-```bash
-curl -X POST http://127.0.0.1:8000/events \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "images": [
-      {
-        "image_path": "/runs/PCB-0001/images/top.png",
-        "image_role": "top_view",
-        "image_width": 1600,
-        "image_height": 900
-      }
-    ],
-    "events": [
-      {
-        "pcb_id": "PCB-0001",
-        "component_id": "R101",
-        "inspection_result": "FAIL",
-        "defect_type": "MISALIGNMENT",
-        "confidence_score": 0.88,
-        "inference_latency_ms": 31,
-        "run_image_index": 0,
-        "overlay_x": 0.33,
-        "overlay_y": 0.44,
-        "overlay_width": 0.07,
-        "overlay_height": 0.05,
-        "overlay_shape": "rect"
-      }
-    ]
-  }'
-```
-
-Accepted events are written as newline-delimited JSON to `logs/inference.jsonl`.
-Accepted event batches are also persisted into a SQLite database as one `inspection_run`
-plus related `defect_logs`.
-
-Read recent runs:
-
-```bash
-curl http://127.0.0.1:8000/runs?limit=5
-```
-
-Supported run filters:
-
-- `limit`
-- `pcb_id`
-- `status`
-- `model_version`
-- `defect_type`
-
-Read one run with embedded defect logs:
-
-```bash
-curl http://127.0.0.1:8000/runs/<run_id>
-```
-
-Supported embedded defect filters:
-
-- `component_id`
-- `defect_type`
-- `severity`
-- `inspection_result`
-
-Read defect logs for one run:
-
-```bash
-curl http://127.0.0.1:8000/runs/<run_id>/defects
-```
-
-Example filtered queries:
-
-```bash
-curl 'http://127.0.0.1:8000/runs?status=FAIL&defect_type=MISALIGNMENT&limit=10'
-curl 'http://127.0.0.1:8000/runs/<run_id>?component_id=U002'
-curl 'http://127.0.0.1:8000/runs/<run_id>/defects?inspection_result=FAIL&severity=major'
-```
-
-## Run Dedicated Frontend
-
-The repo also contains a separate React app in `web/`.
-
-This environment uses Node `22`.
-
-Load Node:
-
-```bash
-export NVM_DIR="$HOME/.nvm"
-. "$NVM_DIR/nvm.sh"
-nvm use
-```
-
-Install dependencies:
-
-```bash
-cd web
-npm install
-```
-
-Run the Vite dev server:
-
-```bash
-npm run dev
-```
-
-Frontend URL:
-
-```text
-http://127.0.0.1:5173
-```
-
-The Vite dev server proxies `/health`, `/runs`, and `/events` to the AOI backend on port `8000`.
-When the frontend runs inside Docker, the proxy target is injected with `VITE_PROXY_TARGET=http://aoi-app:8000`.
-
-## Run Mock Event Sender
-
-To continuously generate synthetic traffic against the HTTP service:
-
-```bash
-PYTHONPATH=src python3 -m aoi.cli send-mock-events --endpoint http://127.0.0.1:8000/events
-```
-
 ## Docker Stack
 
-The repository includes a local stack for:
-
-- `aoi-app`: exposes the HTTP ingestion API and writes validated events to JSONL
-- `aoi-app`: also persists accepted batches to `/var/lib/aoi/aoi.db`
-- `aoi-web`: runs the dedicated frontend from `web/`
-- `aoi-mock-sender`: continuously sends mock events to the API
-- `promtail`: scrapes JSONL logs from the shared volume
-- `loki`: stores and indexes logs
-- `grafana`: queries and visualizes Loki data
-
-### Start the stack
+Run the full local environment:
 
 ```bash
 docker compose up -d --build
 ```
 
-### Stop the stack
+Service URLs:
 
-```bash
-docker compose down
-```
-
-### Service URLs
-
-- AOI ingestion API: `http://localhost:8000`
-- AOI frontend: `http://localhost:5173`
+- API: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
 - Grafana: `http://localhost:3000`
 - Loki: `http://localhost:3100`
 
 Grafana default credentials:
 
-- username: `admin`
-- password: `admin`
+- Username: `admin`
+- Password: `admin`
 
-### Provisioned Dashboard
-
-Grafana provisions an `AOI Overview` dashboard automatically in the `AOI` folder.
-
-Direct URL:
-
-```text
-http://localhost:3000/d/aoi-overview/aoi-overview
-```
-
-The dashboard includes:
-
-- event count in the last 5 minutes
-- fail count in the last 5 minutes
-- boards seen in the last 15 minutes
-- average inference latency
-- inspection result rate over time
-- failure type breakdown
-- raw AOI event logs
-
-### Inspect logs
-
-To inspect container status:
+To stop the stack:
 
 ```bash
-docker compose ps
+docker compose down
 ```
 
-To inspect app logs:
+## Development Notes
 
-```bash
-docker compose logs aoi-app
-```
+- Python requirement: `3.11+`
+- Frontend runtime: Node `22`
+- Uploaded images are stored under the configured storage path, defaulting to `data/storage`
+- Local SQLite data defaults to `data/aoi.db`
+- Mock traffic can be generated with `PYTHONPATH=src python3 -m aoi.cli send-mock-events`
 
-To inspect the persisted SQLite database inside the app container:
+## Documentation
 
-```bash
-docker exec aoi-app python -c "import sqlite3; conn=sqlite3.connect('/var/lib/aoi/aoi.db'); print(conn.execute('select pcb_id, model_version, status from inspection_runs order by rowid desc limit 5').fetchall())"
-```
-
-To inspect mock sender logs:
-
-```bash
-docker compose logs aoi-mock-sender
-```
-
-To inspect Promtail logs:
-
-```bash
-docker compose logs promtail
-```
-
-## Run Tests
-
-Create a local virtual environment and install the Python dependencies:
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-```
-
-Run the full Python test suite:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m pytest -q
-```
-
-Run the setup-related backend verification used by the current checklist:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_database.py tests/test_fastapi_app.py
-```
+- [System architecture](docs/architecture.md)
+- [API contract](docs/api_spec.md)
+- [Database notes](docs/database.md)
+- [Testing notes](docs/testing.md)
+- [Troubleshooting manual](docs/troubleshooting_manual.md)
