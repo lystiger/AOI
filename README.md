@@ -23,17 +23,13 @@ The current project state includes:
 ## Current UI
 
 <p align="center">
-  <img src="docs/pics/currentv2.png" alt="AOI industrial review workspace" width="48%" />
-  <img src="docs/pics/layout/currentlayout.png" alt="AOI editorial light workspace" width="48%" />
+  <img src="assets/readme/review-workspace.png" alt="AOI review workspace captured from the running application" width="48%" />
+  <img src="assets/readme/setup-workflow.png" alt="AOI setup workflow captured from the running application" width="48%" />
 </p>
 
 <p align="center">
-  <em>Current workstation themes: industrial dark mode and editorial light mode.</em>
+  <em>Fresh captures from the live application: defect review and pre-program setup workflow.</em>
 </p>
-
-## Workflow Snapshot
-
-![AOI workflow overview](docs/pics/usecase.png)
 
 The operator-facing flow in the repo today is:
 
@@ -183,6 +179,7 @@ docker compose down
 - Uploaded images are stored under the configured storage path, defaulting to `data/storage`
 - Local SQLite data defaults to `data/aoi.db`
 - Mock traffic can be generated with `PYTHONPATH=src python3 -m aoi.cli send-mock-events`
+- Fresh README screenshots can be regenerated with `cd web && npm run capture:readme`
 
 ## Documentation
 
