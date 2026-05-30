@@ -282,6 +282,12 @@
   background: rgba(83, 155, 245, 0.14);
 }
 
+.component-box {
+  position: absolute;
+  border: 2px solid #66d9bd;
+  background: rgba(102, 217, 189, 0.1);
+}
+
 .fiducial-box span {
   position: absolute;
   top: -20px;
@@ -300,6 +306,18 @@
   left: -2px;
   background: var(--accent-soft);
   color: var(--accent);
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.component-box span {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  background: rgba(16, 52, 46, 0.88);
+  color: #66d9bd;
   padding: 0 6px;
   font-size: 0.68rem;
   font-family: var(--font-mono);

@@ -215,6 +215,18 @@
 .overlay-selected { border-color: var(--accent); z-index: 10; border-width: 2px; box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.18), 0 0 22px rgba(88, 166, 255, 0.15); }
 .overlay-selected span { color: #fff; background: var(--accent); }
 
+.overlay-component {
+  border-color: rgba(102, 217, 189, 0.72);
+  background: rgba(102, 217, 189, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(102, 217, 189, 0.12);
+  pointer-events: none;
+}
+
+.overlay-component span {
+  color: #66d9bd;
+  background: rgba(16, 52, 46, 0.88);
+}
+
 .viewer-surface.zen-mode-active .overlay-box:not(.overlay-selected) {
   opacity: 0.15;
   filter: grayscale(1);

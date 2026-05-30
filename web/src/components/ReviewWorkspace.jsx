@@ -67,6 +67,9 @@ export default function ReviewWorkspace({ workspace }) {
   } = workspace
   const hasVisibleDefects = visibleDefects.length > 0
   const isDefectListEmpty = !selectedRunId || !hasVisibleDefects
+  const visibleComponents = (selectedRun?.components || []).filter(
+    (component) => component.run_image_id === effectiveSelectedImageId,
+  )
 
   return (
     <section className="panel review-panel">
@@ -297,6 +300,7 @@ export default function ReviewWorkspace({ workspace }) {
                   key={`${selectedRunId || 'none'}`}
                   image={selectedImage}
                   run={selectedRun}
+                  components={visibleComponents}
                   defects={visibleDefects}
                   selectedDefect={selectedDefect}
                   hoveredDefectId={hoveredDefectId}

@@ -16,6 +16,7 @@ The current project state includes:
 - A FastAPI service for run creation, image upload, event ingestion, and run review APIs
 - A React-based AOI review workstation with run history, defect filters, image viewer controls, and settings
 - Setup-stage workflow support for model selection, fiducial detection, barcode handling, and review readiness
+- Automatic component-candidate detection on uploaded PCB scans, with persisted overlays in setup and review
 - SQLite-backed storage for `inspection_runs`, `defect_logs`, and uploaded scan assets
 - JSONL event logging for downstream observability pipelines
 - A local Docker stack with Grafana, Loki, and Promtail
@@ -45,7 +46,7 @@ The operator-facing flow in the repo today is:
 
 - `src/aoi/api/`: FastAPI routes for runs, events, health, setup, and image access
 - `src/aoi/setup_service.py`: run setup state transitions and review-readiness logic
-- `src/aoi/vision_service.py`: fiducial detection, normalization, and barcode helpers
+- `src/aoi/vision_service.py`: component detection, fiducial detection, normalization, and barcode helpers
 - `src/aoi/database.py`: SQLite schema and persistence operations
 - `src/aoi/log_manager.py`: JSONL event logging
 

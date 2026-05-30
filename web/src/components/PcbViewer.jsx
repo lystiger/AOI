@@ -5,6 +5,7 @@ import { clamp } from '../app/utils'
 export default function PcbViewer({
   image,
   run,
+  components = [],
   defects,
   selectedDefect,
   hoveredDefectId,
@@ -199,6 +200,7 @@ export default function PcbViewer({
           <div className="viewer-toolbar-block viewer-toolbar-block-end">
             <div className="viewer-toolbar-meta">
               <span className="viewer-toolbar-stat">{defects.length} overlays</span>
+              <span className="viewer-toolbar-stat">{components.length} components</span>
               {isKbNavEnabled ? <span className="viewer-toolbar-stat">Arrows to pan</span> : null}
             </div>
             <div className="viewer-zoom-controls">
@@ -258,6 +260,20 @@ export default function PcbViewer({
                 )
               }}
             />
+            {components.map((component) => (
+              <div
+                key={component.id}
+                className="overlay-box overlay-component"
+                style={{
+                  left: `${component.x * 100}%`,
+                  top: `${component.y * 100}%`,
+                  width: `${component.width * 100}%`,
+                  height: `${component.height * 100}%`,
+                }}
+              >
+                <span>{component.id}</span>
+              </div>
+            ))}
             {defects.map((defect) => {
               const overlayState =
                 defect.id === selectedDefect?.id

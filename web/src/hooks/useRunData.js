@@ -194,6 +194,7 @@ export function useRunData({
   const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
   const requiresBarcode = Boolean(selectedRun?.requires_barcode)
   const barcodeStatus = selectedRun?.barcode_status || 'not_required'
+  const componentDetectionStatus = selectedRun?.component_detection_status || (hasScan ? 'empty' : 'blocked')
   const isReviewReady = Boolean(
     selectedRunId &&
     hasScan &&
@@ -221,8 +222,36 @@ export function useRunData({
         statusLabel: !selectedRunId ? 'Blocked' : hasScan ? 'Done' : 'Ready',
       },
       {
-        id: 'enter-model',
+        id: 'component-scan',
         order: 3,
+        label: 'Auto Detect Components',
+        description: 'Run the automatic PCB component scan as soon as a board image is attached.',
+        status:
+          !selectedRunId || !hasScan
+            ? 'blocked'
+            : componentDetectionStatus === 'detected'
+              ? 'done'
+              : componentDetectionStatus === 'failed'
+                ? 'needs_review'
+                : componentDetectionStatus === 'empty'
+                  ? 'ready'
+                  : componentDetectionStatus,
+        statusLabel:
+          !selectedRunId || !hasScan
+            ? 'Blocked'
+            : componentDetectionStatus === 'detected'
+              ? 'Done'
+              : componentDetectionStatus === 'failed'
+                ? 'Needs Review'
+                : componentDetectionStatus === 'empty'
+                  ? 'No Matches'
+                  : componentDetectionStatus === 'blocked'
+                    ? 'Blocked'
+                    : 'Ready',
+      },
+      {
+        id: 'enter-model',
+        order: 4,
         label: 'Enter Model Name',
         description: 'Set the product context before optional automation steps are evaluated.',
         status: !selectedRunId ? 'blocked' : hasModel ? 'done' : 'ready',
@@ -230,7 +259,7 @@ export function useRunData({
       },
       {
         id: 'fiducials',
-        order: 4,
+        order: 5,
         label: 'Find Fiducial Marks',
         description: 'Detect and confirm fiducial marks when the selected model requires alignment setup.',
         status: !requiresFiducials ? 'not_required' : fiducialStatus === 'confirmed' ? 'done' : fiducialStatus,
@@ -251,7 +280,7 @@ export function useRunData({
       },
       {
         id: 'barcode',
-        order: 5,
+        order: 6,
         label: 'Find Barcode',
         description: 'Detect and confirm barcode position and decoded value when the selected model requires barcode validation.',
         status: !requiresBarcode ? 'not_required' : barcodeStatus === 'confirmed' ? 'done' : barcodeStatus,
@@ -272,7 +301,7 @@ export function useRunData({
       },
       {
         id: 'continue-review',
-        order: 6,
+        order: 7,
         label: 'Continue To Review',
         description: 'Open the normal PCB review surface once required setup is complete.',
         status: isReviewReady ? 'ready' : 'blocked',
@@ -294,6 +323,7 @@ export function useRunData({
     hasScan,
     isReviewReady,
     manualStepId,
+    componentDetectionStatus,
     requiresBarcode,
     requiresFiducials,
     selectedRunId,

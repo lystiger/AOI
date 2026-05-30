@@ -74,6 +74,36 @@ function BarcodePreview({ image, barcode, editableBarcode, onChangeBarcode }) {
   )
 }
 
+function ComponentPreview({ image, components }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to preview automatic component detection.</div>
+  }
+
+  if (!components?.length) {
+    return <div className="empty-state">No component candidates were detected from the current board image.</div>
+  }
+
+  return (
+    <div className="fiducial-preview">
+      <img src={image.image_path} alt="Component preview" />
+      {components.map((component) => (
+        <div
+          key={component.id}
+          className="component-box"
+          style={{
+            left: `${component.x * 100}%`,
+            top: `${component.y * 100}%`,
+            width: `${component.width * 100}%`,
+            height: `${component.height * 100}%`,
+          }}
+        >
+          <span>{Math.round((component.confidence || 0) * 100)}%</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function SetupFlow({
   steps,
   activeStep,
@@ -222,6 +252,26 @@ export default function SetupFlow({
               >
                 {isSavingModel ? 'Saving Model...' : 'Save Model Name'}
               </button>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'component-scan' ? (
+            <div className="setup-action-card">
+              <p>
+                Component detection runs automatically after image upload. Review the candidate overlays here before
+                proceeding with the rest of setup.
+              </p>
+              <ComponentPreview image={selectedImage} components={selectedRun?.components || []} />
+              <div className="manual-setup-grid compact">
+                <div className="manual-setup-item compact">
+                  <strong>Detection Status</strong>
+                  <span>{selectedRun?.component_detection_status || 'blocked'}</span>
+                </div>
+                <div className="manual-setup-item compact">
+                  <strong>Detected Candidates</strong>
+                  <span>{selectedRun?.components?.length || 0}</span>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -391,6 +441,12 @@ export default function SetupFlow({
             <strong>{selectedRun?.images?.length ? 'Attached' : 'Missing'}</strong>
             <span>Model</span>
             <strong>{selectedRun?.model_name || 'Unset'}</strong>
+            <span>Components</span>
+            <strong>
+              {selectedRun?.images?.length
+                ? `${selectedRun?.component_detection_status || 'blocked'} (${selectedRun?.components?.length || 0})`
+                : 'Blocked'}
+            </strong>
             <span>Fiducials</span>
             <strong>{selectedRun?.requires_fiducials ? selectedRun?.fiducial_status || 'Required' : 'Not required'}</strong>
             <span>Barcode</span>
