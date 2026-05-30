@@ -603,6 +603,8 @@ def test_fastapi_save_model_fovs_and_generate_run_fov_crops(tmp_path) -> None:
     fov_images = [image for image in run_payload["images"] if image["image_role"].startswith("fov:")]
     assert len(fov_images) == 2
     assert (tmp_path / "storage" / run["id"] / "fovs" / "power-left.png").exists()
+    component_image_ids = {component["run_image_id"] for component in run_payload["components"]}
+    assert any(image["id"] in component_image_ids for image in fov_images)
 
     image_response = client.get(f"/runs/{run['id']}/images/{fov_images[0]['id']}")
     assert image_response.status_code == 200

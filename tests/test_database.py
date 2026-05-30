@@ -38,6 +38,24 @@ def _create_fiducial_board_image(path: Path, *, size: tuple[int, int] = (1600, 9
     return path
 
 
+def _create_component_board_image(path: Path, *, size: tuple[int, int] = (1600, 900)) -> Path:
+    image = Image.new("RGB", size, color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    component_boxes = [
+        (150, 120, 320, 250),
+        (520, 180, 710, 340),
+        (980, 430, 1160, 590),
+        (310, 520, 460, 650),
+    ]
+    fills = [(40, 40, 46), (182, 182, 182), (68, 68, 74), (210, 198, 120)]
+    outlines = [(220, 220, 220), (245, 245, 245), (210, 210, 210), (245, 230, 160)]
+    for box, fill, outline in zip(component_boxes, fills, outlines, strict=True):
+        draw.rounded_rectangle(box, radius=12, fill=fill, outline=outline, width=4)
+
+    image.save(path)
+    return path
+
+
 def _insert_run_image(database: DatabaseManager, run: dict[str, object], image_path: Path, *, image_id: str = "img-1") -> None:
     with Image.open(image_path) as image:
         width, height = image.size
@@ -414,7 +432,7 @@ def test_delete_run_removes_run_images_and_defect_logs(tmp_path) -> None:
 def test_save_model_fovs_and_generate_run_fov_crops(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-FOV")
-    image_path = _create_fiducial_board_image(tmp_path / "fov-board.png")
+    image_path = _create_component_board_image(tmp_path / "fov-board.png")
     _insert_run_image(database, run, image_path)
     database.update_run(run["id"], model_name="MODEL-FOV")
 

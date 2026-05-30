@@ -171,18 +171,23 @@ class SetupService:
             )
             return
 
-        image = images[0]
-        try:
-            components = self.vision_service.detect_components(image, run_id)
-        except ValueError:
-            self.database.update_component_detection(
-                run_id,
-                component_detection_status="failed",
-                components_json=None,
+        components: list[dict[str, object]] = []
+        failed_images = 0
+        for image in images:
+            try:
+                detected_components = self.vision_service.detect_components(image, run_id)
+            except ValueError:
+                failed_images += 1
+                continue
+            components.extend(
+                {
+                    **component,
+                    "image_role": image.get("image_role"),
+                }
+                for component in detected_components
             )
-            return
 
-        status = "detected" if components else "empty"
+        status = "detected" if components else "failed" if failed_images == len(images) else "empty"
         self.database.update_component_detection(
             run_id,
             component_detection_status=status,
@@ -489,6 +494,7 @@ class SetupService:
                     created_at=str(run_row["timestamp"]),
                 )
 
+        self._refresh_component_detection(run_id)
         return self.database.fetch_run(run_id)
 
     def _calculate_fiducial_status(self, run_id: str, *, requires_fiducials: bool, current_status: str) -> str:

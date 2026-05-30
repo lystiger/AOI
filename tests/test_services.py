@@ -158,3 +158,61 @@ def test_setup_service_calculate_setup_status_logic(setup_service):
         requires_barcode=False
     )
     assert status == "review_ready"
+
+
+def test_setup_service_generate_run_fov_crops_refreshes_hybrid_component_detection(temp_paths, monkeypatch):
+    db_path, storage_path = temp_paths
+    database = DatabaseManager(db_path)
+    vision_service = VisionService(db_path=db_path, storage_path=storage_path)
+    service = SetupService(database, vision_service)
+
+    run = database.create_run(pcb_id="PCB-HYBRID")
+    image_path = storage_path / "hybrid-board.png"
+    image = Image.new("RGB", (1200, 800), color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((160, 140, 320, 260), fill=(40, 40, 46), outline=(220, 220, 220), width=4)
+    draw.rectangle((540, 220, 710, 380), fill=(182, 182, 182), outline=(245, 245, 245), width=3)
+    image.save(image_path)
+
+    with database._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO run_images (id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("img-1", run["id"], str(image_path), "full_board", 1200, 800, 0, run["timestamp"]),
+        )
+
+    database.update_run(run["id"], model_name="MODEL-HYBRID")
+    database.save_model_fovs(
+        "MODEL-HYBRID",
+        [
+            {"id": "fov-left", "label": "FOV Left", "x": 0.05, "y": 0.10, "width": 0.28, "height": 0.28},
+            {"id": "fov-center", "label": "FOV Center", "x": 0.30, "y": 0.14, "width": 0.32, "height": 0.34},
+        ],
+    )
+
+    def stub_detect_components(image, run_id):
+        return [
+            {
+                "id": f"cmp-{image['id']}",
+                "run_image_id": image["id"],
+                "x": 0.1,
+                "y": 0.1,
+                "width": 0.2,
+                "height": 0.2,
+                "confidence": 0.8,
+                "label": "component_candidate",
+            }
+        ]
+
+    monkeypatch.setattr(service.vision_service, "detect_components", stub_detect_components)
+
+    refreshed_run = service.generate_run_fov_crops(run["id"])
+
+    assert refreshed_run is not None
+    fov_images = [entry for entry in database.fetch_run_images(run["id"]) if entry["image_role"].startswith("fov:")]
+    assert len(fov_images) == 2
+    component_image_ids = {component["run_image_id"] for component in refreshed_run["components"]}
+    assert "img-1" in component_image_ids
+    assert all(image["id"] in component_image_ids for image in fov_images)
