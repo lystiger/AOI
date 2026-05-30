@@ -43,3 +43,6 @@ ml/notebooks/.ipynb_checkpoints/
 .DS_Store
 .idea/
 .vscode/
+
+# Documentation
+docs/references/
