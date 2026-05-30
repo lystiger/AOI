@@ -1,15 +1,51 @@
 from __future__ import annotations
 
 from collections import deque
+import importlib.util
 from pathlib import Path
 
 from PIL import Image, ImageFilter, UnidentifiedImageError
+
+
+REFERENCE_COMPONENT_MODEL_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "docs"
+    / "references"
+    / "PCB-Component-Detection-main"
+    / "PCB-Component-Detection-main"
+    / "pcbComponent_net.pth"
+)
+
+REFERENCE_COMPONENT_LABELS = (
+    "resistor",
+    "capacitor",
+    "inductor",
+    "diode",
+    "led",
+    "ic",
+    "transistor",
+    "connector",
+    "jumper",
+    "emi_filter",
+    "button",
+    "clock",
+    "transformer",
+    "potentiometer",
+    "heatsink",
+    "fuse",
+    "ferrite_bead",
+    "buzzer",
+    "display",
+    "battery",
+)
 
 
 class VisionService:
     def __init__(self, *, db_path: Path, storage_path: Path) -> None:
         self.db_path = db_path
         self.storage_path = storage_path
+        self._component_classifier: object | None = None
+        self._component_classifier_loaded = False
 
     def detect_fiducial_failure(self, image: dict[str, object], run_id: str) -> str | None:
         width = int(image.get("image_width") or 0)
@@ -36,13 +72,14 @@ class VisionService:
         working_image, scale = self._prepare_detection_image(rgb_image)
         component_mask = self._build_component_candidate_mask(working_image)
         components = self._extract_mask_components(component_mask, *working_image.size)
-        return self._score_component_candidates(
+        candidates = self._score_component_candidates(
             components,
             run_image_id=str(image["id"]),
             image_size=working_image.size,
             original_size=(original_width, original_height),
             scale=scale,
         )
+        return self._classify_component_candidates(candidates, rgb_image)
 
     @staticmethod
     def detect_barcode_failure(image: dict[str, object]) -> str | None:
@@ -350,6 +387,44 @@ class VisionService:
         candidates.sort(key=lambda entry: (float(entry["confidence"]), float(entry["width"]) * float(entry["height"])), reverse=True)
         return candidates[:64]
 
+    def _classify_component_candidates(
+        self,
+        candidates: list[dict[str, object]],
+        image: Image.Image,
+    ) -> list[dict[str, object]]:
+        classifier = self._load_reference_component_classifier()
+        if classifier is None:
+            return candidates
+
+        classified: list[dict[str, object]] = []
+        for candidate in candidates:
+            label, confidence = classifier.classify(image, candidate)
+            enriched = dict(candidate)
+            if label is not None:
+                enriched["label"] = label
+            if confidence is not None:
+                enriched["classification_confidence"] = confidence
+            classified.append(enriched)
+        return classified
+
+    def _load_reference_component_classifier(self) -> object | None:
+        if self._component_classifier_loaded:
+            return self._component_classifier
+        self._component_classifier_loaded = True
+
+        if not REFERENCE_COMPONENT_MODEL_PATH.exists():
+            self._component_classifier = None
+            return None
+        if importlib.util.find_spec("torch") is None:
+            self._component_classifier = None
+            return None
+
+        try:
+            self._component_classifier = _ReferenceComponentClassifier(REFERENCE_COMPONENT_MODEL_PATH)
+        except Exception:
+            self._component_classifier = None
+        return self._component_classifier
+
     @staticmethod
     def _select_fiducial_candidates(candidates: list[dict[str, object]]) -> list[dict[str, object]]:
         sorted_candidates = sorted(candidates, key=lambda item: float(item["score"]), reverse=True)
@@ -443,3 +518,83 @@ class VisionService:
         if number < 0 or number > 1:
             raise ValueError("confidence must be between 0 and 1")
         return number
+
+
+class _ReferenceComponentClassifier:
+    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.52) -> None:
+        import torch
+        from torch import nn
+        import torch.nn.functional as F
+
+        self._torch = torch
+        self._nn = nn
+        self._F = F
+        self._confidence_threshold = confidence_threshold
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._model = self._build_model().to(self._device)
+        state_dict = torch.load(model_path, map_location=self._device)
+        self._model.load_state_dict(state_dict)
+        self._model.eval()
+
+    def _build_model(self):
+        nn = self._nn
+        F = self._F
+
+        class NeuralNetwork(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.conv1 = nn.Conv2d(3, 6, 5)
+                self.pool = nn.MaxPool2d(2, 2)
+                self.conv2 = nn.Conv2d(6, 16, 5)
+                self.fc1 = nn.Linear(16 * 5 * 5, 120)
+                self.fc2 = nn.Linear(120, 84)
+                self.fc3 = nn.Linear(84, len(REFERENCE_COMPONENT_LABELS))
+
+            def forward(self, x):
+                x = self.pool(F.relu(self.conv1(x)))
+                x = self.pool(F.relu(self.conv2(x)))
+                x = x.flatten(1)
+                x = F.relu(self.fc1(x))
+                x = F.relu(self.fc2(x))
+                x = self.fc3(x)
+                return x
+
+        return NeuralNetwork()
+
+    def classify(
+        self,
+        image: Image.Image,
+        candidate: dict[str, object],
+    ) -> tuple[str | None, float | None]:
+        crop = self._crop_candidate(image, candidate)
+        if crop is None:
+            return None, None
+        tensor = self._to_tensor(crop)
+        with self._torch.no_grad():
+            logits = self._model(tensor)
+            probs = self._torch.softmax(logits, dim=1)
+            conf_tensor, class_tensor = self._torch.max(probs, dim=1)
+        confidence = round(float(conf_tensor.item()), 4)
+        if confidence < self._confidence_threshold:
+            return None, confidence
+        label = REFERENCE_COMPONENT_LABELS[int(class_tensor.item())]
+        return label, confidence
+
+    def _crop_candidate(self, image: Image.Image, candidate: dict[str, object]) -> Image.Image | None:
+        width, height = image.size
+        x = int(float(candidate["x"]) * width)
+        y = int(float(candidate["y"]) * height)
+        crop_width = max(1, int(float(candidate["width"]) * width))
+        crop_height = max(1, int(float(candidate["height"]) * height))
+        x2 = min(width, x + crop_width)
+        y2 = min(height, y + crop_height)
+        if x2 <= x or y2 <= y:
+            return None
+        return image.crop((x, y, x2, y2))
+
+    def _to_tensor(self, crop: Image.Image):
+        torch = self._torch
+        resized = crop.resize((32, 32), Image.Resampling.BILINEAR).convert("RGB")
+        data = torch.ByteTensor(bytearray(resized.tobytes())).float() / 255.0
+        tensor = data.view(32, 32, 3).permute(2, 0, 1).unsqueeze(0)
+        return tensor.to(self._device)

@@ -69,6 +69,34 @@ def test_vision_service_detect_components_returns_component_candidates(vision_se
     assert all(component["run_image_id"] == "img-1" for component in components[:3])
     assert all(component["confidence"] >= 0.4 for component in components[:3])
 
+
+def test_vision_service_detect_components_uses_reference_classifier_when_available(vision_service, tmp_path, monkeypatch):
+    image_path = tmp_path / "component-board-labeled.png"
+    image = Image.new("RGB", (600, 400), color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((120, 100, 240, 200), fill=(40, 40, 46), outline=(220, 220, 220), width=4)
+    image.save(image_path)
+
+    class StubClassifier:
+        def classify(self, image, candidate):
+            return "resistor", 0.91
+
+    monkeypatch.setattr(vision_service, "_load_reference_component_classifier", lambda: StubClassifier())
+
+    components = vision_service.detect_components(
+        {
+            "id": "img-2",
+            "image_path": str(image_path),
+            "image_width": 600,
+            "image_height": 400,
+        },
+        "run-2",
+    )
+
+    assert components
+    assert components[0]["label"] == "resistor"
+    assert components[0]["classification_confidence"] == 0.91
+
 def test_setup_service_create_run(setup_service):
     run = setup_service.create_run(pcb_id="TEST-PCB")
     
