@@ -78,15 +78,26 @@ class VisionService:
         original_width, original_height = rgb_image.size
         working_image, scale = self._prepare_detection_image(rgb_image)
         board_mask = self._build_board_region_mask(working_image)
-        component_mask = self._build_component_candidate_mask(working_image)
-        components = self._extract_mask_components(component_mask, *working_image.size)
+        search_region = self._resolve_component_search_region(board_mask, *working_image.size)
+        search_image = working_image.crop(
+            (
+                search_region["min_x"],
+                search_region["min_y"],
+                search_region["max_x"] + 1,
+                search_region["max_y"] + 1,
+            )
+        )
+        component_mask = self._build_component_candidate_mask(search_image)
+        components = self._extract_mask_components(component_mask, *search_image.size)
         candidates = self._score_component_candidates(
             components,
             run_image_id=str(image["id"]),
-            image_size=working_image.size,
+            image_size=search_image.size,
             original_size=(original_width, original_height),
             scale=scale,
-            board_mask=board_mask,
+            origin_x=search_region["min_x"],
+            origin_y=search_region["min_y"],
+            full_image_size=working_image.size,
         )
         return self._classify_component_candidates(candidates, rgb_image)
 
@@ -286,6 +297,26 @@ class VisionService:
         return board_mask
 
     @staticmethod
+    def _resolve_component_search_region(board_mask: list[int], width: int, height: int) -> dict[str, int]:
+        positive_indexes = [index for index, value in enumerate(board_mask) if value]
+        if not positive_indexes:
+            return {"min_x": 0, "min_y": 0, "max_x": width - 1, "max_y": height - 1}
+        xs = [index % width for index in positive_indexes]
+        ys = [index // width for index in positive_indexes]
+        min_x = min(xs)
+        max_x = max(xs)
+        min_y = min(ys)
+        max_y = max(ys)
+        pad_x = max(12, int((max_x - min_x + 1) * 0.03))
+        pad_y = max(12, int((max_y - min_y + 1) * 0.03))
+        return {
+            "min_x": max(0, min_x - pad_x),
+            "min_y": max(0, min_y - pad_y),
+            "max_x": min(width - 1, max_x + pad_x),
+            "max_y": min(height - 1, max_y + pad_y),
+        }
+
+    @staticmethod
     def _circular_hue_distance(first: int, second: int) -> int:
         diff = abs(first - second)
         return min(diff, 256 - diff)
@@ -344,7 +375,6 @@ class VisionService:
         image_size: tuple[int, int],
         original_size: tuple[int, int],
         scale: float,
-        board_mask: list[int] | None = None,
     ) -> list[dict[str, object]]:
         width, height = image_size
         original_width, original_height = original_size
@@ -402,13 +432,16 @@ class VisionService:
         image_size: tuple[int, int],
         original_size: tuple[int, int],
         scale: float,
-        board_mask: list[int] | None = None,
+        origin_x: int = 0,
+        origin_y: int = 0,
+        full_image_size: tuple[int, int] | None = None,
     ) -> list[dict[str, object]]:
         width, height = image_size
         original_width, original_height = original_size
         image_area = width * height
-        edge_margin_x = max(6, int(width * 0.012))
-        edge_margin_y = max(6, int(height * 0.012))
+        full_width, full_height = full_image_size or image_size
+        edge_margin_x = max(6, int(full_width * 0.012))
+        edge_margin_y = max(6, int(full_height * 0.012))
         candidates: list[dict[str, object]] = []
         for component in components:
             box_width = component["max_x"] - component["min_x"] + 1
@@ -420,10 +453,14 @@ class VisionService:
                 continue
             if box_width < 8 or box_height < 8:
                 continue
-            touches_left_edge = component["min_x"] <= edge_margin_x
-            touches_top_edge = component["min_y"] <= edge_margin_y
-            touches_right_edge = component["max_x"] >= (width - 1 - edge_margin_x)
-            touches_bottom_edge = component["max_y"] >= (height - 1 - edge_margin_y)
+            absolute_min_x = component["min_x"] + origin_x
+            absolute_min_y = component["min_y"] + origin_y
+            absolute_max_x = component["max_x"] + origin_x
+            absolute_max_y = component["max_y"] + origin_y
+            touches_left_edge = absolute_min_x <= edge_margin_x
+            touches_top_edge = absolute_min_y <= edge_margin_y
+            touches_right_edge = absolute_max_x >= (full_width - 1 - edge_margin_x)
+            touches_bottom_edge = absolute_max_y >= (full_height - 1 - edge_margin_y)
             touches_edge = touches_left_edge or touches_top_edge or touches_right_edge or touches_bottom_edge
 
             fill_ratio = component["area"] / max(box_area, 1)
@@ -433,11 +470,9 @@ class VisionService:
             if aspect_ratio < 0.2 or aspect_ratio > 5.0:
                 continue
             # Reject UI chrome and image-frame artifacts that cling to the outer edge.
-            if touches_edge and (box_width >= width * 0.025 or box_height >= height * 0.025):
+            if touches_edge and (box_width >= full_width * 0.025 or box_height >= full_height * 0.025):
                 continue
             if touches_edge and component["area"] < int(image_area * 0.0012):
-                continue
-            if board_mask is not None and not VisionService._candidate_is_on_board(component, board_mask, width, height):
                 continue
 
             normalized_width = min((box_width * scale) / original_width, 1.0)
@@ -445,12 +480,12 @@ class VisionService:
             normalized_area = normalized_width * normalized_height
             confidence = min(0.99, 0.4 + (fill_ratio * 0.35) + min(normalized_area * 4.0, 0.24))
             expanded_box = VisionService._expand_component_box(
-                min_x=component["min_x"],
-                min_y=component["min_y"],
-                max_x=component["max_x"],
-                max_y=component["max_y"],
-                image_width=width,
-                image_height=height,
+                min_x=absolute_min_x,
+                min_y=absolute_min_y,
+                max_x=absolute_max_x,
+                max_y=absolute_max_y,
+                image_width=full_width,
+                image_height=full_height,
             )
             expanded_width = expanded_box["max_x"] - expanded_box["min_x"] + 1
             expanded_height = expanded_box["max_y"] - expanded_box["min_y"] + 1
@@ -469,54 +504,6 @@ class VisionService:
 
         candidates.sort(key=lambda entry: (float(entry["confidence"]), float(entry["width"]) * float(entry["height"])), reverse=True)
         return candidates[:64]
-
-    @staticmethod
-    def _candidate_is_on_board(
-        component: dict[str, int],
-        board_mask: list[int],
-        width: int,
-        height: int,
-    ) -> bool:
-        box_width = component["max_x"] - component["min_x"] + 1
-        box_height = component["max_y"] - component["min_y"] + 1
-        pad_x = max(4, int(box_width * 0.2))
-        pad_y = max(4, int(box_height * 0.2))
-        left = max(0, component["min_x"] - pad_x)
-        right = min(width - 1, component["max_x"] + pad_x)
-        top = max(0, component["min_y"] - pad_y)
-        bottom = min(height - 1, component["max_y"] + pad_y)
-        center_x = (component["min_x"] + component["max_x"]) // 2
-        center_y = (component["min_y"] + component["max_y"]) // 2
-
-        sample_xs = {
-            left,
-            component["min_x"],
-            center_x,
-            component["max_x"],
-            right,
-        }
-        sample_ys = {
-            top,
-            component["min_y"],
-            center_y,
-            component["max_y"],
-            bottom,
-        }
-        hits = 0
-        total = 0
-        for sample_x in sample_xs:
-            for sample_y in sample_ys:
-                inside_component = (
-                    component["min_x"] <= sample_x <= component["max_x"]
-                    and component["min_y"] <= sample_y <= component["max_y"]
-                )
-                if inside_component:
-                    continue
-                clamped_x = min(max(sample_x, 0), width - 1)
-                clamped_y = min(max(sample_y, 0), height - 1)
-                total += 1
-                hits += board_mask[(clamped_y * width) + clamped_x]
-        return hits / max(total, 1) >= 0.25
 
     @staticmethod
     def _expand_component_box(
