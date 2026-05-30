@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { DEFAULT_IMAGE_ID } from '../app/constants'
 import { useRunData } from './useRunData'
@@ -7,7 +7,9 @@ import { useWorkspacePrefs } from './useWorkspacePrefs'
 
 export function useAoiWorkspace() {
   const [manualStepId, setManualStepId] = useState(null)
+  const lastAutoFocusDefectIdRef = useRef(null)
   const prefs = useWorkspacePrefs(DEFAULT_IMAGE_ID)
+  const { selectedImageId, setSelectedImageId } = prefs
 
   const runData = useRunData({
     selectedRunId: prefs.selectedRunId,
@@ -36,6 +38,26 @@ export function useAoiWorkspace() {
   useEffect(() => {
     syncSetupFromRun(runData.selectedRun)
   }, [runData.selectedRun, syncSetupFromRun])
+
+  useEffect(() => {
+    if (!runData.selectedDefect?.run_image_id || !runData.selectedRun?.images?.length) {
+      lastAutoFocusDefectIdRef.current = null
+      return
+    }
+    const defectImage = runData.selectedRun.images.find((image) => image.id === runData.selectedDefect.run_image_id)
+    if (!defectImage?.image_role?.startsWith('fov:')) {
+      lastAutoFocusDefectIdRef.current = null
+      return
+    }
+    if (lastAutoFocusDefectIdRef.current === runData.selectedDefect.id) {
+      return
+    }
+    lastAutoFocusDefectIdRef.current = runData.selectedDefect.id
+    if (selectedImageId === defectImage.id) {
+      return
+    }
+    setSelectedImageId(defectImage.id)
+  }, [selectedImageId, setSelectedImageId, runData.selectedDefect, runData.selectedRun])
 
   function openImagePicker() {
     if (actions.isUploading || !prefs.selectedRunId) {

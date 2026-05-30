@@ -81,6 +81,10 @@ export default function ReviewWorkspace({ workspace }) {
     (component) => component.run_image_id === effectiveSelectedImageId,
   )
   const setupImage = runImages.find((image) => image.image_role === 'full_board') || selectedImage
+  const fullBoardImage = runImages.find((image) => image.image_role === 'full_board') || null
+  const currentImageIsFov = Boolean(selectedImage?.image_role?.startsWith('fov:'))
+  const selectedDefectSurface = selectedRun?.images?.find((image) => image.id === selectedDefect?.run_image_id) || null
+  const selectedDefectIsOnFov = Boolean(selectedDefectSurface?.image_role?.startsWith('fov:'))
 
   return (
     <section className="panel review-panel">
@@ -134,6 +138,16 @@ export default function ReviewWorkspace({ workspace }) {
             </div>
           ) : null}
           <div className="review-actions">
+            {currentImageIsFov ? (
+              <button
+                type="button"
+                className="ghost-button viewer-toolbar-button"
+                onClick={() => fullBoardImage && setSelectedImageId(fullBoardImage.id)}
+                disabled={!fullBoardImage}
+              >
+                Back To Full Board
+              </button>
+            ) : null}
             <button
               type="button"
               className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
@@ -317,6 +331,14 @@ export default function ReviewWorkspace({ workspace }) {
               </div>
             ) : (
               <>
+                {selectedDefect && selectedDefectIsOnFov ? (
+                  <div className="review-fov-callout">
+                    <strong>FOV Inspect Mode</strong>
+                    <span>
+                      Reviewing {selectedDefect.component_id} on {selectedDefectSurface?.image_role?.replace('fov:', '')}.
+                    </span>
+                  </div>
+                ) : null}
                 <PcbViewer
                   key={`${selectedRunId || 'none'}`}
                   image={selectedImage}

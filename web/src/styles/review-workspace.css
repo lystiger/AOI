@@ -219,6 +219,35 @@
   color: var(--accent);
 }
 
+.review-fov-callout {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #ff7a59 55%, var(--line));
+  border-radius: 12px;
+  background: rgba(58, 24, 16, 0.84);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+}
+
+.review-fov-callout strong {
+  color: #ffd3c4;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.review-fov-callout span {
+  color: #ffb399;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 1280px) {
   .review-topbar {
     flex-direction: column;
