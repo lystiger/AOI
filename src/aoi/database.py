@@ -119,6 +119,18 @@ class DatabaseManager:
             )
             self._ensure_column(
                 connection,
+                table_name="inspection_runs",
+                column_name="component_detection_status",
+                definition="TEXT NOT NULL DEFAULT 'blocked'",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
+                column_name="components_json",
+                definition="TEXT",
+            )
+            self._ensure_column(
+                connection,
                 table_name="defect_logs",
                 column_name="run_image_id",
                 definition="TEXT",
@@ -183,14 +195,16 @@ class DatabaseManager:
                 INSERT INTO inspection_runs (
                     id, pcb_id, timestamp, model_version, status, model_name, setup_status,
                     requires_fiducials, fiducial_status, fiducials_json,
-                    requires_barcode, barcode_status, barcode_json
+                    requires_barcode, barcode_status, barcode_json,
+                    component_detection_status, components_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id, pcb_id, run_timestamp, model_version, status, None, "review_ready",
                     0, "not_required", None,
                     0, "not_required", None,
+                    "blocked", None,
                 ),
             )
             connection.executemany(
@@ -287,9 +301,10 @@ class DatabaseManager:
                 INSERT INTO inspection_runs (
                     id, pcb_id, timestamp, model_version, status, model_name, setup_status,
                     requires_fiducials, fiducial_status, fiducials_json,
-                    requires_barcode, barcode_status, barcode_json
+                    requires_barcode, barcode_status, barcode_json,
+                    component_detection_status, components_json
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -305,6 +320,8 @@ class DatabaseManager:
                     int(requires_barcode),
                     barcode_status,
                     barcode_json,
+                    "blocked",
+                    None,
                 ),
             )
 
@@ -348,6 +365,23 @@ class DatabaseManager:
     def create_run(self, *, pcb_id: str | None = None) -> dict[str, object]:
         return self._setup_service().create_run(pcb_id=pcb_id)
 
+    def update_component_detection(
+        self,
+        run_id: str,
+        *,
+        component_detection_status: str,
+        components_json: str | None,
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE inspection_runs
+                SET component_detection_status = ?, components_json = ?
+                WHERE id = ?
+                """,
+                (component_detection_status, components_json, run_id),
+            )
+
     def update_run(
         self,
         run_id: str,
@@ -388,7 +422,8 @@ class DatabaseManager:
                 """
                 SELECT id, pcb_id, timestamp, model_version, model_name, status, setup_status,
                        requires_fiducials, fiducial_status, fiducials_json,
-                       requires_barcode, barcode_status, barcode_json
+                       requires_barcode, barcode_status, barcode_json,
+                       component_detection_status, components_json
                 FROM inspection_runs
                 WHERE id = ?
                 """,
@@ -401,8 +436,10 @@ class DatabaseManager:
         payload["fiducials"] = json.loads(payload["fiducials_json"]) if payload.get("fiducials_json") else []
         payload["requires_barcode"] = bool(payload.get("requires_barcode"))
         payload["barcode"] = json.loads(payload["barcode_json"]) if payload.get("barcode_json") else None
+        payload["components"] = json.loads(payload["components_json"]) if payload.get("components_json") else []
         payload.pop("fiducials_json", None)
         payload.pop("barcode_json", None)
+        payload.pop("components_json", None)
         return payload
 
     def fetch_defect_logs(
@@ -505,12 +542,14 @@ class DatabaseManager:
                     r.fiducial_status,
                     r.requires_barcode,
                     r.barcode_status,
+                    r.component_detection_status,
                     COUNT(d.id) AS event_count
                 FROM inspection_runs AS r
                 LEFT JOIN defect_logs AS d ON d.run_id = r.id
                 {where_sql}
                 GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.model_name, r.status, r.setup_status,
-                         r.requires_fiducials, r.fiducial_status, r.requires_barcode, r.barcode_status
+                         r.requires_fiducials, r.fiducial_status, r.requires_barcode, r.barcode_status,
+                         r.component_detection_status
                 ORDER BY r.timestamp DESC
                 LIMIT ?
                 """,

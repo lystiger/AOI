@@ -39,6 +39,23 @@ def _create_fiducial_board_image(path, *, size=(1600, 900), include_marks=True):
     return path
 
 
+def _create_component_board_image(path, *, size=(1600, 900)):
+    image = Image.new("RGB", size, color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    component_boxes = [
+        (150, 120, 320, 250),
+        (520, 180, 710, 340),
+        (980, 430, 1160, 590),
+        (310, 520, 460, 650),
+    ]
+    fills = [(40, 40, 46), (182, 182, 182), (68, 68, 74), (210, 198, 120)]
+    outlines = [(220, 220, 220), (245, 245, 245), (210, 210, 210), (245, 230, 160)]
+    for box, fill, outline in zip(component_boxes, fills, outlines, strict=True):
+        draw.rounded_rectangle(box, radius=12, fill=fill, outline=outline, width=4)
+    image.save(path)
+    return path
+
+
 def test_fastapi_health_endpoint_returns_ok(tmp_path) -> None:
     app = create_app(
         db_path=tmp_path / "aoi.db",
@@ -460,8 +477,9 @@ def test_fastapi_upload_run_image_stores_metadata_and_asset(tmp_path) -> None:
         storage_path=tmp_path / "storage",
     )
     client = TestClient(app)
+    image_path = _create_component_board_image(tmp_path / "upload-components.png")
     buffer = BytesIO()
-    Image.new("RGB", (1600, 900), color=(0, 128, 0)).save(buffer, format="PNG")
+    Image.open(image_path).save(buffer, format="PNG")
 
     response = client.post(
         f"/runs/{run['id']}/images",
@@ -477,6 +495,10 @@ def test_fastapi_upload_run_image_stores_metadata_and_asset(tmp_path) -> None:
     assert stored_images[0]["image_width"] == 1600
     assert stored_images[0]["image_height"] == 900
     assert (tmp_path / "storage" / run["id"] / "scan.png").exists()
+    refreshed_run = database.fetch_run(run["id"])
+    assert refreshed_run is not None
+    assert refreshed_run["component_detection_status"] == "detected"
+    assert len(refreshed_run["components"]) >= 3
 
 
 def test_fastapi_get_run_image_returns_uploaded_asset(tmp_path) -> None:
@@ -511,6 +533,34 @@ def test_fastapi_get_run_image_returns_uploaded_asset(tmp_path) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert response.content == image_bytes
+
+
+def test_fastapi_get_run_returns_detected_components_after_upload(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-COMP")
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+    image_path = _create_component_board_image(tmp_path / "component-board.png")
+    buffer = BytesIO()
+    Image.open(image_path).save(buffer, format="PNG")
+
+    upload_response = client.post(
+        f"/runs/{run['id']}/images",
+        content=buffer.getvalue(),
+        headers={"Content-Type": "image/png"},
+    )
+    run_response = client.get(f"/runs/{run['id']}")
+
+    assert upload_response.status_code == 201
+    assert run_response.status_code == 200
+    run_payload = run_response.json()["run"]
+    assert run_payload["component_detection_status"] == "detected"
+    assert len(run_payload["components"]) >= 3
+    assert run_payload["components"][0]["run_image_id"] == run_payload["images"][0]["id"]
 
 
 def test_fastapi_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:

@@ -24,6 +24,26 @@ class VisionService:
             return "fiducial detection failed: found fewer than 3 fiducial candidates"
         return None
 
+    def detect_components(self, image: dict[str, object], run_id: str) -> list[dict[str, object]]:
+        image_file = self._resolve_run_image_file(run_id, image)
+        try:
+            with Image.open(image_file) as source_image:
+                rgb_image = source_image.convert("RGB")
+        except (FileNotFoundError, UnidentifiedImageError) as exc:
+            raise ValueError(f"component detection failed: unable to read scan image from {image_file}") from exc
+
+        original_width, original_height = rgb_image.size
+        working_image, scale = self._prepare_detection_image(rgb_image)
+        component_mask = self._build_component_candidate_mask(working_image)
+        components = self._extract_mask_components(component_mask, *working_image.size)
+        return self._score_component_candidates(
+            components,
+            run_image_id=str(image["id"]),
+            image_size=working_image.size,
+            original_size=(original_width, original_height),
+            scale=scale,
+        )
+
     @staticmethod
     def detect_barcode_failure(image: dict[str, object]) -> str | None:
         if int(image.get("image_width") or 0) < 960 or int(image.get("image_height") or 0) < 540:
@@ -138,6 +158,45 @@ class VisionService:
         return [1 if value >= 128 else 0 for value in cleaned.tobytes()]
 
     @staticmethod
+    def _build_component_candidate_mask(image: Image.Image) -> list[int]:
+        rgb_image = image.convert("RGB")
+        width, height = rgb_image.size
+        pixels = rgb_image.load()
+
+        border_pixels: list[tuple[int, int, int]] = []
+        sample_step = max(1, min(width, height) // 80)
+        for x in range(0, width, sample_step):
+            border_pixels.append(pixels[x, 0])
+            border_pixels.append(pixels[x, height - 1])
+        for y in range(0, height, sample_step):
+            border_pixels.append(pixels[0, y])
+            border_pixels.append(pixels[width - 1, y])
+
+        if not border_pixels:
+            return [0] * (width * height)
+
+        board_red = sum(pixel[0] for pixel in border_pixels) / len(border_pixels)
+        board_green = sum(pixel[1] for pixel in border_pixels) / len(border_pixels)
+        board_blue = sum(pixel[2] for pixel in border_pixels) / len(border_pixels)
+        board_brightness = (board_red + board_green + board_blue) / 3.0
+
+        mask = [0] * (width * height)
+        for y in range(height):
+            for x in range(width):
+                red, green, blue = pixels[x, y]
+                diff = abs(red - board_red) + abs(green - board_green) + abs(blue - board_blue)
+                brightness = (red + green + blue) / 3.0
+                brightness_gap = abs(brightness - board_brightness)
+                is_candidate = diff >= 90 or brightness_gap >= 45 or (red + blue) > (green + 55)
+                if is_candidate:
+                    mask[(y * width) + x] = 255
+
+        mask_image = Image.new("L", (width, height))
+        mask_image.putdata(mask)
+        cleaned = mask_image.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
+        return [1 if value >= 128 else 0 for value in cleaned.tobytes()]
+
+    @staticmethod
     def _extract_mask_components(mask: list[int], width: int | None = None, height: int | None = None) -> list[dict[str, int]]:
         if width is None or height is None:
             raise ValueError("mask width and height are required")
@@ -239,6 +298,57 @@ class VisionService:
                 }
             )
         return candidates
+
+    @staticmethod
+    def _score_component_candidates(
+        components: list[dict[str, int]],
+        *,
+        run_image_id: str,
+        image_size: tuple[int, int],
+        original_size: tuple[int, int],
+        scale: float,
+    ) -> list[dict[str, object]]:
+        width, height = image_size
+        original_width, original_height = original_size
+        image_area = width * height
+        candidates: list[dict[str, object]] = []
+        for component in components:
+            box_width = component["max_x"] - component["min_x"] + 1
+            box_height = component["max_y"] - component["min_y"] + 1
+            box_area = box_width * box_height
+            if component["area"] < max(60, int(image_area * 0.00018)):
+                continue
+            if component["area"] > int(image_area * 0.18):
+                continue
+            if box_width < 8 or box_height < 8:
+                continue
+
+            fill_ratio = component["area"] / max(box_area, 1)
+            aspect_ratio = box_width / max(box_height, 1)
+            if fill_ratio < 0.3 or fill_ratio > 1.0:
+                continue
+            if aspect_ratio < 0.2 or aspect_ratio > 5.0:
+                continue
+
+            normalized_width = min((box_width * scale) / original_width, 1.0)
+            normalized_height = min((box_height * scale) / original_height, 1.0)
+            normalized_area = normalized_width * normalized_height
+            confidence = min(0.99, 0.4 + (fill_ratio * 0.35) + min(normalized_area * 4.0, 0.24))
+            candidates.append(
+                {
+                    "id": f"cmp-{len(candidates) + 1}",
+                    "run_image_id": run_image_id,
+                    "x": round(max((component["min_x"] * scale) / original_width, 0.0), 4),
+                    "y": round(max((component["min_y"] * scale) / original_height, 0.0), 4),
+                    "width": round(normalized_width, 4),
+                    "height": round(normalized_height, 4),
+                    "confidence": round(confidence, 3),
+                    "label": "component_candidate",
+                }
+            )
+
+        candidates.sort(key=lambda entry: (float(entry["confidence"]), float(entry["width"]) * float(entry["height"])), reverse=True)
+        return candidates[:64]
 
     @staticmethod
     def _select_fiducial_candidates(candidates: list[dict[str, object]]) -> list[dict[str, object]]:

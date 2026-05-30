@@ -153,7 +153,40 @@ class SetupService:
             sort_order=0,
             created_at=created_at,
         )
-        return self.update_run(run_id)
+        updated_run = self.update_run(run_id)
+        self._refresh_component_detection(run_id)
+        return self.database.fetch_run(run_id) if updated_run is not None else None
+
+    def _refresh_component_detection(self, run_id: str) -> None:
+        run_row = self.database.fetch_run(run_id)
+        if run_row is None:
+            return
+        images = self.database.fetch_run_images(run_id)
+        if not images:
+            self.database.update_component_detection(
+                run_id,
+                component_detection_status="blocked",
+                components_json=None,
+            )
+            return
+
+        image = images[0]
+        try:
+            components = self.vision_service.detect_components(image, run_id)
+        except ValueError:
+            self.database.update_component_detection(
+                run_id,
+                component_detection_status="failed",
+                components_json=None,
+            )
+            return
+
+        status = "detected" if components else "empty"
+        self.database.update_component_detection(
+            run_id,
+            component_detection_status=status,
+            components_json=json.dumps(components) if components else None,
+        )
 
     def detect_fiducials(self, run_id: str) -> dict[str, object] | None:
         run_row = self.database.fetch_run(run_id)

@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from aoi.vision_service import VisionService
 from aoi.setup_service import SetupService
@@ -44,6 +44,30 @@ def test_vision_service_build_fiducial_candidate_mask(vision_service):
     
     # Check if our point is represented (might be slightly shifted due to filters)
     assert any(val == 1 for val in mask)
+
+
+def test_vision_service_detect_components_returns_component_candidates(vision_service, tmp_path):
+    image_path = tmp_path / "component-board.png"
+    image = Image.new("RGB", (1200, 800), color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((160, 140, 320, 260), fill=(40, 40, 46), outline=(220, 220, 220), width=4)
+    draw.rectangle((540, 220, 710, 380), fill=(182, 182, 182), outline=(245, 245, 245), width=3)
+    draw.rectangle((860, 470, 1040, 610), fill=(62, 62, 68), outline=(205, 205, 205), width=4)
+    image.save(image_path)
+
+    components = vision_service.detect_components(
+        {
+            "id": "img-1",
+            "image_path": str(image_path),
+            "image_width": 1200,
+            "image_height": 800,
+        },
+        "run-1",
+    )
+
+    assert len(components) >= 3
+    assert all(component["run_image_id"] == "img-1" for component in components[:3])
+    assert all(component["confidence"] >= 0.4 for component in components[:3])
 
 def test_setup_service_create_run(setup_service):
     run = setup_service.create_run(pcb_id="TEST-PCB")
