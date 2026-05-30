@@ -376,6 +376,8 @@ class VisionService:
         width, height = image_size
         original_width, original_height = original_size
         image_area = width * height
+        edge_margin_x = max(6, int(width * 0.012))
+        edge_margin_y = max(6, int(height * 0.012))
         candidates: list[dict[str, object]] = []
         for component in components:
             box_width = component["max_x"] - component["min_x"] + 1
@@ -387,12 +389,22 @@ class VisionService:
                 continue
             if box_width < 8 or box_height < 8:
                 continue
+            touches_left_edge = component["min_x"] <= edge_margin_x
+            touches_top_edge = component["min_y"] <= edge_margin_y
+            touches_right_edge = component["max_x"] >= (width - 1 - edge_margin_x)
+            touches_bottom_edge = component["max_y"] >= (height - 1 - edge_margin_y)
+            touches_edge = touches_left_edge or touches_top_edge or touches_right_edge or touches_bottom_edge
 
             fill_ratio = component["area"] / max(box_area, 1)
             aspect_ratio = box_width / max(box_height, 1)
             if fill_ratio < 0.3 or fill_ratio > 1.0:
                 continue
             if aspect_ratio < 0.2 or aspect_ratio > 5.0:
+                continue
+            # Reject UI chrome and image-frame artifacts that cling to the outer edge.
+            if touches_edge and (box_width >= width * 0.025 or box_height >= height * 0.025):
+                continue
+            if touches_edge and component["area"] < int(image_area * 0.0012):
                 continue
 
             normalized_width = min((box_width * scale) / original_width, 1.0)
