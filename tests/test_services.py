@@ -97,6 +97,39 @@ def test_vision_service_detect_components_uses_reference_classifier_when_availab
     assert components[0]["label"] == "resistor"
     assert components[0]["classification_confidence"] == 0.91
 
+
+def test_vision_service_detect_components_marks_low_confidence_predictions_as_suspect(
+    vision_service,
+    tmp_path,
+    monkeypatch,
+):
+    image_path = tmp_path / "component-board-suspect.png"
+    image = Image.new("RGB", (600, 400), color=(28, 126, 82))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((120, 100, 240, 200), fill=(40, 40, 46), outline=(220, 220, 220), width=4)
+    image.save(image_path)
+
+    class StubClassifier:
+        def classify(self, image, candidate):
+            return "resistor", 0.56
+
+    monkeypatch.setattr(vision_service, "_load_reference_component_classifier", lambda: StubClassifier())
+
+    components = vision_service.detect_components(
+        {
+            "id": "img-3",
+            "image_path": str(image_path),
+            "image_width": 600,
+            "image_height": 400,
+        },
+        "run-3",
+    )
+
+    assert components
+    assert components[0]["label"] == "component_candidate"
+    assert components[0]["predicted_label"] == "resistor"
+    assert components[0]["label_quality"] == "suspect"
+
 def test_setup_service_create_run(setup_service):
     run = setup_service.create_run(pcb_id="TEST-PCB")
     

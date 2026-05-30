@@ -39,6 +39,13 @@ REFERENCE_COMPONENT_LABELS = (
     "battery",
 )
 
+REFERENCE_COMPONENT_LABEL_THRESHOLDS = {
+    "resistor": 0.60,
+    "connector": 0.50,
+    "led": 0.50,
+    "ic": 0.50,
+}
+
 
 class VisionService:
     def __init__(self, *, db_path: Path, storage_path: Path) -> None:
@@ -196,42 +203,63 @@ class VisionService:
 
     @staticmethod
     def _build_component_candidate_mask(image: Image.Image) -> list[int]:
-        rgb_image = image.convert("RGB")
-        width, height = rgb_image.size
-        pixels = rgb_image.load()
+        hsv_image = image.convert("HSV")
+        width, height = hsv_image.size
+        hsv_pixels = hsv_image.load()
 
-        border_pixels: list[tuple[int, int, int]] = []
-        sample_step = max(1, min(width, height) // 80)
-        for x in range(0, width, sample_step):
-            border_pixels.append(pixels[x, 0])
-            border_pixels.append(pixels[x, height - 1])
-        for y in range(0, height, sample_step):
-            border_pixels.append(pixels[0, y])
-            border_pixels.append(pixels[width - 1, y])
+        hue_buckets = [0] * 256
+        board_samples: list[tuple[int, int, int]] = []
+        for y in range(height):
+            for x in range(width):
+                hue, saturation, value = hsv_pixels[x, y]
+                # Ignore probable white backdrop and near-black framing noise.
+                if (saturation <= 20 and value >= 242) or value <= 18:
+                    continue
+                if saturation >= 30 and 28 <= value <= 240:
+                    hue_buckets[hue] += saturation
 
-        if not border_pixels:
-            return [0] * (width * height)
+        dominant_hue = max(range(256), key=lambda index: hue_buckets[index]) if any(hue_buckets) else 85
 
-        board_red = sum(pixel[0] for pixel in border_pixels) / len(border_pixels)
-        board_green = sum(pixel[1] for pixel in border_pixels) / len(border_pixels)
-        board_blue = sum(pixel[2] for pixel in border_pixels) / len(border_pixels)
-        board_brightness = (board_red + board_green + board_blue) / 3.0
+        for y in range(height):
+            for x in range(width):
+                hue, saturation, value = hsv_pixels[x, y]
+                if (saturation <= 20 and value >= 242) or value <= 18:
+                    continue
+                if VisionService._circular_hue_distance(hue, dominant_hue) <= 18 and saturation >= 25 and value <= 235:
+                    board_samples.append((hue, saturation, value))
+
+        if board_samples:
+            board_saturation = sum(sample[1] for sample in board_samples) / len(board_samples)
+            board_value = sum(sample[2] for sample in board_samples) / len(board_samples)
+        else:
+            board_saturation = 90.0
+            board_value = 120.0
 
         mask = [0] * (width * height)
         for y in range(height):
             for x in range(width):
-                red, green, blue = pixels[x, y]
-                diff = abs(red - board_red) + abs(green - board_green) + abs(blue - board_blue)
-                brightness = (red + green + blue) / 3.0
-                brightness_gap = abs(brightness - board_brightness)
-                is_candidate = diff >= 90 or brightness_gap >= 45 or (red + blue) > (green + 55)
-                if is_candidate:
+                hue, saturation, value = hsv_pixels[x, y]
+                if (saturation <= 20 and value >= 242) or value <= 18:
+                    continue
+
+                hue_distance = VisionService._circular_hue_distance(hue, dominant_hue)
+                bright_metallic = saturation <= 55 and 55 <= value <= 240
+                dark_body = value <= max(42, int(board_value - 22))
+                hue_shifted = hue_distance >= 16 and value >= 28
+                saturation_shifted = abs(saturation - board_saturation) >= 28 and value >= 28
+                board_like = hue_distance <= 14 and abs(saturation - board_saturation) <= 22 and abs(value - board_value) <= 26
+                if not board_like and (bright_metallic or dark_body or hue_shifted or saturation_shifted):
                     mask[(y * width) + x] = 255
 
         mask_image = Image.new("L", (width, height))
         mask_image.putdata(mask)
         cleaned = mask_image.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))
         return [1 if value >= 128 else 0 for value in cleaned.tobytes()]
+
+    @staticmethod
+    def _circular_hue_distance(first: int, second: int) -> int:
+        diff = abs(first - second)
+        return min(diff, 256 - diff)
 
     @staticmethod
     def _extract_mask_components(mask: list[int], width: int | None = None, height: int | None = None) -> list[dict[str, int]]:
@@ -429,14 +457,32 @@ class VisionService:
 
         classified: list[dict[str, object]] = []
         for candidate in candidates:
-            label, confidence = classifier.classify(image, candidate)
+            predicted_label, confidence = classifier.classify(image, candidate)
             enriched = dict(candidate)
-            if label is not None:
-                enriched["label"] = label
+            if predicted_label is not None:
+                enriched["predicted_label"] = predicted_label
             if confidence is not None:
                 enriched["classification_confidence"] = confidence
+            classification_quality = self._classify_component_label_quality(predicted_label, confidence)
+            if classification_quality is not None:
+                enriched["label_quality"] = classification_quality
+            if predicted_label is not None and classification_quality in {"accepted", "strong"}:
+                enriched["label"] = predicted_label
             classified.append(enriched)
         return classified
+
+    @staticmethod
+    def _classify_component_label_quality(predicted_label: str | None, confidence: float | None) -> str | None:
+        if predicted_label is None or confidence is None:
+            return None
+        threshold = REFERENCE_COMPONENT_LABEL_THRESHOLDS.get(predicted_label, 0.45)
+        if confidence >= max(0.72, threshold + 0.15):
+            return "strong"
+        if confidence >= threshold:
+            return "accepted"
+        if confidence >= max(0.3, threshold - 0.08):
+            return "suspect"
+        return "rejected"
 
     def _load_reference_component_classifier(self) -> object | None:
         if self._component_classifier_loaded:
@@ -552,7 +598,7 @@ class VisionService:
 
 
 class _ReferenceComponentClassifier:
-    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.45) -> None:
+    def __init__(self, model_path: Path) -> None:
         import torch
         from torch import nn
         import torch.nn.functional as F
@@ -560,7 +606,6 @@ class _ReferenceComponentClassifier:
         self._torch = torch
         self._nn = nn
         self._F = F
-        self._confidence_threshold = confidence_threshold
         self._device = "cuda" if torch.cuda.is_available() else "cpu"
         self._model = self._build_model().to(self._device)
         state_dict = torch.load(model_path, map_location=self._device)
@@ -606,8 +651,6 @@ class _ReferenceComponentClassifier:
             probs = self._torch.softmax(logits, dim=1)
             conf_tensor, class_tensor = self._torch.max(probs, dim=1)
         confidence = round(float(conf_tensor.item()), 4)
-        if confidence < self._confidence_threshold:
-            return None, confidence
         label = REFERENCE_COMPONENT_LABELS[int(class_tensor.item())]
         return label, confidence
 
