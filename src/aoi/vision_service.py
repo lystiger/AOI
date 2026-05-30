@@ -371,14 +371,24 @@ class VisionService:
             normalized_height = min((box_height * scale) / original_height, 1.0)
             normalized_area = normalized_width * normalized_height
             confidence = min(0.99, 0.4 + (fill_ratio * 0.35) + min(normalized_area * 4.0, 0.24))
+            expanded_box = VisionService._expand_component_box(
+                min_x=component["min_x"],
+                min_y=component["min_y"],
+                max_x=component["max_x"],
+                max_y=component["max_y"],
+                image_width=width,
+                image_height=height,
+            )
+            expanded_width = expanded_box["max_x"] - expanded_box["min_x"] + 1
+            expanded_height = expanded_box["max_y"] - expanded_box["min_y"] + 1
             candidates.append(
                 {
                     "id": f"cmp-{len(candidates) + 1}",
                     "run_image_id": run_image_id,
-                    "x": round(max((component["min_x"] * scale) / original_width, 0.0), 4),
-                    "y": round(max((component["min_y"] * scale) / original_height, 0.0), 4),
-                    "width": round(normalized_width, 4),
-                    "height": round(normalized_height, 4),
+                    "x": round(max((expanded_box["min_x"] * scale) / original_width, 0.0), 4),
+                    "y": round(max((expanded_box["min_y"] * scale) / original_height, 0.0), 4),
+                    "width": round(min((expanded_width * scale) / original_width, 1.0), 4),
+                    "height": round(min((expanded_height * scale) / original_height, 1.0), 4),
                     "confidence": round(confidence, 3),
                     "label": "component_candidate",
                 }
@@ -386,6 +396,27 @@ class VisionService:
 
         candidates.sort(key=lambda entry: (float(entry["confidence"]), float(entry["width"]) * float(entry["height"])), reverse=True)
         return candidates[:64]
+
+    @staticmethod
+    def _expand_component_box(
+        *,
+        min_x: int,
+        min_y: int,
+        max_x: int,
+        max_y: int,
+        image_width: int,
+        image_height: int,
+    ) -> dict[str, int]:
+        box_width = max_x - min_x + 1
+        box_height = max_y - min_y + 1
+        pad_x = max(3, int(box_width * 0.12))
+        pad_y = max(3, int(box_height * 0.12))
+        return {
+            "min_x": max(0, min_x - pad_x),
+            "min_y": max(0, min_y - pad_y),
+            "max_x": min(image_width - 1, max_x + pad_x),
+            "max_y": min(image_height - 1, max_y + pad_y),
+        }
 
     def _classify_component_candidates(
         self,
