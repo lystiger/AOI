@@ -563,6 +563,52 @@ def test_fastapi_get_run_returns_detected_components_after_upload(tmp_path) -> N
     assert run_payload["components"][0]["run_image_id"] == run_payload["images"][0]["id"]
 
 
+def test_fastapi_save_model_fovs_and_generate_run_fov_crops(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FOV")
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    client = TestClient(app)
+    image_path = _create_component_board_image(tmp_path / "fov-components.png")
+    buffer = BytesIO()
+    Image.open(image_path).save(buffer, format="PNG")
+
+    update_response = client.patch(f"/runs/{run['id']}", json={"model_name": "MODEL-FOV"})
+    save_response = client.put(
+        "/models/MODEL-FOV/fovs",
+        json={
+            "fovs": [
+                {"id": "power-left", "label": "Power Left", "x": 0.05, "y": 0.1, "width": 0.25, "height": 0.28},
+                {"id": "logic-center", "label": "Logic Center", "x": 0.3, "y": 0.14, "width": 0.36, "height": 0.34},
+            ]
+        },
+    )
+    upload_response = client.post(
+        f"/runs/{run['id']}/images",
+        content=buffer.getvalue(),
+        headers={"Content-Type": "image/png"},
+    )
+    generate_response = client.post(f"/runs/{run['id']}/fovs/generate")
+
+    assert update_response.status_code == 200
+    assert save_response.status_code == 200
+    assert save_response.json()["count"] == 2
+    assert upload_response.status_code == 201
+    assert generate_response.status_code == 200
+    run_payload = generate_response.json()["run"]
+    assert len(run_payload["model_fovs"]) == 2
+    fov_images = [image for image in run_payload["images"] if image["image_role"].startswith("fov:")]
+    assert len(fov_images) == 2
+    assert (tmp_path / "storage" / run["id"] / "fovs" / "power-left.png").exists()
+
+    image_response = client.get(f"/runs/{run['id']}/images/{fov_images[0]['id']}")
+    assert image_response.status_code == 200
+    assert image_response.headers["content-type"] == "image/png"
+
+
 def test_fastapi_fiducial_detection_and_confirmation_endpoints(tmp_path) -> None:
     database = DatabaseManager(tmp_path / "aoi.db")
     run = database.create_run(pcb_id="PCB-FID")

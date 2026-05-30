@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 import shutil
 import uuid
 from typing import Annotated, Literal
@@ -15,6 +16,7 @@ from aoi.api.models import (
     ManualBarcodeRequest,
     ManualFiducialsRequest,
     ReviewDefectRequest,
+    SaveModelFovsRequest,
     UpdateRunRequest,
 )
 
@@ -198,16 +200,76 @@ async def upload_run_image(
 def get_run_image(
     run_id: str,
     image_id: str,
+    database_manager: DatabaseManagerDep,
     storage_path: StoragePathDep,
 ) -> FileResponse:
-    _ = image_id
-    run_dir = storage_path / run_id
-    for ext in ["png", "jpg", "jpeg"]:
-        candidate = run_dir / f"scan.{ext}"
-        if candidate.exists():
-            media_type = "image/png" if candidate.suffix == ".png" else "image/jpeg"
-            return FileResponse(candidate, media_type=media_type)
+    image = database_manager.fetch_run_image(run_id, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="image not found")
+
+    image_path = str(image.get("image_path") or "").strip()
+    candidate = storage_path / run_id / "scan.png"
+    if image_path:
+        path = Path(image_path)
+        if image_path.startswith(f"/runs/{run_id}/images/"):
+            for ext in ["png", "jpg", "jpeg"]:
+                scan_candidate = storage_path / run_id / f"scan.{ext}"
+                if scan_candidate.exists():
+                    candidate = scan_candidate
+                    break
+        elif path.is_absolute():
+            candidate = path
+        elif path.exists():
+            candidate = path.resolve()
+        else:
+            candidate = (storage_path.parent / image_path.lstrip("/")).resolve()
+
+    if candidate.exists():
+        media_type = "image/png" if candidate.suffix.lower() == ".png" else "image/jpeg"
+        return FileResponse(candidate, media_type=media_type)
     raise HTTPException(status_code=404, detail="image not found")
+
+
+@router.get("/models/{model_name}/fovs")
+def get_model_fovs(
+    model_name: str,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    fovs = database_manager.fetch_model_fovs(model_name)
+    return {"status": "ok", "model_name": model_name, "count": len(fovs), "fovs": fovs}
+
+
+@router.put("/models/{model_name}/fovs")
+def save_model_fovs(
+    model_name: str,
+    payload: SaveModelFovsRequest,
+    setup_service: SetupServiceDep,
+) -> dict[str, object]:
+    try:
+        fovs = setup_service.save_model_fovs(
+            model_name,
+            [entry.model_dump(exclude_none=True) for entry in payload.fovs],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "ok", "model_name": model_name, "count": len(fovs), "fovs": fovs}
+
+
+@router.post("/runs/{run_id}/fovs/generate")
+def generate_run_fov_crops(
+    run_id: str,
+    setup_service: SetupServiceDep,
+    database_manager: DatabaseManagerDep,
+) -> dict[str, object]:
+    try:
+        run = setup_service.generate_run_fov_crops(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    hydrated_run = database_manager.fetch_run_with_defects(run_id)
+    assert hydrated_run is not None
+    return {"status": "ok", "run": hydrated_run}
 
 
 @router.post("/runs/{run_id}/fiducials/detect")

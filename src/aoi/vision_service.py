@@ -67,6 +67,31 @@ class VisionService:
             return "fiducial detection failed: found fewer than 3 fiducial candidates"
         return None
 
+    def open_image_file(self, image_file: Path) -> Image.Image:
+        return Image.open(image_file).convert("RGB")
+
+    def resolve_run_image_file(self, run_id: str, image: dict[str, object]) -> Path:
+        return self._resolve_run_image_file(run_id, image)
+
+    def detect_board_region(self, image: dict[str, object], run_id: str) -> dict[str, float]:
+        image_file = self._resolve_run_image_file(run_id, image)
+        try:
+            with Image.open(image_file) as source_image:
+                rgb_image = source_image.convert("RGB")
+        except (FileNotFoundError, UnidentifiedImageError) as exc:
+            raise ValueError(f"board region detection failed: unable to read scan image from {image_file}") from exc
+
+        original_width, original_height = rgb_image.size
+        working_image, scale = self._prepare_detection_image(rgb_image)
+        board_mask = self._build_board_region_mask(working_image)
+        search_region = self._resolve_component_search_region(board_mask, *working_image.size)
+        return {
+            "x": round((search_region["min_x"] * scale) / original_width, 4),
+            "y": round((search_region["min_y"] * scale) / original_height, 4),
+            "width": round(((search_region["max_x"] - search_region["min_x"] + 1) * scale) / original_width, 4),
+            "height": round(((search_region["max_y"] - search_region["min_y"] + 1) * scale) / original_height, 4),
+        }
+
     def detect_components(self, image: dict[str, object], run_id: str) -> list[dict[str, object]]:
         image_file = self._resolve_run_image_file(run_id, image)
         try:

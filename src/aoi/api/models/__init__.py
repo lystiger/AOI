@@ -6,13 +6,14 @@ from aoi.api.models.events import (
     parse_post_events_payload,
 )
 from aoi.api.models.runs import CreateRunRequest, UpdateRunRequest
-from aoi.api.models.setup import ManualBarcodeRequest, ManualFiducialsRequest
+from aoi.api.models.setup import ManualBarcodeRequest, ManualFiducialsRequest, SaveModelFovsRequest
 
 __all__ = [
     "CreateRunRequest",
     "EventIn",
     "ManualBarcodeRequest",
     "ManualFiducialsRequest",
+    "SaveModelFovsRequest",
     "PostEventsRequest",
     "ReviewDefectRequest",
     "RunImageInputIn",

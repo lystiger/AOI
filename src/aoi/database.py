@@ -67,6 +67,17 @@ class DatabaseManager:
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (run_id) REFERENCES inspection_runs(id)
                 );
+
+                CREATE TABLE IF NOT EXISTS model_fovs (
+                    id TEXT PRIMARY KEY,
+                    model_name TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    x REAL NOT NULL,
+                    y REAL NOT NULL,
+                    width REAL NOT NULL,
+                    height REAL NOT NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0
+                );
                 """
             )
             self._ensure_column(
@@ -437,6 +448,7 @@ class DatabaseManager:
         payload["requires_barcode"] = bool(payload.get("requires_barcode"))
         payload["barcode"] = json.loads(payload["barcode_json"]) if payload.get("barcode_json") else None
         payload["components"] = json.loads(payload["components_json"]) if payload.get("components_json") else []
+        payload["model_fovs"] = self.fetch_model_fovs(str(payload["model_name"])) if payload.get("model_name") else []
         payload.pop("fiducials_json", None)
         payload.pop("barcode_json", None)
         payload.pop("components_json", None)
@@ -497,6 +509,61 @@ class DatabaseManager:
                 (run_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def fetch_run_image(self, run_id: str, image_id: str) -> dict[str, object] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at
+                FROM run_images
+                WHERE run_id = ? AND id = ?
+                """,
+                (run_id, image_id),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def fetch_model_fovs(self, model_name: str) -> list[dict[str, object]]:
+        normalized_model_name = model_name.strip()
+        if not normalized_model_name:
+            return []
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, model_name, label, x, y, width, height, sort_order
+                FROM model_fovs
+                WHERE model_name = ?
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (normalized_model_name,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def replace_model_fovs(self, model_name: str, fovs: list[dict[str, object]]) -> list[dict[str, object]]:
+        normalized_model_name = model_name.strip()
+        if not normalized_model_name:
+            raise ValueError("model_name must be a non-empty string")
+        with self._connect() as connection:
+            connection.execute("DELETE FROM model_fovs WHERE model_name = ?", (normalized_model_name,))
+            connection.executemany(
+                """
+                INSERT INTO model_fovs (id, model_name, label, x, y, width, height, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        str(entry["id"]),
+                        normalized_model_name,
+                        str(entry["label"]),
+                        float(entry["x"]),
+                        float(entry["y"]),
+                        float(entry["width"]),
+                        float(entry["height"]),
+                        int(entry["sort_order"]),
+                    )
+                    for entry in fovs
+                ],
+            )
+        return self.fetch_model_fovs(normalized_model_name)
 
     def list_runs(
         self,
@@ -607,6 +674,31 @@ class DatabaseManager:
                 (image_id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at),
             )
 
+    def delete_run_images_by_role_prefix(self, run_id: str, prefix: str) -> list[dict[str, object]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, run_id, image_path, image_role, image_width, image_height, sort_order, created_at
+                FROM run_images
+                WHERE run_id = ? AND image_role LIKE ?
+                ORDER BY sort_order ASC, created_at ASC
+                """,
+                (run_id, f"{prefix}%"),
+            ).fetchall()
+            connection.execute(
+                "DELETE FROM run_images WHERE run_id = ? AND image_role LIKE ?",
+                (run_id, f"{prefix}%"),
+            )
+        return [dict(row) for row in rows]
+
+    def next_run_image_sort_order(self, run_id: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) AS max_sort_order FROM run_images WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        return int(row["max_sort_order"]) + 1 if row is not None else 0
+
     def add_run_image(
         self,
         run_id: str,
@@ -655,6 +747,12 @@ class DatabaseManager:
 
     def save_manual_barcode(self, run_id: str, barcode: dict[str, object]) -> dict[str, object] | None:
         return self._setup_service().save_manual_barcode(run_id, barcode)
+
+    def save_model_fovs(self, model_name: str, fovs: list[dict[str, object]]) -> list[dict[str, object]]:
+        return self._setup_service().save_model_fovs(model_name, fovs)
+
+    def generate_run_fov_crops(self, run_id: str) -> dict[str, object] | None:
+        return self._setup_service().generate_run_fov_crops(run_id)
 
     @staticmethod
     def _derive_run_status(events: list[InferenceEvent]) -> str:

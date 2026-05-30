@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aoi.vision_service import VisionService
@@ -422,6 +423,74 @@ class SetupService:
         )
         return self.database.fetch_run(run_id)
 
+    def save_model_fovs(self, model_name: str, fovs: list[dict[str, object]]) -> list[dict[str, object]]:
+        normalized_model_name = model_name.strip()
+        if not normalized_model_name:
+            raise ValueError("model_name must be a non-empty string")
+
+        normalized_fovs: list[dict[str, object]] = []
+        for index, entry in enumerate(fovs):
+            normalized_fovs.append(
+                {
+                    "id": str(entry.get("id") or f"fov-{index + 1}").strip(),
+                    "label": str(entry.get("label") or "").strip(),
+                    "x": float(entry["x"]),
+                    "y": float(entry["y"]),
+                    "width": float(entry["width"]),
+                    "height": float(entry["height"]),
+                    "sort_order": index,
+                }
+            )
+
+        return self.database.replace_model_fovs(normalized_model_name, normalized_fovs)
+
+    def generate_run_fov_crops(self, run_id: str) -> dict[str, object] | None:
+        run_row = self.database.fetch_run(run_id)
+        if run_row is None:
+            return None
+
+        model_name = str(run_row.get("model_name") or "").strip()
+        if not model_name:
+            raise ValueError("model_name is required before generating FOV crops")
+
+        fovs = self.database.fetch_model_fovs(model_name)
+        if not fovs:
+            raise ValueError("no FOVs are configured for this model")
+
+        images = self.database.fetch_run_images(run_id)
+        if not images:
+            raise ValueError("scan image is required before generating FOV crops")
+
+        source_image = images[0]
+        source_file = self.vision_service.resolve_run_image_file(run_id, source_image)
+        board_region = self.vision_service.detect_board_region(source_image, run_id)
+        removed_images = self.database.delete_run_images_by_role_prefix(run_id, "fov:")
+        self._delete_generated_fov_assets(removed_images)
+
+        with self.vision_service.open_image_file(source_file) as image:
+            run_dir = self.database.storage_path / run_id / "fovs"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            next_sort_order = self.database.next_run_image_sort_order(run_id)
+            for index, fov in enumerate(fovs):
+                crop_box = self._resolve_fov_crop_box(image.size, board_region, fov)
+                crop = image.crop(crop_box)
+                filename = f"{fov['id']}.png"
+                file_path = run_dir / filename
+                crop.save(file_path, format="PNG")
+                image_id = str(uuid.uuid4())
+                self.database.insert_run_image(
+                    image_id=image_id,
+                    run_id=run_id,
+                    image_path=str(file_path),
+                    image_role=f"fov:{fov['id']}",
+                    image_width=crop.width,
+                    image_height=crop.height,
+                    sort_order=next_sort_order + index,
+                    created_at=str(run_row["timestamp"]),
+                )
+
+        return self.database.fetch_run(run_id)
+
     def _calculate_fiducial_status(self, run_id: str, *, requires_fiducials: bool, current_status: str) -> str:
         if not requires_fiducials:
             return "not_required"
@@ -459,6 +528,39 @@ class SetupService:
         if has_model or has_images:
             return "in_progress"
         return "not_ready"
+
+    @staticmethod
+    def _resolve_fov_crop_box(
+        image_size: tuple[int, int],
+        board_region: dict[str, float],
+        fov: dict[str, object],
+    ) -> tuple[int, int, int, int]:
+        image_width, image_height = image_size
+        board_min_x = int(round(float(board_region["x"]) * image_width))
+        board_min_y = int(round(float(board_region["y"]) * image_height))
+        board_width = max(1, int(round(float(board_region["width"]) * image_width)))
+        board_height = max(1, int(round(float(board_region["height"]) * image_height)))
+        board_max_x = min(image_width, board_min_x + board_width)
+        board_max_y = min(image_height, board_min_y + board_height)
+
+        crop_min_x = board_min_x + int(round(float(fov["x"]) * board_width))
+        crop_min_y = board_min_y + int(round(float(fov["y"]) * board_height))
+        crop_max_x = crop_min_x + max(1, int(round(float(fov["width"]) * board_width)))
+        crop_max_y = crop_min_y + max(1, int(round(float(fov["height"]) * board_height)))
+
+        return (
+            max(0, min(crop_min_x, image_width - 1)),
+            max(0, min(crop_min_y, image_height - 1)),
+            max(1, min(crop_max_x, board_max_x, image_width)),
+            max(1, min(crop_max_y, board_max_y, image_height)),
+        )
+
+    @staticmethod
+    def _delete_generated_fov_assets(images: list[dict[str, object]]) -> None:
+        for image in images:
+            image_path = Path(str(image.get("image_path") or "")).expanduser()
+            if image_path.is_file():
+                image_path.unlink(missing_ok=True)
 
     @staticmethod
     def _build_default_pcb_id(run_id: str) -> str:

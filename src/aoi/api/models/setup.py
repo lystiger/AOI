@@ -55,3 +55,32 @@ class ManualBarcodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     barcode: BarcodeIn
+
+
+class ModelFovIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str | None = None
+    label: str = Field(min_length=1)
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+    @field_validator("id", "label")
+    @classmethod
+    def validate_text_fields(cls, value: str | None, info) -> str | None:
+        return _require_non_empty_string(value, info.field_name)
+
+
+class SaveModelFovsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fovs: list[ModelFovIn]
+
+    @field_validator("fovs")
+    @classmethod
+    def validate_fovs(cls, value: list[ModelFovIn]) -> list[ModelFovIn]:
+        if not value:
+            raise ValueError("at least 1 FOV is required")
+        return value

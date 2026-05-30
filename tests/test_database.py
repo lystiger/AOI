@@ -409,3 +409,27 @@ def test_delete_run_removes_run_images_and_defect_logs(tmp_path) -> None:
     assert database.fetch_run(persisted_run.run_id) is None
     assert database.fetch_run_images(persisted_run.run_id) == []
     assert database.fetch_defect_logs(persisted_run.run_id) == []
+
+
+def test_save_model_fovs_and_generate_run_fov_crops(tmp_path) -> None:
+    database = DatabaseManager(tmp_path / "aoi.db")
+    run = database.create_run(pcb_id="PCB-FOV")
+    image_path = _create_fiducial_board_image(tmp_path / "fov-board.png")
+    _insert_run_image(database, run, image_path)
+    database.update_run(run["id"], model_name="MODEL-FOV")
+
+    saved_fovs = database.save_model_fovs(
+        "MODEL-FOV",
+        [
+            {"id": "left-bank", "label": "Left Bank", "x": 0.08, "y": 0.14, "width": 0.24, "height": 0.28},
+            {"id": "center-core", "label": "Center Core", "x": 0.34, "y": 0.24, "width": 0.32, "height": 0.34},
+        ],
+    )
+    generated_run = database.generate_run_fov_crops(run["id"])
+
+    assert [entry["id"] for entry in saved_fovs] == ["left-bank", "center-core"]
+    assert generated_run is not None
+    assert len(generated_run["model_fovs"]) == 2
+    fov_images = [image for image in database.fetch_run_images(run["id"]) if image["image_role"].startswith("fov:")]
+    assert len(fov_images) == 2
+    assert Path(fov_images[0]["image_path"]).exists()
