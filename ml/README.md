@@ -25,8 +25,21 @@ Supported defect labels:
 Quick start:
 
 ```bash
-pip install -r ml/requirements-ml.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r ml/requirements-ml-cpu.txt
 python ml/pipeline/self_test.py
+```
+
+Package files:
+
+- `ml/requirements-ml.txt`: shared ML dependencies without PyTorch wheel selection
+- `ml/requirements-ml-cpu.txt`: CPU-safe install path for PyTorch + shared ML dependencies
+
+If you need GPU wheels later, install `torch` and `torchvision` explicitly for the target CUDA version, then install:
+
+```bash
+pip install -r ml/requirements-ml.txt
 ```
 
 To download a dataset from Roboflow, configure:
