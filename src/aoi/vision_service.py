@@ -77,6 +77,7 @@ class VisionService:
 
         original_width, original_height = rgb_image.size
         working_image, scale = self._prepare_detection_image(rgb_image)
+        board_mask = self._build_board_region_mask(working_image)
         component_mask = self._build_component_candidate_mask(working_image)
         components = self._extract_mask_components(component_mask, *working_image.size)
         candidates = self._score_component_candidates(
@@ -85,6 +86,7 @@ class VisionService:
             image_size=working_image.size,
             original_size=(original_width, original_height),
             scale=scale,
+            board_mask=board_mask,
         )
         return self._classify_component_candidates(candidates, rgb_image)
 
@@ -257,6 +259,33 @@ class VisionService:
         return [1 if value >= 128 else 0 for value in cleaned.tobytes()]
 
     @staticmethod
+    def _build_board_region_mask(image: Image.Image) -> list[int]:
+        hsv_image = image.convert("HSV")
+        width, height = hsv_image.size
+        hsv_pixels = hsv_image.load()
+
+        hue_buckets = [0] * 256
+        for y in range(height):
+            for x in range(width):
+                hue, saturation, value = hsv_pixels[x, y]
+                if (saturation <= 20 and value >= 242) or value <= 18:
+                    continue
+                if saturation >= 30 and 28 <= value <= 240:
+                    hue_buckets[hue] += saturation
+
+        dominant_hue = max(range(256), key=lambda index: hue_buckets[index]) if any(hue_buckets) else 85
+        board_mask = [0] * (width * height)
+        for y in range(height):
+            for x in range(width):
+                hue, saturation, value = hsv_pixels[x, y]
+                if (saturation <= 20 and value >= 242) or value <= 18:
+                    continue
+                hue_distance = VisionService._circular_hue_distance(hue, dominant_hue)
+                if hue_distance <= 18 and saturation >= 25 and value <= 235:
+                    board_mask[(y * width) + x] = 1
+        return board_mask
+
+    @staticmethod
     def _circular_hue_distance(first: int, second: int) -> int:
         diff = abs(first - second)
         return min(diff, 256 - diff)
@@ -315,6 +344,7 @@ class VisionService:
         image_size: tuple[int, int],
         original_size: tuple[int, int],
         scale: float,
+        board_mask: list[int] | None = None,
     ) -> list[dict[str, object]]:
         width, height = image_size
         original_width, original_height = original_size
@@ -372,6 +402,7 @@ class VisionService:
         image_size: tuple[int, int],
         original_size: tuple[int, int],
         scale: float,
+        board_mask: list[int] | None = None,
     ) -> list[dict[str, object]]:
         width, height = image_size
         original_width, original_height = original_size
@@ -406,6 +437,8 @@ class VisionService:
                 continue
             if touches_edge and component["area"] < int(image_area * 0.0012):
                 continue
+            if board_mask is not None and not VisionService._candidate_is_on_board(component, board_mask, width, height):
+                continue
 
             normalized_width = min((box_width * scale) / original_width, 1.0)
             normalized_height = min((box_height * scale) / original_height, 1.0)
@@ -436,6 +469,54 @@ class VisionService:
 
         candidates.sort(key=lambda entry: (float(entry["confidence"]), float(entry["width"]) * float(entry["height"])), reverse=True)
         return candidates[:64]
+
+    @staticmethod
+    def _candidate_is_on_board(
+        component: dict[str, int],
+        board_mask: list[int],
+        width: int,
+        height: int,
+    ) -> bool:
+        box_width = component["max_x"] - component["min_x"] + 1
+        box_height = component["max_y"] - component["min_y"] + 1
+        pad_x = max(4, int(box_width * 0.2))
+        pad_y = max(4, int(box_height * 0.2))
+        left = max(0, component["min_x"] - pad_x)
+        right = min(width - 1, component["max_x"] + pad_x)
+        top = max(0, component["min_y"] - pad_y)
+        bottom = min(height - 1, component["max_y"] + pad_y)
+        center_x = (component["min_x"] + component["max_x"]) // 2
+        center_y = (component["min_y"] + component["max_y"]) // 2
+
+        sample_xs = {
+            left,
+            component["min_x"],
+            center_x,
+            component["max_x"],
+            right,
+        }
+        sample_ys = {
+            top,
+            component["min_y"],
+            center_y,
+            component["max_y"],
+            bottom,
+        }
+        hits = 0
+        total = 0
+        for sample_x in sample_xs:
+            for sample_y in sample_ys:
+                inside_component = (
+                    component["min_x"] <= sample_x <= component["max_x"]
+                    and component["min_y"] <= sample_y <= component["max_y"]
+                )
+                if inside_component:
+                    continue
+                clamped_x = min(max(sample_x, 0), width - 1)
+                clamped_y = min(max(sample_y, 0), height - 1)
+                total += 1
+                hits += board_mask[(clamped_y * width) + clamped_x]
+        return hits / max(total, 1) >= 0.25
 
     @staticmethod
     def _expand_component_box(
