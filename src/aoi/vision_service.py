@@ -521,7 +521,7 @@ class VisionService:
 
 
 class _ReferenceComponentClassifier:
-    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.52) -> None:
+    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.45) -> None:
         import torch
         from torch import nn
         import torch.nn.functional as F
@@ -594,7 +594,12 @@ class _ReferenceComponentClassifier:
 
     def _to_tensor(self, crop: Image.Image):
         torch = self._torch
-        resized = crop.resize((32, 32), Image.Resampling.BILINEAR).convert("RGB")
+        crop = crop.convert("RGB")
+        side = max(crop.size)
+        square = Image.new("RGB", (side, side), color=(0, 0, 0))
+        offset = ((side - crop.width) // 2, (side - crop.height) // 2)
+        square.paste(crop, offset)
+        resized = square.resize((32, 32), Image.Resampling.BILINEAR)
         data = torch.ByteTensor(bytearray(resized.tobytes())).float() / 255.0
         tensor = data.view(32, 32, 3).permute(2, 0, 1).unsqueeze(0)
         return tensor.to(self._device)
