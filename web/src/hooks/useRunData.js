@@ -190,6 +190,8 @@ export function useRunData({
   const failCount = defects.filter((defect) => defect.inspection_result === 'FAIL').length
   const hasScan = runImages.length > 0
   const hasModel = Boolean(selectedRun?.model_name?.trim())
+  const modelFovCount = selectedRun?.model_fovs?.length || 0
+  const fovImageCount = runImages.filter((image) => image.image_role?.startsWith('fov:')).length
   const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
   const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
   const requiresBarcode = Boolean(selectedRun?.requires_barcode)
@@ -258,8 +260,23 @@ export function useRunData({
         statusLabel: !selectedRunId ? 'Blocked' : hasModel ? 'Done' : 'Ready',
       },
       {
-        id: 'fiducials',
+        id: 'fovs',
         order: 5,
+        label: 'Define FOVs',
+        description: 'Define named field-of-view boxes for this model and generate crop surfaces for review or training.',
+        status: !selectedRunId || !hasScan || !hasModel ? 'blocked' : modelFovCount > 0 && fovImageCount >= modelFovCount ? 'done' : 'ready',
+        statusLabel:
+          !selectedRunId || !hasScan || !hasModel
+            ? 'Blocked'
+            : modelFovCount > 0 && fovImageCount >= modelFovCount
+              ? 'Done'
+              : modelFovCount > 0
+                ? 'Ready'
+                : 'Ready',
+      },
+      {
+        id: 'fiducials',
+        order: 6,
         label: 'Find Fiducial Marks',
         description: 'Detect and confirm fiducial marks when the selected model requires alignment setup.',
         status: !requiresFiducials ? 'not_required' : fiducialStatus === 'confirmed' ? 'done' : fiducialStatus,
@@ -280,7 +297,7 @@ export function useRunData({
       },
       {
         id: 'barcode',
-        order: 6,
+        order: 7,
         label: 'Find Barcode',
         description: 'Detect and confirm barcode position and decoded value when the selected model requires barcode validation.',
         status: !requiresBarcode ? 'not_required' : barcodeStatus === 'confirmed' ? 'done' : barcodeStatus,
@@ -301,7 +318,7 @@ export function useRunData({
       },
       {
         id: 'continue-review',
-        order: 7,
+        order: 8,
         label: 'Continue To Review',
         description: 'Open the normal PCB review surface once required setup is complete.',
         status: isReviewReady ? 'ready' : 'blocked',
@@ -324,8 +341,10 @@ export function useRunData({
     isReviewReady,
     manualStepId,
     componentDetectionStatus,
+    fovImageCount,
     requiresBarcode,
     requiresFiducials,
+    modelFovCount,
     selectedRunId,
   ])
 

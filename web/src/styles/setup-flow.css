@@ -138,6 +138,11 @@
   align-content: start;
 }
 
+.setup-grid {
+  display: grid;
+  gap: 16px;
+}
+
 .setup-action-card,
 .setup-summary-card {
   display: grid;
@@ -198,6 +203,11 @@
   gap: 8px;
 }
 
+.manual-setup-list {
+  display: grid;
+  gap: 10px;
+}
+
 .manual-setup-item.compact {
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -209,6 +219,15 @@
   color: var(--muted);
   font-size: 0.75rem;
   font-family: var(--font-mono);
+}
+
+.setup-inspector {
+  display: grid;
+  gap: 14px;
+}
+
+.slim-button {
+  justify-self: start;
 }
 
 .manual-setup-fields {
@@ -282,6 +301,12 @@
   background: rgba(83, 155, 245, 0.14);
 }
 
+.fov-box {
+  position: absolute;
+  border: 2px solid #ff7a59;
+  background: rgba(255, 122, 89, 0.14);
+}
+
 .component-box {
   position: absolute;
   border: 2px solid #66d9bd;
@@ -306,6 +331,18 @@
   left: -2px;
   background: var(--accent-soft);
   color: var(--accent);
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.fov-box span {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  background: rgba(88, 28, 18, 0.9);
+  color: #ffb399;
   padding: 0 6px;
   font-size: 0.68rem;
   font-family: var(--font-mono);

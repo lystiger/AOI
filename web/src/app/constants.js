@@ -27,3 +27,9 @@ export const DEFAULT_MANUAL_FIDUCIALS = [
   { id: 'fid-2', x: '0.86', y: '0.12', width: '0.035', height: '0.035' },
   { id: 'fid-3', x: '0.12', y: '0.82', width: '0.035', height: '0.035' },
 ]
+
+export const DEFAULT_MODEL_FOVS = [
+  { id: 'fov-1', label: 'Power Entry', x: '0.06', y: '0.08', width: '0.22', height: '0.24' },
+  { id: 'fov-2', label: 'Logic Core', x: '0.32', y: '0.18', width: '0.30', height: '0.30' },
+  { id: 'fov-3', label: 'I/O Edge', x: '0.68', y: '0.12', width: '0.22', height: '0.34' },
+]

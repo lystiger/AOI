@@ -14,6 +14,7 @@ export default function ReviewWorkspace({ workspace }) {
     setSelectedDefectId,
     detailLoading,
     failCount,
+    fovError,
     showSetupMode,
     runImages,
     effectiveSelectedImageId,
@@ -33,6 +34,12 @@ export default function ReviewWorkspace({ workspace }) {
     setRequiresBarcodeDraft,
     handleCreateRun,
     handleSaveModel,
+    handleSaveFovs,
+    handleGenerateFovs,
+    handleAddFovDraft,
+    handleRemoveFovDraft,
+    handleManualFovChange,
+    handleManualFovMetaChange,
     handleDetectFiducials,
     handleConfirmFiducials,
     handleManualFiducialChange,
@@ -46,6 +53,8 @@ export default function ReviewWorkspace({ workspace }) {
     isReviewReady,
     isCreatingRun,
     isSavingModel,
+    isSavingFovs,
+    isGeneratingFovs,
     isDetectingFiducials,
     isSavingManualFiducials,
     isDetectingBarcode,
@@ -57,6 +66,7 @@ export default function ReviewWorkspace({ workspace }) {
     barcodeError,
     manualFiducialsDraft,
     manualBarcodeDraft,
+    manualFovDraft,
     isSidebarOpen,
     isFiltersOpen,
     detailFilters,
@@ -70,6 +80,7 @@ export default function ReviewWorkspace({ workspace }) {
   const visibleComponents = (selectedRun?.components || []).filter(
     (component) => component.run_image_id === effectiveSelectedImageId,
   )
+  const setupImage = runImages.find((image) => image.image_role === 'full_board') || selectedImage
 
   return (
     <section className="panel review-panel">
@@ -159,7 +170,7 @@ export default function ReviewWorkspace({ workspace }) {
           steps={setupSteps}
           activeStep={activeSetupStep}
           selectedRun={selectedRun}
-          selectedImage={selectedImage}
+          selectedImage={setupImage}
           modelDraft={modelDraft}
           requiresFiducialsDraft={requiresFiducialsDraft}
           requiresBarcodeDraft={requiresBarcodeDraft}
@@ -169,6 +180,12 @@ export default function ReviewWorkspace({ workspace }) {
           onCreateRun={handleCreateRun}
           onUploadScan={openImagePicker}
           onSaveModel={handleSaveModel}
+          onSaveFovs={handleSaveFovs}
+          onGenerateFovs={handleGenerateFovs}
+          onAddFov={handleAddFovDraft}
+          onRemoveFov={handleRemoveFovDraft}
+          onManualFovChange={handleManualFovChange}
+          onManualFovMetaChange={handleManualFovMetaChange}
           onDetectFiducials={handleDetectFiducials}
           onConfirmFiducials={handleConfirmFiducials}
           onManualFiducialsChange={handleManualFiducialChange}
@@ -183,6 +200,8 @@ export default function ReviewWorkspace({ workspace }) {
           isCreatingRun={isCreatingRun}
           isUploading={isUploading}
           isSavingModel={isSavingModel}
+          isSavingFovs={isSavingFovs}
+          isGeneratingFovs={isGeneratingFovs}
           isDetectingFiducials={isDetectingFiducials}
           isSavingManualFiducials={isSavingManualFiducials}
           isDetectingBarcode={isDetectingBarcode}
@@ -190,8 +209,10 @@ export default function ReviewWorkspace({ workspace }) {
           createRunError={createRunError}
           uploadError={uploadError}
           modelError={modelError}
+          fovError={fovError}
           fiducialError={fiducialError}
           barcodeError={barcodeError}
+          manualFovDraft={manualFovDraft}
           manualFiducialsDraft={manualFiducialsDraft}
           manualBarcodeDraft={manualBarcodeDraft}
         />

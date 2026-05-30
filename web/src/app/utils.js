@@ -1,4 +1,4 @@
-import { DEFAULT_MANUAL_FIDUCIALS } from './constants'
+import { DEFAULT_MANUAL_FIDUCIALS, DEFAULT_MODEL_FOVS } from './constants'
 
 export function formatFiducialLabel(index) {
   return `mark-${index + 1}`
@@ -34,6 +34,20 @@ export function buildManualBarcodeDraft(run) {
     width: '0.16',
     height: '0.08',
   }
+}
+
+export function buildManualFovDraft(run) {
+  if (run?.model_fovs?.length) {
+    return run.model_fovs.map((fov, index) => ({
+      id: fov.id || `fov-${index + 1}`,
+      label: fov.label || `FOV ${index + 1}`,
+      x: String(fov.x ?? ''),
+      y: String(fov.y ?? ''),
+      width: String(fov.width ?? ''),
+      height: String(fov.height ?? ''),
+    }))
+  }
+  return DEFAULT_MODEL_FOVS.map((fov) => ({ ...fov }))
 }
 
 export function buildQuery(filters) {

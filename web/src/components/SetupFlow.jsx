@@ -104,6 +104,14 @@ function ComponentPreview({ image, components }) {
   )
 }
 
+function FovPreview({ image, editableFovs, onChangeFov }) {
+  if (!image) {
+    return <div className="empty-state">Upload a scan to define field-of-view regions.</div>
+  }
+
+  return <EditableOverlayPreview image={image} overlays={editableFovs} onChange={onChangeFov} kind="fov" />
+}
+
 export default function SetupFlow({
   steps,
   activeStep,
@@ -118,6 +126,12 @@ export default function SetupFlow({
   onCreateRun,
   onUploadScan,
   onSaveModel,
+  onSaveFovs,
+  onGenerateFovs,
+  onAddFov,
+  onRemoveFov,
+  onManualFovChange,
+  onManualFovMetaChange,
   onDetectFiducials,
   onConfirmFiducials,
   onManualFiducialsChange,
@@ -132,6 +146,8 @@ export default function SetupFlow({
   isCreatingRun,
   isUploading,
   isSavingModel,
+  isSavingFovs,
+  isGeneratingFovs,
   isDetectingFiducials,
   isSavingManualFiducials,
   isDetectingBarcode,
@@ -139,11 +155,21 @@ export default function SetupFlow({
   createRunError,
   uploadError,
   modelError,
+  fovError,
   fiducialError,
   barcodeError,
+  manualFovDraft,
   manualFiducialsDraft,
   manualBarcodeDraft,
 }) {
+  const editableFovs = manualFovDraft.map((fov, index) => ({
+    id: fov.id || `fov-${index + 1}`,
+    x: toNormalizedNumber(fov.x, 0.1),
+    y: toNormalizedNumber(fov.y, 0.1),
+    width: toPositiveNormalizedNumber(fov.width, 0.18),
+    height: toPositiveNormalizedNumber(fov.height, 0.18),
+    label: fov.label || `FOV ${index + 1}`,
+  }))
   const editableFiducials = manualFiducialsDraft.map((fiducial, index) => ({
     id: fiducial.id || `fid-${index + 1}`,
     x: toNormalizedNumber(fiducial.x),
@@ -272,6 +298,100 @@ export default function SetupFlow({
                   <span>{selectedRun?.components?.length || 0}</span>
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          {activeStep.id === 'fovs' ? (
+            <div className="setup-grid">
+              {!selectedRun?.model_name?.trim() ? (
+                <div className="empty-guidance">
+                  <strong>Model name required</strong>
+                  <p>Save the model name first so these FOV definitions are attached to the correct product.</p>
+                </div>
+              ) : !selectedImage ? (
+                <div className="empty-guidance">
+                  <strong>Board scan required</strong>
+                  <p>Upload a full-board scan before defining mechanical field-of-view regions.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="setup-action-card">
+                    <p>
+                      Define named field-of-view regions on the full board image, save them to the model, then
+                      generate reusable crop surfaces for review and training.
+                    </p>
+                    {fovError ? <div className="step-error-message">{fovError}</div> : null}
+                    <FovPreview image={selectedImage} editableFovs={editableFovs} onChangeFov={onManualFovChange} />
+                    <div className="setup-button-row">
+                      <button type="button" className="ghost-button" onClick={onAddFov}>
+                        Add FOV
+                      </button>
+                      <button type="button" className="primary-button" onClick={onSaveFovs} disabled={isSavingFovs}>
+                        {isSavingFovs ? 'Saving FOVs...' : 'Save FOV Layout'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={onGenerateFovs}
+                        disabled={isGeneratingFovs || !(selectedRun?.model_fovs?.length || 0)}
+                      >
+                        {isGeneratingFovs ? 'Generating Crops...' : 'Generate FOV Crops'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="setup-inspector">
+                    <div className="manual-setup-card">
+                      <strong>Named FOV Regions</strong>
+                      <p>Drag the overlays to place them. Edit each label here so generated crop surfaces stay readable.</p>
+                      <div className="manual-setup-list">
+                        {editableFovs.map((fov) => (
+                          <div key={fov.id} className="manual-setup-item">
+                            <label className="field compact">
+                              <span>Label</span>
+                              <input
+                                value={manualFovDraft.find((entry) => entry.id === fov.id)?.label || ''}
+                                onChange={(event) => onManualFovMetaChange(fov.id, 'label', event.target.value)}
+                              />
+                            </label>
+                            <span className="compact-meta">
+                              x {fov.x.toFixed(3)} y {fov.y.toFixed(3)} w {fov.width.toFixed(3)} h {fov.height.toFixed(3)}
+                            </span>
+                            <button
+                              type="button"
+                              className="ghost-button slim-button"
+                              onClick={() => onRemoveFov(fov.id)}
+                              disabled={editableFovs.length <= 1}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="manual-setup-card">
+                      <strong>Generated Crop Surfaces</strong>
+                      {(selectedRun?.images || []).some((image) => image.image_role?.startsWith('fov:')) ? (
+                        <div className="fiducial-list">
+                          {selectedRun.images
+                            .filter((image) => image.image_role?.startsWith('fov:'))
+                            .map((image) => (
+                              <div key={image.id} className="fiducial-list-item">
+                                <strong>{image.image_role.replace('fov:', '')}</strong>
+                                <span>
+                                  {image.image_width} x {image.image_height}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state">No FOV crop images generated yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           ) : null}
 
@@ -441,6 +561,10 @@ export default function SetupFlow({
             <strong>{selectedRun?.images?.length ? 'Attached' : 'Missing'}</strong>
             <span>Model</span>
             <strong>{selectedRun?.model_name || 'Unset'}</strong>
+            <span>Model FOVs</span>
+            <strong>
+              {(selectedRun?.model_fovs?.length || 0) > 0 ? `${selectedRun?.model_fovs?.length || 0} saved` : 'Unset'}
+            </strong>
             <span>Components</span>
             <strong>
               {selectedRun?.images?.length

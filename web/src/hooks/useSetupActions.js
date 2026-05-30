@@ -1,14 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
 
-import { buildManualBarcodeDraft, buildManualFiducialsDraft, buildQuery, fetchJson } from '../app/utils'
+import { buildManualBarcodeDraft, buildManualFiducialsDraft, buildManualFovDraft, buildQuery, fetchJson } from '../app/utils'
 import { useToast } from '../components/toastContext'
 
 function normalizeRunPayload(run, selectedRun) {
   return {
     ...run,
-    images: selectedRun?.images || [],
-    defect_logs: selectedRun?.defect_logs || [],
-    event_count: selectedRun?.event_count || 0,
+    images: Array.isArray(run?.images) ? run.images : selectedRun?.images || [],
+    defect_logs: Array.isArray(run?.defect_logs) ? run.defect_logs : selectedRun?.defect_logs || [],
+    event_count: typeof run?.event_count === 'number' ? run.event_count : selectedRun?.event_count || 0,
   }
 }
 
@@ -30,11 +30,14 @@ export function useSetupActions({
   const [createRunError, setCreateRunError] = useState('')
   const [uploadError, setUploadError] = useState('')
   const [modelError, setModelError] = useState('')
+  const [fovError, setFovError] = useState('')
   const [fiducialError, setFiducialError] = useState('')
   const [barcodeError, setBarcodeError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
+  const [isSavingFovs, setIsSavingFovs] = useState(false)
+  const [isGeneratingFovs, setIsGeneratingFovs] = useState(false)
   const [isDetectingFiducials, setIsDetectingFiducials] = useState(false)
   const [isSavingManualFiducials, setIsSavingManualFiducials] = useState(false)
   const [isDetectingBarcode, setIsDetectingBarcode] = useState(false)
@@ -43,6 +46,7 @@ export function useSetupActions({
   const [modelDraft, setModelDraft] = useState('')
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
+  const [manualFovDraft, setManualFovDraft] = useState(() => buildManualFovDraft(null))
   const [manualFiducialsDraft, setManualFiducialsDraft] = useState(() => buildManualFiducialsDraft(null))
   const [manualBarcodeDraft, setManualBarcodeDraft] = useState(() => buildManualBarcodeDraft(null))
 
@@ -50,12 +54,14 @@ export function useSetupActions({
     setModelDraft('')
     setRequiresFiducialsDraft(false)
     setRequiresBarcodeDraft(false)
+    setManualFovDraft(buildManualFovDraft(null))
     setManualFiducialsDraft(buildManualFiducialsDraft(null))
     setManualBarcodeDraft(buildManualBarcodeDraft(null))
     setManualStepId(null)
     setCreateRunError('')
     setUploadError('')
     setModelError('')
+    setFovError('')
     setFiducialError('')
     setBarcodeError('')
     setSelectedDefectId(null)
@@ -68,12 +74,14 @@ export function useSetupActions({
     setModelDraft(nextRun?.model_name || '')
     setRequiresFiducialsDraft(Boolean(nextRun?.requires_fiducials))
     setRequiresBarcodeDraft(Boolean(nextRun?.requires_barcode))
+    setManualFovDraft(buildManualFovDraft(nextRun))
     setManualFiducialsDraft(buildManualFiducialsDraft(nextRun))
     setManualBarcodeDraft(buildManualBarcodeDraft(nextRun))
     setManualStepId(null)
     setCreateRunError('')
     setUploadError('')
     setModelError('')
+    setFovError('')
     setFiducialError('')
     setBarcodeError('')
   }, [setManualStepId])
@@ -212,6 +220,120 @@ export function useSetupActions({
       toast.error(`Failed to delete run: ${err.message}`)
     } finally {
       setIsDeletingRun(false)
+    }
+  }
+
+  function handleManualFovChange(fovId, nextBox) {
+    setManualFovDraft((current) =>
+      current.map((fov, index) =>
+        (fov.id || `fov-${index + 1}`) === fovId
+          ? {
+              ...fov,
+              x: nextBox.x.toFixed(4),
+              y: nextBox.y.toFixed(4),
+              width: nextBox.width.toFixed(4),
+              height: nextBox.height.toFixed(4),
+            }
+          : fov,
+      ),
+    )
+  }
+
+  function handleManualFovMetaChange(fovId, key, value) {
+    setManualFovDraft((current) =>
+      current.map((fov, index) =>
+        (fov.id || `fov-${index + 1}`) === fovId
+          ? {
+              ...fov,
+              [key]: value,
+            }
+          : fov,
+      ),
+    )
+  }
+
+  function handleAddFovDraft() {
+    setManualFovDraft((current) => [
+      ...current,
+      {
+        id: `fov-${current.length + 1}`,
+        label: `FOV ${current.length + 1}`,
+        x: '0.15',
+        y: '0.15',
+        width: '0.18',
+        height: '0.18',
+      },
+    ])
+  }
+
+  function handleRemoveFovDraft(fovId) {
+    setManualFovDraft((current) => (current.length > 1 ? current.filter((fov) => fov.id !== fovId) : current))
+  }
+
+  async function handleSaveFovs() {
+    if (!selectedRunId) {
+      return
+    }
+    const modelName = (selectedRunRef.current?.model_name || modelDraft || '').trim()
+    if (!modelName) {
+      setFovError('Save FOV Error: model name is required before saving FOVs')
+      return
+    }
+
+    setIsSavingFovs(true)
+    setFovError('')
+    try {
+      const response = await fetch(`/models/${encodeURIComponent(modelName)}/fovs`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fovs: manualFovDraft.map((fov, index) => ({
+            id: fov.id || `fov-${index + 1}`,
+            label: (fov.label || '').trim(),
+            x: Number(fov.x),
+            y: Number(fov.y),
+            width: Number(fov.width),
+            height: Number(fov.height),
+          })),
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok || payload.status === 'error') {
+        throw new Error(payload.message || 'Save FOVs failed')
+      }
+
+      const nextRun = {
+        ...normalizeRunPayload(selectedRunRef.current, selectedRunRef.current),
+        model_name: modelName,
+        model_fovs: payload.fovs,
+      }
+      updateSelectedRun(nextRun)
+      setManualFovDraft(buildManualFovDraft(nextRun))
+      toast.success('Model FOVs saved')
+    } catch (err) {
+      setFovError(`Save FOV Error: ${err.message}`)
+      toast.error(`Failed to save FOVs: ${err.message}`)
+    } finally {
+      setIsSavingFovs(false)
+    }
+  }
+
+  async function handleGenerateFovs() {
+    if (!selectedRunId) {
+      return
+    }
+    setIsGeneratingFovs(true)
+    setFovError('')
+    try {
+      await updateSetupRun(`/runs/${selectedRunId}/fovs/generate`, 'POST', {}, 'FOV Generate Error', (nextRun) => {
+        setManualFovDraft(buildManualFovDraft(nextRun))
+        toast.success('FOV crops generated')
+      })
+    } catch (err) {
+      setFovError(err.message)
+      toast.error(err.message)
+    } finally {
+      setIsGeneratingFovs(false)
     }
   }
 
@@ -421,7 +543,9 @@ export function useSetupActions({
     barcodeError,
     clearRunDrafts,
     createRunError,
+    fovError,
     fiducialError,
+    handleAddFovDraft,
     handleConfirmBarcode,
     handleConfirmFiducials,
     handleContinueToReview,
@@ -429,21 +553,29 @@ export function useSetupActions({
     handleDeleteRun,
     handleDetectBarcode,
     handleDetectFiducials,
+    handleGenerateFovs,
     handleImageUpload,
+    handleManualFovChange,
+    handleManualFovMetaChange,
     handleManualBarcodeChange,
     handleManualFiducialChange,
+    handleRemoveFovDraft,
     handleSaveManualBarcode,
     handleSaveManualFiducials,
+    handleSaveFovs,
     handleSaveModel,
     isCreatingRun,
     isDeletingRun,
     isDetectingBarcode,
     isDetectingFiducials,
+    isGeneratingFovs,
     isSavingManualBarcode,
     isSavingManualFiducials,
+    isSavingFovs,
     isSavingModel,
     isUploading,
     manualBarcodeDraft,
+    manualFovDraft,
     manualFiducialsDraft,
     manualStepId,
     modelDraft,

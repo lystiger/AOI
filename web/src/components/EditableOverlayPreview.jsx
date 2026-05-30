@@ -102,6 +102,8 @@ export default function EditableOverlayPreview({ image, overlays, onChange, kind
     }
   }, [editState, onChange])
 
+  const overlayClassName = kind === 'barcode' ? 'barcode-box' : kind === 'fov' ? 'fov-box' : 'fiducial-box'
+
   return (
     <div ref={previewRef} className="fiducial-preview editable-preview">
       <img src={image.image_path} alt={`${kind} preview`} />
@@ -109,7 +111,7 @@ export default function EditableOverlayPreview({ image, overlays, onChange, kind
         <button
           key={overlay.id}
           type="button"
-          className={`${kind === 'barcode' ? 'barcode-box' : 'fiducial-box'} editable-box${selectedOverlayId === overlay.id ? ' selected' : ''}`}
+          className={`${overlayClassName} editable-box${selectedOverlayId === overlay.id ? ' selected' : ''}`}
           style={{
             left: `${overlay.x * 100}%`,
             top: `${overlay.y * 100}%`,
