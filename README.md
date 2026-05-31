@@ -69,6 +69,12 @@ Latest reduced-baseline test metrics:
 
 That result is still far from production quality, but it is materially better than the earlier 20-class baseline (`mAP@50 = 0.0044`) and confirms that class reduction is the correct short-term strategy.
 
+Benchmarking note:
+
+- the current `0.0953 mAP@50` result is an internal engineering baseline for the reduced 6-class taxonomy
+- it should be compared to our earlier internal runs, not directly to published SOTA numbers on `pcb_wacv_2019`
+- a fair literature comparison would require matching the original benchmark task definition, label space, and evaluation protocol
+
 Latest chart:
 
 <p align="center">
