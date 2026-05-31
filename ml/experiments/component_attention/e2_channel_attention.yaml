@@ -1,0 +1,46 @@
+experiment_id: E2
+title: YOLOv8s + Channel Attention Only
+task: component_detection
+model_variant: yolov8s
+attention_variant: channel_only
+
+dataset:
+  root: ml/data/component_detection_seed
+  split_protocol: fixed_local_split
+  class_profile: reduced
+
+training:
+  base_model: yolov8s.pt
+  epochs: 100
+  imgsz: 640
+  batch: 4
+  device: cpu
+  seed: 42
+
+architecture:
+  insertion_points:
+    - after_backbone_c2f_stage_1
+    - after_backbone_c2f_stage_2
+    - after_backbone_c2f_stage_3
+  keep_neck_unchanged: true
+  keep_head_unchanged: true
+
+evaluation:
+  split: test
+  compare_against: E1
+  report_metrics:
+    - map50
+    - map50_95
+    - precision
+    - recall
+    - per_class_precision
+    - per_class_recall
+    - per_class_f1
+    - per_class_ap50
+    - confusion_matrix
+    - pr_curves
+    - latency
+
+notes:
+  - This is the first ablation step and should be implemented before full CBAM.
+  - Isolate whether channel reweighting alone improves PCB-focused feature selection.

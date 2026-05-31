@@ -1,0 +1,36 @@
+experiment_id: E1
+title: Baseline YOLOv8s
+task: component_detection
+model_variant: yolov8s
+attention_variant: none
+
+dataset:
+  root: ml/data/component_detection_seed
+  split_protocol: fixed_local_split
+  class_profile: reduced
+
+training:
+  base_model: yolov8s.pt
+  epochs: 100
+  imgsz: 640
+  batch: 4
+  device: cpu
+  seed: 42
+
+evaluation:
+  split: test
+  report_metrics:
+    - map50
+    - map50_95
+    - precision
+    - recall
+    - per_class_precision
+    - per_class_recall
+    - per_class_f1
+    - per_class_ap50
+    - confusion_matrix
+    - pr_curves
+    - latency
+
+notes:
+  - Keep this run as the reference point for all later attention ablations.

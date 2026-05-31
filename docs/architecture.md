@@ -48,6 +48,121 @@ Production implication:
 
 This boundary is intentional: the current architecture optimizes for delivery speed and local operability first, while leaving the persistence layer isolated enough to support a later migration.
 
+## Proposed Architecture Modification
+
+### Motivation
+
+The next thesis-stage model change is to test whether attention improves PCB defect localization and component-focused detection.
+
+Why this is technically justified:
+
+- PCB defects are typically small relative to the full image
+- defect regions are spatially sparse rather than uniformly distributed
+- standard convolutions process all spatial regions with the same local filtering behavior
+- attention modules can bias feature refinement toward informative channels and anomalous spatial regions
+
+In this project context, that matters because AOI scenes contain large amounts of visually repetitive background:
+
+- solder mask
+- repeated passive components
+- silkscreen markings
+- dense but non-defective texture
+
+An attention mechanism is therefore a reasonable architectural modification for improving signal allocation toward subtle or rare abnormal patterns.
+
+### Proposed Model Variant
+
+The proposed thesis modification is a CBAM-augmented YOLOv8 backbone.
+
+Reference diagram:
+
+- `docs/pics/cbam_yolov8_novel_arch.svg`
+
+The diagram shows:
+
+- standard YOLOv8 backbone on the left
+- modified backbone on the right
+- CBAM modules inserted after selected `C2f` blocks
+- standard PANet neck and detection head retained
+
+This is a good thesis design because it changes one meaningful architectural variable while keeping the rest of the detection pipeline stable.
+
+### Why CBAM
+
+CBAM is a practical choice because it combines:
+
+- channel attention
+- spatial attention
+
+This lets the thesis test two related hypotheses:
+
+1. Channel reweighting alone may improve discrimination between useful and noisy feature maps.
+2. Full channel + spatial attention may further improve localization of sparse anomalies on the board surface.
+
+### Experimental Design
+
+The clean experiment plan is:
+
+| Experiment | Model Variant | Purpose |
+| --- | --- | --- |
+| 1 | Baseline `YOLOv8s` | establish reference performance |
+| 2 | `YOLOv8s + channel attention only` | isolate the benefit of channel reweighting |
+| 3 | `YOLOv8s + full CBAM` | test the combined channel + spatial attention effect |
+
+This three-row comparison is strong for an undergraduate thesis because:
+
+- it is simple
+- it is controlled
+- it isolates architectural contribution
+- it produces a defensible ablation rather than a single one-off modified model
+
+### Evaluation Plan
+
+Each experiment should be evaluated with the same:
+
+- dataset split
+- class taxonomy
+- training schedule
+- confidence/NMS policy
+- hardware notes
+
+The comparison table should report at minimum:
+
+- mAP@50
+- mAP@50-95
+- precision
+- recall
+- per-class precision/recall/F1
+- confusion matrix
+- precision-recall curves
+- inference latency
+
+### Benchmarking Scope
+
+For thesis clarity, two benchmark scopes must be separated:
+
+1. Internal engineering benchmark
+
+- compares baseline YOLOv8s vs channel attention vs full CBAM under the same local protocol
+- valid for the current reduced-class AOI setup
+
+2. Published benchmark comparison
+
+- only valid if the dataset task definition, label space, and evaluation protocol match the original benchmark exactly
+
+This distinction matters because the current project already uses a reduced taxonomy in some runs. That makes internal comparisons valid, but it prevents direct apples-to-apples claims against published SOTA on the original `pcb_wacv_2019` benchmark unless the protocol is matched.
+
+### Thesis Value
+
+This modification is appropriate thesis material because it contributes:
+
+- a concrete model architecture change
+- an interpretable motivation tied to PCB image characteristics
+- a controlled ablation study
+- measurable trade-offs between accuracy and latency
+
+In short: the work is not just "train YOLO." It becomes a structured investigation of whether attention mechanisms improve PCB-focused visual inspection under constrained data conditions.
+
 ## Implementation Standards
 - **Dark Mode First**: Industrial tactical aesthetic to reduce operator eye strain.
 - **Monospaced Data**: All coordinates and IDs use monospaced fonts for precision alignment.
