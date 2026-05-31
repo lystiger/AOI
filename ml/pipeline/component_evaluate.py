@@ -4,8 +4,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ml.pipeline.component_dataset import COMPONENT_CLASSES, DEFAULT_OUTPUT_ROOT
+from ml.pipeline.component_dataset import DEFAULT_OUTPUT_ROOT, load_component_class_names
 from ml.pipeline.component_train import get_component_data_yaml_path, get_latest_component_weights
+from ml.pipeline.reporting import write_run_report
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "models" / "component_detection" / "eval"
 EVAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -24,6 +25,7 @@ def evaluate_component_model(
 
     weights = weights_path or get_latest_component_weights()
     data_yaml = get_component_data_yaml_path(dataset_root or DEFAULT_OUTPUT_ROOT)
+    class_names = load_component_class_names(data_yaml.parent)
 
     model = YOLO(str(weights))
     metrics = model.val(
@@ -37,7 +39,7 @@ def evaluate_component_model(
     )
 
     per_class: dict[str, dict[str, float]] = {}
-    for index, class_name in enumerate(COMPONENT_CLASSES):
+    for index, class_name in enumerate(class_names):
         precision = float(metrics.box.p[index]) if index < len(metrics.box.p) else 0.0
         recall = float(metrics.box.r[index]) if index < len(metrics.box.r) else 0.0
         ap50 = float(metrics.box.ap50[index]) if index < len(metrics.box.ap50) else 0.0
@@ -66,6 +68,22 @@ def evaluate_component_model(
         print(f"  {class_name:<22} F1={stats['f1']:.3f} AP50={stats['ap50']:.3f}")
 
     _save_metrics_chart(per_class)
+    report_path = write_run_report(
+        category="component_detection",
+        stage="evaluate",
+        title="Component Evaluation Run",
+        summary=f"Evaluated component detector on `{split}` split.",
+        details=[
+            f"Dataset: `{data_yaml}`",
+            f"Weights: `{weights}`",
+            f"Classes: {', '.join(class_names)}",
+            f"mAP@50: {result['map50']:.4f}",
+            f"mAP@50-95: {result['map50_95']:.4f}",
+            f"Precision: {result['precision']:.4f}",
+            f"Recall: {result['recall']:.4f}",
+        ],
+    )
+    print(f"Report saved: {report_path}")
     return result
 
 

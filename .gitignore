@@ -13,6 +13,7 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+venv_broken_lzma_20260531/
 env/
 
 # Environment files
@@ -38,6 +39,7 @@ run-assets/
 ml/data/
 ml/models/
 ml/notebooks/.ipynb_checkpoints/
+yolov8s.pt
 
 # IDE and OS files
 .DS_Store

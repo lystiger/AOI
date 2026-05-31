@@ -21,6 +21,45 @@ The current project state includes:
 - JSONL event logging for downstream observability pipelines
 - A local Docker stack with Grafana, Loki, and Promtail
 
+## Project Progress
+
+The workstation and backend are already functional, and the ML work has now advanced to a first component-detection baseline.
+
+Current ML status:
+
+- A component-detection-first pipeline now exists beside the original defect-first path
+- The WACV 2019 reference dataset was converted into a YOLOv8 board-level dataset
+- The initial 20-class setup was collapsed into a reduced 6-class profile:
+  - `resistor`
+  - `capacitor`
+  - `connector`
+  - `ic`
+  - `led`
+  - `other`
+- Automatic Markdown run reports are generated for dataset build, training, and evaluation
+
+Latest reduced-baseline test metrics:
+
+- `mAP@50`: `0.0953`
+- `mAP@50-95`: `0.0617`
+- `precision`: `0.2057`
+- `recall`: `0.1581`
+
+That result is still far from production quality, but it is materially better than the earlier 20-class baseline (`mAP@50 = 0.0044`) and confirms that class reduction is the correct short-term strategy.
+
+Latest chart:
+
+<p align="center">
+  <img src="docs/chart/component-detection-reduced-f1-20260531.png" alt="Per-class F1 chart for the reduced 6-class component detection baseline" width="78%" />
+</p>
+
+Tracked reports:
+
+- [Project progress](docs/project_progress.md)
+- [Dataset run report](ml/reports/component_detection/20260531-150245Z-dataset.md)
+- [Training run report](ml/reports/component_detection/20260531-150610Z-train.md)
+- [Evaluation run report](ml/reports/component_detection/20260531-150631Z-evaluate.md)
+
 ## Current UI
 
 <p align="center">

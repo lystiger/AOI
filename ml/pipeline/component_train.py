@@ -6,7 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
-from ml.pipeline.component_dataset import COMPONENT_CLASSES, DEFAULT_OUTPUT_ROOT
+from ml.pipeline.component_dataset import DEFAULT_OUTPUT_ROOT, load_component_class_names
+from ml.pipeline.reporting import write_run_report
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "component_detection"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,6 +57,7 @@ def _write_run_manifest(
     save_dir: Path,
     *,
     data_yaml: Path,
+    classes: list[str],
     base_model: str,
     epochs: int,
     imgsz: int,
@@ -65,7 +67,7 @@ def _write_run_manifest(
 ) -> None:
     manifest = {
         "task": "component_detection",
-        "classes": COMPONENT_CLASSES,
+        "classes": classes,
         "base_model": base_model,
         "epochs": epochs,
         "imgsz": imgsz,
@@ -94,6 +96,7 @@ def train_component_model(
     from ultralytics import YOLO
 
     data_yaml = get_component_data_yaml_path(dataset_root)
+    classes = load_component_class_names(data_yaml.parent)
     print(f"Dataset: {data_yaml}")
     verify_component_dataset(data_yaml.parent)
 
@@ -130,6 +133,7 @@ def train_component_model(
     _write_run_manifest(
         Path(results.save_dir),
         data_yaml=data_yaml,
+        classes=classes,
         base_model=base_model,
         epochs=epochs,
         imgsz=imgsz,
@@ -137,6 +141,23 @@ def train_component_model(
         device=device,
         seed=seed,
     )
+    report_path = write_run_report(
+        category="component_detection",
+        stage="train",
+        title="Component Training Run",
+        summary=f"Finished component training run `{name}`.",
+        details=[
+            f"Dataset: `{data_yaml}`",
+            f"Classes: {', '.join(classes)}",
+            f"Epochs: {epochs}",
+            f"Image size: {imgsz}",
+            f"Batch: {batch}",
+            f"Device: {device}",
+            f"Best weights: `{output_path}`",
+            f"Save dir: `{results.save_dir}`",
+        ],
+    )
+    print(f"Report saved: {report_path}")
     print(f"Best weights saved to: {output_path}")
     return output_path
 

@@ -70,7 +70,7 @@ Component-first baseline:
 
 ```bash
 source venv/bin/activate
-python -m ml.pipeline.component_dataset --overwrite
+python -m ml.pipeline.component_dataset --profile reduced --overwrite
 python -m ml.pipeline.component_train --device cpu
 python -m ml.pipeline.component_evaluate --split test
 ```
@@ -82,15 +82,21 @@ Notebook split:
 
 Component-detection seed dataset:
 
-- `python -m ml.pipeline.component_dataset --overwrite`
+- `python -m ml.pipeline.component_dataset --profile reduced --overwrite`
 - Source: `docs/references/pcb_wacv_2019/pcb_wacv_2019`
 - Output: `ml/data/component_detection_seed`
 - Purpose: convert the WACV 2019 PCB annotations into a YOLOv8-ready board-level dataset with normalized component classes
 
 Class normalization rules:
 
-- Keeps: `resistor`, `capacitor`, `inductor`, `diode`, `led`, `ic`, `transistor`, `connector`, `jumper`, `emi_filter`, `button`, `clock`, `transformer`, `potentiometer`, `heatsink`, `fuse`, `ferrite_bead`, `buzzer`, `display`, `battery`
+- Reduced profile keeps: `resistor`, `capacitor`, `connector`, `ic`, `led`, `other`
+- Full profile keeps: `resistor`, `capacitor`, `inductor`, `diode`, `led`, `ic`, `transistor`, `connector`, `jumper`, `emi_filter`, `button`, `clock`, `transformer`, `potentiometer`, `heatsink`, `fuse`, `ferrite_bead`, `buzzer`, `display`, `battery`
 - Drops annotation noise such as silkscreen text, pads, pins, test points, and unknown labels
+- In reduced mode, any supported component outside the core classes is collapsed into `other`
 - Maps aliases such as `electrolytic capacitor -> capacitor`, `ferrite bead -> ferrite_bead`, `emi filter -> emi_filter`, `zener -> diode`, `switch -> button`
 
 When your real AOI images are ready, label them with the same normalized class set so they can be merged into `component_detection_seed` without changing downstream training code.
+
+Run reports:
+
+- Component dataset builds, training runs, and evaluations each write a small Markdown report under `ml/reports/component_detection/`
