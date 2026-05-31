@@ -25,6 +25,28 @@ The current project state includes:
 
 The workstation and backend are already functional, and the ML work has now advanced to a first component-detection baseline.
 
+### Latest ML Status
+
+| Item | Current Value |
+| --- | --- |
+| Task | `component_detection` |
+| Dataset profile | `reduced` |
+| Active classes | `resistor`, `capacitor`, `connector`, `ic`, `led`, `other` |
+| Dataset split | `33 train / 7 val / 7 test` |
+| Latest test `mAP@50` | `0.0953` |
+| Latest test `mAP@50-95` | `0.0617` |
+| Latest test precision | `0.2057` |
+| Latest test recall | `0.1581` |
+| Best current class | `ic` (`AP50 = 0.379`) |
+| Current limitation | small seed dataset, strong domain gap to real AOI images |
+
+Quick links:
+
+- [Progress report](docs/project_progress.md)
+- [Dataset report](ml/reports/component_detection/20260531-150245Z-dataset.md)
+- [Training report](ml/reports/component_detection/20260531-150610Z-train.md)
+- [Evaluation report](ml/reports/component_detection/20260531-150631Z-evaluate.md)
+
 Current ML status:
 
 - A component-detection-first pipeline now exists beside the original defect-first path
