@@ -32,21 +32,23 @@ The workstation and backend are already functional, and the ML work has now adva
 | Task | `component_detection` |
 | Dataset profile | `reduced` |
 | Active classes | `resistor`, `capacitor`, `connector`, `ic`, `led`, `other` |
-| Dataset split | `33 train / 7 val / 7 test` |
-| Latest test `mAP@50` | `0.0953` |
-| Latest test `mAP@50-95` | `0.0617` |
-| Latest test precision | `0.2057` |
-| Latest test recall | `0.1581` |
-| Best current class | `ic` (`AP50 = 0.379`) |
-| Latest ablation result | `E2 channel_attention` collapsed to `0.0000 mAP@50` |
-| Current limitation | small seed dataset, strong domain gap to real AOI images |
+| Dataset split | `470 train / 102 val / 100 test` |
+| Latest test `mAP@50` | `0.1346` |
+| Latest test `mAP@50-95` | `0.0687` |
+| Latest test precision | `0.1602` |
+| Latest test recall | `0.2452` |
+| Best current class | `ic` (`AP50 = 0.461`) |
+| Latest ablation result | `E2 channel_attention` collapsed to `0.0000 mAP@50` on the small seed |
+| Current limitation | dense small parts still suppress `resistor` and `led` performance |
 
 Quick links:
 
 - [Progress report](docs/project_progress.md)
-- [Dataset report](ml/reports/component_detection/20260531-150245Z-dataset.md)
-- [E1 baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
-- [E1 baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
+- [Larger-seed dataset report](ml/reports/component_detection/20260531-164255Z-dataset.md)
+- [Larger-seed train report](ml/reports/component_detection/20260531-170538Z-train.md)
+- [Larger-seed evaluation report](ml/reports/component_detection/20260531-170800Z-evaluate.md)
+- [Small-seed baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
+- [Small-seed baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
 - [E2 channel-attention train report](ml/reports/component_detection/20260531-163332Z-train.md)
 - [E2 channel-attention evaluation report](ml/reports/component_detection/20260531-163349Z-evaluate.md)
 
@@ -63,31 +65,33 @@ Current ML status:
   - `other`
 - Automatic Markdown run reports are generated for dataset build, training, and evaluation
 
-Latest reduced-baseline test metrics:
+Latest larger-seed test metrics:
 
-- `mAP@50`: `0.0953`
-- `mAP@50-95`: `0.0617`
-- `precision`: `0.2057`
-- `recall`: `0.1581`
+- `mAP@50`: `0.1346`
+- `mAP@50-95`: `0.0687`
+- `precision`: `0.1602`
+- `recall`: `0.2452`
 
-That result is still far from production quality, but it is materially better than the earlier 20-class baseline (`mAP@50 = 0.0044`) and confirms that class reduction is the correct short-term strategy.
+That result is still far from production quality, but it is materially better than both the earlier 20-class baseline (`mAP@50 = 0.0044`) and the tiny reduced small-seed baseline (`mAP@50 = 0.0953`). The larger cleaned Roboflow-derived seed is already helping before any longer training schedule or real AOI images are added.
 
 Latest controlled ablation on the reduced 6-class task:
 
-| Experiment | Variant | Test `mAP@50` | Test `mAP@50-95` | Precision | Recall | Mean latency |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `E1` | `baseline` | `0.0953` | `0.0617` | `0.2057` | `0.1581` | `183.4 ms` |
-| `E2` | `channel_attention` | `0.0000` | `0.0000` | `0.0000` | `0.0000` | `253.4 ms` |
+| Experiment | Dataset | Variant | Test `mAP@50` | Test `mAP@50-95` | Precision | Recall | Mean latency |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `E1` | `small seed` | `baseline` | `0.0953` | `0.0617` | `0.2057` | `0.1581` | `183.4 ms` |
+| `E1b` | `larger seed` | `baseline` | `0.1346` | `0.0687` | `0.1602` | `0.2452` | `102.6 ms` |
+| `E2` | `small seed` | `channel_attention` | `0.0000` | `0.0000` | `0.0000` | `0.0000` | `253.4 ms` |
 
 Interpretation:
 
 - `E1` confirms the new variant-aware training path reproduces the earlier reduced baseline.
+- `E1b` shows that better data is already more valuable than architectural experimentation in this project stage.
 - `E2` is currently a negative result: channel attention increases inference cost and fails to learn a usable detector on the small seed dataset under the same 5-epoch CPU budget.
 - This means the thesis ablation is already informative: attention is not automatically beneficial, and the dataset/training regime matters.
 
 Benchmarking note:
 
-- the current `0.0953 mAP@50` result is an internal engineering baseline for the reduced 6-class taxonomy
+- the current `0.1346 mAP@50` result is an internal engineering baseline for the reduced 6-class taxonomy
 - it should be compared to our earlier internal runs, not directly to published SOTA numbers on `pcb_wacv_2019`
 - a fair literature comparison would require matching the original benchmark task definition, label space, and evaluation protocol
 
@@ -100,9 +104,11 @@ Latest chart:
 Tracked reports:
 
 - [Project progress](docs/project_progress.md)
-- [Dataset run report](ml/reports/component_detection/20260531-150245Z-dataset.md)
-- [E1 baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
-- [E1 baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
+- [Larger-seed dataset report](ml/reports/component_detection/20260531-164255Z-dataset.md)
+- [Larger-seed train report](ml/reports/component_detection/20260531-170538Z-train.md)
+- [Larger-seed evaluation report](ml/reports/component_detection/20260531-170800Z-evaluate.md)
+- [Small-seed baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
+- [Small-seed baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
 - [E2 channel-attention train report](ml/reports/component_detection/20260531-163332Z-train.md)
 - [E2 channel-attention evaluation report](ml/reports/component_detection/20260531-163349Z-evaluate.md)
 
