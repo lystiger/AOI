@@ -15,6 +15,7 @@ def write_run_report(
     title: str,
     summary: str,
     details: Iterable[str] = (),
+    extra_markdown: str = "",
 ) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
     report_dir = REPORT_ROOT / category
@@ -34,6 +35,9 @@ def write_run_report(
         lines.append("## Details")
         lines.append("")
         lines.extend(f"- {detail}" for detail in details)
+        lines.append("")
+    if extra_markdown:
+        lines.append(extra_markdown.rstrip())
         lines.append("")
 
     report_path.write_text("\n".join(lines), encoding="utf-8")
