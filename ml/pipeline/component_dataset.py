@@ -267,8 +267,10 @@ def build_component_dataset(
             dropped_annotations += 1
             continue
 
-        image_target = output_root / split_name / "images" / annotation.image_path.name
-        label_target = output_root / split_name / "labels" / f"{annotation.image_path.stem}.txt"
+        image_name = f"{annotation.board_id}__{annotation.image_path.name}"
+        label_name = f"{annotation.board_id}__{annotation.image_path.stem}.txt"
+        image_target = output_root / split_name / "images" / image_name
+        label_target = output_root / split_name / "labels" / label_name
         shutil.copy2(annotation.image_path, image_target)
         yolo_lines = [_yolo_line(box, width=annotation.width, height=annotation.height) for box in annotation.boxes]
         label_target.write_text("\n".join(yolo_lines) + "\n", encoding="utf-8")

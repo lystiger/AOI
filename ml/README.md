@@ -25,8 +25,14 @@ Supported defect labels:
 Quick start:
 
 ```bash
+# Repo/dev environment for tests and API work
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+# Separate ML environment
+python3 -m venv venv
+source venv/bin/activate
 pip install -r ml/requirements-ml-cpu.txt
 python ml/pipeline/self_test.py
 ```
@@ -59,6 +65,20 @@ python -m ml.pipeline.component_dataset --overwrite
 python -m ml.pipeline.train --device cpu
 python -m ml.pipeline.evaluate
 ```
+
+Component-first baseline:
+
+```bash
+source venv/bin/activate
+python -m ml.pipeline.component_dataset --overwrite
+python -m ml.pipeline.component_train --device cpu
+python -m ml.pipeline.component_evaluate --split test
+```
+
+Notebook split:
+
+- Defect-first notebooks: `ml/notebooks/01_dataset_explore.ipynb` through `04_evaluation.ipynb`
+- Component-first notebooks: `ml/notebooks/11_component_dataset_explore.ipynb`, `12_component_training.ipynb`, `13_component_evaluation.ipynb`
 
 Component-detection seed dataset:
 
