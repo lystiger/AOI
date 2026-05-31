@@ -38,14 +38,17 @@ The workstation and backend are already functional, and the ML work has now adva
 | Latest test precision | `0.2057` |
 | Latest test recall | `0.1581` |
 | Best current class | `ic` (`AP50 = 0.379`) |
+| Latest ablation result | `E2 channel_attention` collapsed to `0.0000 mAP@50` |
 | Current limitation | small seed dataset, strong domain gap to real AOI images |
 
 Quick links:
 
 - [Progress report](docs/project_progress.md)
 - [Dataset report](ml/reports/component_detection/20260531-150245Z-dataset.md)
-- [Training report](ml/reports/component_detection/20260531-150610Z-train.md)
-- [Evaluation report](ml/reports/component_detection/20260531-150631Z-evaluate.md)
+- [E1 baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
+- [E1 baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
+- [E2 channel-attention train report](ml/reports/component_detection/20260531-163332Z-train.md)
+- [E2 channel-attention evaluation report](ml/reports/component_detection/20260531-163349Z-evaluate.md)
 
 Current ML status:
 
@@ -69,6 +72,19 @@ Latest reduced-baseline test metrics:
 
 That result is still far from production quality, but it is materially better than the earlier 20-class baseline (`mAP@50 = 0.0044`) and confirms that class reduction is the correct short-term strategy.
 
+Latest controlled ablation on the reduced 6-class task:
+
+| Experiment | Variant | Test `mAP@50` | Test `mAP@50-95` | Precision | Recall | Mean latency |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| `E1` | `baseline` | `0.0953` | `0.0617` | `0.2057` | `0.1581` | `183.4 ms` |
+| `E2` | `channel_attention` | `0.0000` | `0.0000` | `0.0000` | `0.0000` | `253.4 ms` |
+
+Interpretation:
+
+- `E1` confirms the new variant-aware training path reproduces the earlier reduced baseline.
+- `E2` is currently a negative result: channel attention increases inference cost and fails to learn a usable detector on the small seed dataset under the same 5-epoch CPU budget.
+- This means the thesis ablation is already informative: attention is not automatically beneficial, and the dataset/training regime matters.
+
 Benchmarking note:
 
 - the current `0.0953 mAP@50` result is an internal engineering baseline for the reduced 6-class taxonomy
@@ -85,8 +101,10 @@ Tracked reports:
 
 - [Project progress](docs/project_progress.md)
 - [Dataset run report](ml/reports/component_detection/20260531-150245Z-dataset.md)
-- [Training run report](ml/reports/component_detection/20260531-150610Z-train.md)
-- [Evaluation run report](ml/reports/component_detection/20260531-150631Z-evaluate.md)
+- [E1 baseline train report](ml/reports/component_detection/20260531-162633Z-train.md)
+- [E1 baseline evaluation report](ml/reports/component_detection/20260531-162656Z-evaluate.md)
+- [E2 channel-attention train report](ml/reports/component_detection/20260531-163332Z-train.md)
+- [E2 channel-attention evaluation report](ml/reports/component_detection/20260531-163349Z-evaluate.md)
 
 ## Current UI
 

@@ -56,10 +56,19 @@ def build_component_model(*, base_model: str | Path, variant: str):
 
 
 def _infer_output_channels(block: nn.Module) -> int:
-    for attribute in ("c", "c2"):
-        value = getattr(block, attribute, None)
-        if isinstance(value, int) and value > 0:
-            return value
+    cv2 = getattr(block, "cv2", None)
+    conv = getattr(cv2, "conv", None)
+    out_channels = getattr(conv, "out_channels", None)
+    if isinstance(out_channels, int) and out_channels > 0:
+        return out_channels
+
+    value = getattr(block, "c2", None)
+    if isinstance(value, int) and value > 0:
+        return value
+
+    value = getattr(block, "c", None)
+    if isinstance(value, int) and value > 0:
+        return value
 
     for module in reversed(list(block.modules())):
         out_channels = getattr(module, "out_channels", None)

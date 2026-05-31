@@ -62,6 +62,10 @@ class AttentionWrappedBlock(nn.Module):
         super().__init__()
         self.block = block
         self.attention = attention
+        # Preserve Ultralytics graph metadata used during predict/val traversal.
+        for attribute in ("i", "f", "type", "np"):
+            if hasattr(block, attribute):
+                setattr(self, attribute, getattr(block, attribute))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.attention(self.block(x))
