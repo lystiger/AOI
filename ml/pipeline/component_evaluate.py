@@ -8,7 +8,8 @@ import time
 from pathlib import Path
 
 from ml.pipeline.component_dataset import DEFAULT_OUTPUT_ROOT, load_component_class_names
-from ml.pipeline.component_train import get_component_data_yaml_path, get_latest_component_weights
+from ml.pipeline.component_train import get_component_data_yaml_path, get_component_weights_for_variant
+from ml.pipeline.model_variants import SUPPORTED_VARIANTS, build_component_model
 from ml.pipeline.reporting import write_run_report
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "models" / "component_detection" / "eval"
@@ -19,6 +20,7 @@ def evaluate_component_model(
     *,
     dataset_root: Path | None = None,
     weights_path: Path | None = None,
+    variant: str = "baseline",
     split: str = "test",
     batch: int = 8,
     imgsz: int = 1280,
@@ -26,13 +28,11 @@ def evaluate_component_model(
     baseline_map50: float = 0.0044,
 ) -> dict[str, object]:
     """Run YOLO validation and return aggregate plus per-class metrics."""
-    from ultralytics import YOLO
-
-    weights = weights_path or get_latest_component_weights()
+    weights = weights_path or get_component_weights_for_variant(variant)
     data_yaml = get_component_data_yaml_path(dataset_root or DEFAULT_OUTPUT_ROOT)
     class_names = load_component_class_names(data_yaml.parent)
 
-    model = YOLO(str(weights))
+    model = build_component_model(base_model=weights, variant=variant)
     metrics = model.val(
         data=str(data_yaml),
         split=split,
@@ -84,6 +84,7 @@ def evaluate_component_model(
     summary = {
         "dataset": str(data_yaml),
         "weights": str(weights),
+        "variant": variant,
         "split": split,
         "imgsz": imgsz,
         "batch": batch,
@@ -121,6 +122,7 @@ def evaluate_component_model(
         details=[
             f"Dataset: `{data_yaml}`",
             f"Weights: `{weights}`",
+            f"Variant: `{variant}`",
             f"Classes: {', '.join(class_names)}",
             f"mAP@50: {result['map50']:.4f}",
             f"mAP@50-95: {result['map50_95']:.4f}",
@@ -263,6 +265,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate YOLOv8 on the component seed dataset")
     parser.add_argument("--dataset-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--weights", type=Path, default=None)
+    parser.add_argument("--variant", choices=SUPPORTED_VARIANTS, default="baseline")
     parser.add_argument("--split", default="test")
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--imgsz", type=int, default=1280)
@@ -273,6 +276,7 @@ def main() -> None:
     evaluate_component_model(
         dataset_root=args.dataset_root,
         weights_path=args.weights,
+        variant=args.variant,
         split=args.split,
         batch=args.batch,
         imgsz=args.imgsz,

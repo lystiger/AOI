@@ -71,8 +71,8 @@ Component-first baseline:
 ```bash
 source venv/bin/activate
 python -m ml.pipeline.component_dataset --profile reduced --overwrite
-python -m ml.pipeline.component_train --device cpu
-python -m ml.pipeline.component_evaluate --split test
+python -m ml.pipeline.component_train --variant baseline --device cpu
+python -m ml.pipeline.component_evaluate --variant baseline --split test
 ```
 
 Notebook split:
@@ -100,3 +100,9 @@ When your real AOI images are ready, label them with the same normalized class s
 Run reports:
 
 - Component dataset builds, training runs, and evaluations each write a small Markdown report under `ml/reports/component_detection/`
+
+Model variants:
+
+- `baseline`: unmodified YOLOv8s
+- `channel_attention`: wraps selected backbone `C2f` blocks with channel attention
+- `full_cbam`: wraps selected backbone `C2f` blocks with full CBAM

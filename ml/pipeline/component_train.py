@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 from ml.pipeline.component_dataset import DEFAULT_OUTPUT_ROOT, load_component_class_names
+from ml.pipeline.model_variants import SUPPORTED_VARIANTS, build_component_model, get_variant_config
 from ml.pipeline.reporting import write_run_report
 
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models" / "component_detection"
@@ -58,6 +59,7 @@ def _write_run_manifest(
     *,
     data_yaml: Path,
     classes: list[str],
+    variant: str,
     base_model: str,
     epochs: int,
     imgsz: int,
@@ -67,6 +69,7 @@ def _write_run_manifest(
 ) -> None:
     manifest = {
         "task": "component_detection",
+        "variant": variant,
         "classes": classes,
         "base_model": base_model,
         "epochs": epochs,
@@ -82,6 +85,7 @@ def _write_run_manifest(
 def train_component_model(
     *,
     dataset_root: Path | None = None,
+    variant: str = "baseline",
     base_model: str = DEFAULT_BASE_MODEL,
     epochs: int = DEFAULT_EPOCHS,
     imgsz: int = DEFAULT_IMGSZ,
@@ -93,14 +97,13 @@ def train_component_model(
     seed: int = DEFAULT_SEED,
 ) -> Path:
     """Fine-tune a YOLOv8 detector on the component seed dataset."""
-    from ultralytics import YOLO
-
     data_yaml = get_component_data_yaml_path(dataset_root)
     classes = load_component_class_names(data_yaml.parent)
+    variant_config = get_variant_config(variant)
     print(f"Dataset: {data_yaml}")
     verify_component_dataset(data_yaml.parent)
 
-    model = YOLO(base_model)
+    model = build_component_model(base_model=base_model, variant=variant)
     results = model.train(
         data=str(data_yaml),
         epochs=epochs,
@@ -128,12 +131,15 @@ def train_component_model(
     )
 
     best_weights = Path(results.save_dir) / "weights" / "best.pt"
-    output_path = MODEL_DIR / "best.pt"
+    output_path = MODEL_DIR / f"best-{variant}.pt"
     shutil.copy2(best_weights, output_path)
+    if variant == "baseline":
+        shutil.copy2(best_weights, MODEL_DIR / "best.pt")
     _write_run_manifest(
         Path(results.save_dir),
         data_yaml=data_yaml,
         classes=classes,
+        variant=variant,
         base_model=base_model,
         epochs=epochs,
         imgsz=imgsz,
@@ -148,6 +154,8 @@ def train_component_model(
         summary=f"Finished component training run `{name}`.",
         details=[
             f"Dataset: `{data_yaml}`",
+            f"Variant: `{variant}`",
+            f"Attention type: `{variant_config.attention_type}`",
             f"Classes: {', '.join(classes)}",
             f"Epochs: {epochs}",
             f"Image size: {imgsz}",
@@ -163,9 +171,21 @@ def train_component_model(
 
 
 def get_latest_component_weights() -> Path:
-    weights = MODEL_DIR / "best.pt"
+    weights = MODEL_DIR / "best-baseline.pt"
+    legacy = MODEL_DIR / "best.pt"
     if not weights.exists():
+        if legacy.exists():
+            return legacy
         raise FileNotFoundError(f"No trained component weights found at {weights}. Run train_component_model() first.")
+    return weights
+
+
+def get_component_weights_for_variant(variant: str) -> Path:
+    if variant == "baseline":
+        return get_latest_component_weights()
+    weights = MODEL_DIR / f"best-{variant}.pt"
+    if not weights.exists():
+        raise FileNotFoundError(f"No trained component weights found for variant `{variant}` at {weights}")
     return weights
 
 
@@ -176,6 +196,7 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=DEFAULT_BATCH)
     parser.add_argument("--imgsz", type=int, default=DEFAULT_IMGSZ)
     parser.add_argument("--model", default=DEFAULT_BASE_MODEL)
+    parser.add_argument("--variant", choices=SUPPORTED_VARIANTS, default="baseline")
     parser.add_argument("--device", default="0")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -183,6 +204,7 @@ def main() -> None:
 
     train_component_model(
         dataset_root=args.dataset_root,
+        variant=args.variant,
         base_model=args.model,
         epochs=args.epochs,
         batch=args.batch,
