@@ -1,680 +1,1159 @@
 #!/usr/bin/env python3
 """
-PCB Component Labeling Tool
-- Chạy: python3 pcb_labeler.py
-- Mở browser: http://localhost:5000
-- Click + kéo để crop component, gõ label để lưu
+PCB board annotation tool for component-level labeling.
+
+Run:
+    python3 utilities/PCB_laber.py
+
+Open:
+    http://localhost:5000
 """
 
-import os
-import json
+from __future__ import annotations
+
 import base64
-import shutil
+import json
+import re
+import uuid
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import BytesIO
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
-import io
+from urllib.parse import unquote, urlparse
 
-# ── Cấu hình ──────────────────────────────────────────────
-OUTPUT_DIR = Path("dataset")
-CLASSES = {
-    "o": "ok",
-    "s": "shift",
-    "m": "missing",
-    "t": "tombstone",
-    "w": "wrong_part",
-    "p": "polarity",
-    "f": "solder_fail",
+from PIL import Image
+
+
+WORKSPACE_DIR = Path("board_dataset")
+IMAGE_DIR = WORKSPACE_DIR / "images"
+ANNOTATION_DIR = WORKSPACE_DIR / "annotations"
+EXPORT_DIR = WORKSPACE_DIR / "exports"
+CROP_DIR = EXPORT_DIR / "crops"
+YOLO_IMAGE_DIR = EXPORT_DIR / "yolo" / "images"
+YOLO_LABEL_DIR = EXPORT_DIR / "yolo" / "labels"
+
+COMPONENT_CLASSES = [
+    "resistor",
+    "capacitor",
+    "connector",
+    "ic",
+    "led",
+    "diode",
+    "inductor",
+    "transistor",
+    "crystal",
+    "switch",
+    "button",
+    "jumper",
+    "test_point",
+    "other",
+]
+
+CLASS_KEYS = {
+    "1": "resistor",
+    "2": "capacitor",
+    "3": "connector",
+    "4": "ic",
+    "5": "led",
+    "6": "diode",
+    "7": "inductor",
+    "8": "transistor",
+    "9": "crystal",
+    "q": "switch",
+    "w": "button",
+    "e": "jumper",
+    "r": "test_point",
+    "t": "other",
 }
-# ──────────────────────────────────────────────────────────
 
-# Tạo thư mục output
-for cls in CLASSES.values():
-    (OUTPUT_DIR / "train" / cls).mkdir(parents=True, exist_ok=True)
-    (OUTPUT_DIR / "val" / cls).mkdir(parents=True, exist_ok=True)
+for path in (IMAGE_DIR, ANNOTATION_DIR, CROP_DIR, YOLO_IMAGE_DIR, YOLO_LABEL_DIR):
+    path.mkdir(parents=True, exist_ok=True)
 
-# Counter cho mỗi class
-counters = {cls: len(list((OUTPUT_DIR / "train" / cls).glob("*.jpg"))) 
-            for cls in CLASSES.values()}
+
+def _safe_slug(value: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", value.strip()).strip("-")
+    return slug or "item"
+
+
+def _image_record(image_path: Path) -> dict[str, object]:
+    annotation = _load_annotation(image_path.name)
+    with Image.open(image_path) as image:
+        width, height = image.size
+    return {
+        "id": image_path.name,
+        "filename": image_path.name,
+        "url": f"/image/{image_path.name}",
+        "width": width,
+        "height": height,
+        "box_count": len(annotation["boxes"]),
+        "updated_at": annotation["updated_at"],
+    }
+
+
+def _annotation_path(image_id: str) -> Path:
+    return ANNOTATION_DIR / f"{image_id}.json"
+
+
+def _default_annotation(image_id: str) -> dict[str, object]:
+    return {
+        "image_id": image_id,
+        "boxes": [],
+        "updated_at": "",
+    }
+
+
+def _load_annotation(image_id: str) -> dict[str, object]:
+    path = _annotation_path(image_id)
+    if not path.exists():
+        return _default_annotation(image_id)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload.get("boxes"), list):
+        payload["boxes"] = []
+    payload.setdefault("image_id", image_id)
+    payload.setdefault("updated_at", "")
+    return payload
+
+
+def _save_annotation(image_id: str, payload: dict[str, object]) -> dict[str, object]:
+    payload = {
+        "image_id": image_id,
+        "boxes": payload.get("boxes", []),
+        "updated_at": payload.get("updated_at", ""),
+    }
+    _annotation_path(image_id).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return payload
+
+
+def _list_images() -> list[dict[str, object]]:
+    records = [
+        _image_record(image_path)
+        for image_path in sorted(IMAGE_DIR.iterdir())
+        if image_path.is_file() and image_path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+    ]
+    records.sort(key=lambda item: str(item["filename"]).lower())
+    return records
+
+
+def _decode_data_url(image_data: str) -> tuple[bytes, str]:
+    if "," not in image_data:
+        raise ValueError("invalid data url")
+    header, encoded = image_data.split(",", 1)
+    if ";base64" not in header:
+        raise ValueError("unsupported upload encoding")
+    mime = header.split(":", 1)[-1].split(";", 1)[0].lower()
+    if mime == "image/png":
+        ext = ".png"
+    elif mime == "image/webp":
+        ext = ".webp"
+    elif mime in {"image/jpeg", "image/jpg"}:
+        ext = ".jpg"
+    else:
+        raise ValueError(f"unsupported image type: {mime}")
+    return base64.b64decode(encoded), ext
+
+
+def _import_image(filename: str, image_data: str) -> dict[str, object]:
+    raw_bytes, ext = _decode_data_url(image_data)
+    stem = _safe_slug(Path(filename).stem or "board")
+    final_name = f"{stem}{ext}"
+    candidate = IMAGE_DIR / final_name
+    if candidate.exists():
+        final_name = f"{stem}-{uuid.uuid4().hex[:8]}{ext}"
+        candidate = IMAGE_DIR / final_name
+    candidate.write_bytes(raw_bytes)
+    return _image_record(candidate)
+
+
+def _validate_box(box: dict[str, object]) -> dict[str, object]:
+    class_name = str(box.get("class_name") or "").strip()
+    if class_name not in COMPONENT_CLASSES:
+        raise ValueError(f"unknown class_name: {class_name}")
+    x = max(0.0, min(float(box.get("x", 0.0)), 1.0))
+    y = max(0.0, min(float(box.get("y", 0.0)), 1.0))
+    width = max(0.001, min(float(box.get("width", 0.001)), 1.0))
+    height = max(0.001, min(float(box.get("height", 0.001)), 1.0))
+    x = min(x, 1.0 - width)
+    y = min(y, 1.0 - height)
+    label = str(box.get("label") or class_name).strip() or class_name
+    return {
+        "id": str(box.get("id") or uuid.uuid4().hex),
+        "class_name": class_name,
+        "label": label,
+        "x": round(x, 6),
+        "y": round(y, 6),
+        "width": round(width, 6),
+        "height": round(height, 6),
+    }
+
+
+def _save_boxes(image_id: str, boxes: list[dict[str, object]]) -> dict[str, object]:
+    payload = _save_annotation(
+        image_id,
+        {
+            "boxes": [_validate_box(box) for box in boxes],
+            "updated_at": uuid.uuid1().hex,
+        },
+    )
+    return payload
+
+
+def _yolo_line(box: dict[str, object]) -> str:
+    class_index = COMPONENT_CLASSES.index(str(box["class_name"]))
+    center_x = float(box["x"]) + (float(box["width"]) / 2.0)
+    center_y = float(box["y"]) + (float(box["height"]) / 2.0)
+    return (
+        f"{class_index} "
+        f"{center_x:.6f} "
+        f"{center_y:.6f} "
+        f"{float(box['width']):.6f} "
+        f"{float(box['height']):.6f}"
+    )
+
+
+def _export_image(image_id: str) -> dict[str, object]:
+    image_path = IMAGE_DIR / image_id
+    if not image_path.exists():
+        raise FileNotFoundError("image not found")
+    annotation = _load_annotation(image_id)
+    boxes = [_validate_box(box) for box in annotation["boxes"]]
+    if not boxes:
+        raise ValueError("no boxes to export")
+
+    stem = image_path.stem
+    yolo_image_path = YOLO_IMAGE_DIR / image_path.name
+    yolo_label_path = YOLO_LABEL_DIR / f"{stem}.txt"
+    yolo_image_path.write_bytes(image_path.read_bytes())
+    yolo_label_path.write_text("\n".join(_yolo_line(box) for box in boxes) + "\n", encoding="utf-8")
+
+    crop_root = CROP_DIR / stem
+    crop_root.mkdir(parents=True, exist_ok=True)
+    crop_count = 0
+
+    with Image.open(image_path) as image:
+        image_width, image_height = image.size
+        for index, box in enumerate(boxes, start=1):
+            x0 = int(round(float(box["x"]) * image_width))
+            y0 = int(round(float(box["y"]) * image_height))
+            x1 = int(round((float(box["x"]) + float(box["width"])) * image_width))
+            y1 = int(round((float(box["y"]) + float(box["height"])) * image_height))
+            x0 = max(0, min(x0, image_width - 1))
+            y0 = max(0, min(y0, image_height - 1))
+            x1 = max(x0 + 1, min(x1, image_width))
+            y1 = max(y0 + 1, min(y1, image_height))
+            crop = image.crop((x0, y0, x1, y1))
+            class_dir = crop_root / str(box["class_name"])
+            class_dir.mkdir(parents=True, exist_ok=True)
+            crop_name = f"{index:04d}_{_safe_slug(str(box['label']))}.png"
+            crop.save(class_dir / crop_name, format="PNG")
+            crop_count += 1
+
+    return {
+        "image_id": image_id,
+        "box_count": len(boxes),
+        "crop_count": crop_count,
+        "yolo_label_path": str(yolo_label_path),
+        "crop_dir": str(crop_root),
+    }
+
 
 HTML = """<!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>PCB Labeler</title>
+<title>PCB Board Annotator</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; }
-  
-  .header {
-    background: #16213e;
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    border-bottom: 2px solid #0f3460;
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #10161f;
+    color: #eef2f7;
+    font-family: "Segoe UI", sans-serif;
   }
-  .header h1 { font-size: 18px; color: #e94560; }
-  
-  .main { display: flex; height: calc(100vh - 56px); }
-  
-  .sidebar {
-    width: 260px;
-    background: #16213e;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow-y: auto;
-    border-right: 1px solid #0f3460;
-  }
-  
-  .canvas-area {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: auto;
-    padding: 16px;
-    position: relative;
-  }
-  
-  #canvas {
-    cursor: crosshair;
-    border: 2px solid #0f3460;
-    max-width: 100%;
-    image-rendering: pixelated;
-  }
-  
-  .section-title {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #888;
-    margin-bottom: 4px;
-  }
-  
-  .upload-btn {
-    background: #e94560;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    width: 100%;
-    font-weight: bold;
-  }
-  .upload-btn:hover { background: #c73652; }
-  
-  .class-grid {
+  .shell {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    grid-template-columns: 340px 1fr 300px;
+    height: 100vh;
   }
-  
-  .class-btn {
-    padding: 8px 6px;
-    border: 2px solid #333;
-    border-radius: 6px;
-    cursor: pointer;
+  .panel {
+    overflow: auto;
+    border-right: 1px solid #233246;
+    background: #141d29;
+    padding: 16px;
+  }
+  .panel.right {
+    border-right: none;
+    border-left: 1px solid #233246;
+  }
+  .section {
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid #233246;
+  }
+  .section:last-child {
+    border-bottom: none;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 20px;
+  }
+  h2 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #93a4ba;
+  }
+  .hint, .muted {
+    color: #93a4ba;
     font-size: 12px;
-    text-align: center;
-    background: #0f3460;
-    color: #eee;
-    transition: all 0.15s;
+    line-height: 1.5;
   }
-  .class-btn:hover { border-color: #e94560; transform: scale(1.03); }
-  .class-btn.active { border-color: #4ecca3; background: #1a5a4a; color: #4ecca3; }
-  .class-btn .key {
-    display: inline-block;
-    background: #333;
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-size: 10px;
-    font-weight: bold;
-    margin-right: 4px;
-    color: #ffd700;
-  }
-  
-  .stats {
-    background: #0f3460;
-    border-radius: 8px;
-    padding: 10px;
-  }
-  .stat-row {
+  .toolbar, .row {
     display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    padding: 2px 0;
-    border-bottom: 1px solid #1a3a6a;
+    gap: 8px;
+    flex-wrap: wrap;
   }
-  .stat-row:last-child { border: none; }
-  .stat-count { color: #4ecca3; font-weight: bold; }
-  
-  .controls { display: flex; flex-direction: column; gap: 6px; }
-  .btn {
-    padding: 8px;
-    border: 1px solid #333;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    background: #0f3460;
-    color: #eee;
-    text-align: center;
+  button, input, select {
+    font: inherit;
   }
-  .btn:hover { background: #1a4a8a; }
-  .btn.danger { border-color: #e94560; }
-  .btn.danger:hover { background: #4a1a2a; }
-  
-  .info-box {
-    background: #0a2040;
-    border: 1px solid #1a4a8a;
+  button {
+    border: 1px solid #355074;
+    background: #1b2b3f;
+    color: #eef2f7;
+    padding: 8px 10px;
     border-radius: 8px;
-    padding: 10px;
-    font-size: 11px;
-    line-height: 1.8;
-    color: #aaa;
+    cursor: pointer;
   }
-  .info-box b { color: #4ecca3; }
-  
-  .status-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #0f3460;
-    padding: 6px 16px;
-    font-size: 12px;
-    color: #4ecca3;
-    border-top: 1px solid #1a4a8a;
-    z-index: 100;
+  button.primary {
+    background: #225a9c;
+    border-color: #3d77bf;
   }
-  
+  button.danger {
+    border-color: #8c4350;
+    background: #4a2029;
+  }
+  button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  input[type="file"] {
+    display: none;
+  }
+  input[type="text"] {
+    width: 100%;
+    border: 1px solid #355074;
+    background: #0f1722;
+    color: #eef2f7;
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+  .canvas-wrap {
+    position: relative;
+    overflow: auto;
+    background:
+      linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.02) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.02) 75%);
+    background-size: 24px 24px;
+    background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  .canvas-stage {
+    position: relative;
+    margin: 16px;
+    display: inline-block;
+  }
+  #boardImage {
+    display: block;
+    max-width: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
   #overlay {
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.7);
+    inset: 0;
+    cursor: crosshair;
+  }
+  .box {
+    position: absolute;
+    border: 2px solid var(--box-color, #54b2ff);
+    background: color-mix(in srgb, var(--box-color, #54b2ff) 18%, transparent);
+    color: #fff;
+    overflow: hidden;
+  }
+  .box.selected {
+    box-shadow: 0 0 0 2px #f8c34a inset;
+  }
+  .box-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 11px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.72);
+    white-space: nowrap;
+  }
+  .image-list, .box-list, .class-list {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-    border-radius: 8px;
-  }
-  
-  .save-popup {
-    background: #16213e;
-    border: 2px solid #4ecca3;
-    border-radius: 12px;
-    padding: 24px 32px;
-    text-align: center;
-    min-width: 280px;
-  }
-  .save-popup h3 { color: #4ecca3; margin-bottom: 12px; }
-  .save-popup .preview {
-    width: 200px;
-    height: 150px;
-    object-fit: contain;
-    border: 1px solid #333;
-    background: #000;
-    margin: 10px auto;
-    display: block;
-  }
-  .save-popup .label-buttons {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    flex-direction: column;
     gap: 8px;
-    margin-top: 12px;
   }
-  .save-popup .lbl-btn {
-    padding: 8px;
-    border: 1px solid #333;
-    border-radius: 6px;
+  .image-item, .box-item, .class-item {
+    border: 1px solid #233246;
+    border-radius: 10px;
+    padding: 10px;
+    background: #111925;
     cursor: pointer;
-    font-size: 12px;
-    background: #0f3460;
-    color: #eee;
   }
-  .save-popup .lbl-btn:hover { background: #1a5a4a; border-color: #4ecca3; }
-  .save-popup .cancel-btn {
-    margin-top: 10px;
-    padding: 6px 20px;
-    background: #333;
-    border: none;
-    border-radius: 6px;
-    color: #aaa;
-    cursor: pointer;
-    font-size: 12px;
+  .image-item.active, .box-item.active, .class-item.active {
+    border-color: #54b2ff;
+    background: #162438;
   }
-  
-  .toast {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #4ecca3;
-    color: #000;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: bold;
-    font-size: 14px;
-    z-index: 999;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-  }
-  .toast.show { opacity: 1; }
-  
-  .no-image {
-    color: #555;
+  .class-key {
+    display: inline-block;
+    min-width: 22px;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: #2a405d;
+    color: #b4d2ff;
     text-align: center;
-    font-size: 14px;
+    margin-right: 8px;
+    font-size: 11px;
   }
-  .no-image .icon { font-size: 48px; margin-bottom: 12px; }
+  .status {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 8px 12px;
+    background: #0b1119;
+    border-top: 1px solid #233246;
+    color: #b5c8e0;
+    font-size: 12px;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .metric {
+    background: #0f1722;
+    border: 1px solid #233246;
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .metric .value {
+    display: block;
+    margin-top: 4px;
+    font-size: 18px;
+    color: #54b2ff;
+    font-weight: 600;
+  }
+  .empty {
+    color: #93a4ba;
+    font-size: 13px;
+    padding: 12px 0;
+  }
 </style>
 </head>
 <body>
+<div class="shell">
+  <aside class="panel">
+    <div class="section">
+      <h1>PCB Annotator</h1>
+      <div class="hint">Board-level component labeling with persistent boxes, YOLO export, and automatic crop extraction.</div>
+    </div>
 
-<div class="header">
-  <h1>🔬 PCB Component Labeler</h1>
-  <span style="color:#888; font-size:13px;">Kéo để crop → chọn label → lưu tự động</span>
+    <div class="section">
+      <h2>Import Board</h2>
+      <div class="toolbar">
+        <input id="fileInput" type="file" accept="image/*">
+        <button class="primary" onclick="document.getElementById('fileInput').click()">Import Image</button>
+        <button onclick="selectPreviousImage()" id="prevImageBtn">Prev</button>
+        <button onclick="selectNextImage()" id="nextImageBtn">Next</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Imported images are stored in <code>board_dataset/images</code>.</div>
+    </div>
+
+    <div class="section">
+      <h2>Boards</h2>
+      <div id="imageList" class="image-list"></div>
+    </div>
+
+    <div class="section">
+      <h2>Classes</h2>
+      <div id="classList" class="class-list"></div>
+    </div>
+  </aside>
+
+  <main class="canvas-wrap">
+    <div class="section" style="padding:16px 16px 0; border-bottom:none;">
+      <div class="toolbar">
+        <button class="primary" onclick="saveAnnotations()" id="saveBtn">Save</button>
+        <button onclick="exportCurrentImage()" id="exportBtn">Export YOLO + Crops</button>
+        <button class="danger" onclick="deleteSelectedBox()" id="deleteBtn">Delete Box</button>
+        <button onclick="duplicateSelectedBox()" id="duplicateBtn">Duplicate</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="muted">Zoom</div>
+        <input id="zoomSlider" type="range" min="25" max="250" value="100" oninput="setZoom(this.value)">
+        <div id="zoomText" class="muted">100%</div>
+      </div>
+    </div>
+    <div id="canvasStage" class="canvas-stage" style="display:none;">
+      <img id="boardImage" alt="Board">
+      <div id="overlay"></div>
+    </div>
+    <div id="emptyState" class="empty" style="padding:24px;">Import or select a board image to start annotating.</div>
+  </main>
+
+  <aside class="panel right">
+    <div class="section">
+      <h2>Board Summary</h2>
+      <div class="metrics">
+        <div class="metric">Images<span class="value" id="metricImages">0</span></div>
+        <div class="metric">Boxes<span class="value" id="metricBoxes">0</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Selected Box</h2>
+      <div id="selectionEmpty" class="empty">No box selected.</div>
+      <div id="selectionEditor" style="display:none;">
+        <div class="row" style="margin-bottom:8px;">
+          <select id="selectedClass" onchange="updateSelectedBoxClass(this.value)" style="flex:1; border:1px solid #355074; background:#0f1722; color:#eef2f7; padding:8px 10px; border-radius:8px;"></select>
+        </div>
+        <div style="margin-bottom:8px;">
+          <input id="selectedLabel" type="text" placeholder="Custom label" oninput="updateSelectedBoxLabel(this.value)">
+        </div>
+        <div class="hint">Arrow keys nudge the selected box. Hold Shift for larger movement. Press Delete to remove it.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Boxes</h2>
+      <div id="boxList" class="box-list"></div>
+    </div>
+  </aside>
 </div>
 
-<div class="main">
-  <div class="sidebar">
-    <!-- Upload -->
-    <div>
-      <div class="section-title">Ảnh PCB</div>
-      <input type="file" id="fileInput" accept="image/*" style="display:none">
-      <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-        📁 Mở ảnh PCB
-      </button>
-      <div id="filename" style="font-size:11px; color:#888; margin-top:6px; word-break:break-all;"></div>
-    </div>
-    
-    <!-- Classes -->
-    <div>
-      <div class="section-title">Phím tắt / Label</div>
-      <div class="class-grid">
-        <div class="class-btn" data-key="o" onclick="selectClass('ok','o')">
-          <span class="key">O</span>OK
-        </div>
-        <div class="class-btn" data-key="s" onclick="selectClass('shift','s')">
-          <span class="key">S</span>Shift
-        </div>
-        <div class="class-btn" data-key="m" onclick="selectClass('missing','m')">
-          <span class="key">M</span>Missing
-        </div>
-        <div class="class-btn" data-key="t" onclick="selectClass('tombstone','t')">
-          <span class="key">T</span>Tombstone
-        </div>
-        <div class="class-btn" data-key="w" onclick="selectClass('wrong_part','w')">
-          <span class="key">W</span>Wrong Part
-        </div>
-        <div class="class-btn" data-key="p" onclick="selectClass('polarity','p')">
-          <span class="key">P</span>Polarity
-        </div>
-        <div class="class-btn" data-key="f" onclick="selectClass('solder_fail','f')">
-          <span class="key">F</span>Solder Fail
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div>
-      <div class="section-title">Số ảnh đã lưu</div>
-      <div class="stats" id="stats">
-        <div class="stat-row"><span>ok</span><span class="stat-count" id="cnt-ok">0</span></div>
-        <div class="stat-row"><span>shift</span><span class="stat-count" id="cnt-shift">0</span></div>
-        <div class="stat-row"><span>missing</span><span class="stat-count" id="cnt-missing">0</span></div>
-        <div class="stat-row"><span>tombstone</span><span class="stat-count" id="cnt-tombstone">0</span></div>
-        <div class="stat-row"><span>wrong_part</span><span class="stat-count" id="cnt-wrong_part">0</span></div>
-        <div class="stat-row"><span>polarity</span><span class="stat-count" id="cnt-polarity">0</span></div>
-        <div class="stat-row"><span>solder_fail</span><span class="stat-count" id="cnt-solder_fail">0</span></div>
-        <div class="stat-row" style="border-top:1px solid #4ecca3; margin-top:4px; padding-top:4px;">
-          <span><b>Total</b></span><span class="stat-count" id="cnt-total">0</span>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Controls -->
-    <div class="controls">
-      <div class="section-title">Thao tác</div>
-      <div class="btn" onclick="undoLast()">↩ Undo ảnh cuối (U)</div>
-      <div class="btn danger" onclick="clearCanvas()">✕ Xóa vùng chọn (Esc)</div>
-    </div>
-    
-    <!-- Shortcuts -->
-    <div class="info-box">
-      <b>Hướng dẫn:</b><br>
-      1. Mở ảnh PCB<br>
-      2. Click + kéo để chọn component<br>
-      3. Nhấn phím tắt hoặc click label<br>
-      4. Ảnh tự lưu vào <b>dataset/</b><br><br>
-      <b>Phím tắt:</b><br>
-      O=ok · S=shift · M=missing<br>
-      T=tombstone · W=wrong · P=polarity<br>
-      F=solder_fail · U=undo · Esc=cancel
-    </div>
-  </div>
-  
-  <div class="canvas-area" id="canvasArea">
-    <div class="no-image" id="noImage">
-      <div class="icon">🖼️</div>
-      Mở ảnh PCB để bắt đầu label
-    </div>
-    <canvas id="canvas" style="display:none"></canvas>
-    
-    <!-- Save popup -->
-    <div id="overlay" style="display:none;">
-      <div class="save-popup">
-        <h3>Chọn label cho component này</h3>
-        <img id="cropPreview" class="preview" src="">
-        <div class="label-buttons">
-          <div class="lbl-btn" onclick="saveWithLabel('ok')">✅ OK</div>
-          <div class="lbl-btn" onclick="saveWithLabel('shift')">↔ Shift</div>
-          <div class="lbl-btn" onclick="saveWithLabel('missing')">❌ Missing</div>
-          <div class="lbl-btn" onclick="saveWithLabel('tombstone')">⬆ Tombstone</div>
-          <div class="lbl-btn" onclick="saveWithLabel('wrong_part')">❓ Wrong Part</div>
-          <div class="lbl-btn" onclick="saveWithLabel('polarity')">🔄 Polarity</div>
-          <div class="lbl-btn" onclick="saveWithLabel('solder_fail')">💧 Solder Fail</div>
-        </div>
-        <button class="cancel-btn" onclick="cancelCrop()">Hủy (Esc)</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="status-bar" id="statusBar">Mở ảnh PCB để bắt đầu...</div>
-<div class="toast" id="toast"></div>
+<div class="status" id="statusBar">Ready.</div>
 
 <script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-let img = null;
-let isDrawing = false;
-let startX, startY, endX, endY;
-let currentCrop = null;
-let selectedClass = null;
-let counters = {};
-let lastSaved = null;
-let scale = 1;
+const state = {
+  classes: [],
+  classKeys: {},
+  images: [],
+  selectedImageId: null,
+  annotations: [],
+  selectedClass: null,
+  selectedBoxId: null,
+  draftBox: null,
+  isDrawing: false,
+  zoomPercent: 100,
+  imageWidth: 0,
+  imageHeight: 0,
+};
 
-// Load file
-document.getElementById('fileInput').addEventListener('change', e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  document.getElementById('filename').textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    img = new Image();
-    img.onload = () => {
-      // Fit to screen
-      const maxW = document.getElementById('canvasArea').clientWidth - 40;
-      const maxH = document.getElementById('canvasArea').clientHeight - 40;
-      scale = Math.min(1, maxW / img.width, maxH / img.height);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      document.getElementById('noImage').style.display = 'none';
-      canvas.style.display = 'block';
-      setStatus(`Ảnh: ${img.width}x${img.height}px | Scale: ${Math.round(scale*100)}% | Kéo để chọn component`);
+const boardImage = document.getElementById('boardImage');
+const overlay = document.getElementById('overlay');
+const stage = document.getElementById('canvasStage');
+const emptyState = document.getElementById('emptyState');
+const imageList = document.getElementById('imageList');
+const boxList = document.getElementById('boxList');
+const classList = document.getElementById('classList');
+const statusBar = document.getElementById('statusBar');
+
+function colorForClass(className) {
+  const index = Math.max(0, state.classes.indexOf(className));
+  const hue = (index * 37) % 360;
+  return `hsl(${hue} 78% 62%)`;
+}
+
+function setStatus(message) {
+  statusBar.textContent = message;
+}
+
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  const payload = await response.json();
+  if (!response.ok || payload.status === 'error') {
+    throw new Error(payload.message || 'Request failed');
+  }
+  return payload;
+}
+
+function updateSummary() {
+  document.getElementById('metricImages').textContent = state.images.length;
+  document.getElementById('metricBoxes').textContent = state.annotations.length;
+}
+
+function renderClassList() {
+  classList.innerHTML = '';
+  state.classes.forEach((className) => {
+    const row = document.createElement('div');
+    row.className = `class-item ${state.selectedClass === className ? 'active' : ''}`;
+    const key = Object.entries(state.classKeys).find(([, value]) => value === className)?.[0] || '';
+    row.innerHTML = `<span class="class-key">${key.toUpperCase()}</span>${className}`;
+    row.onclick = () => {
+      state.selectedClass = className;
+      renderClassList();
+      setStatus(`Selected class: ${className}`);
     };
-    img.src = ev.target.result;
+    classList.appendChild(row);
+  });
+}
+
+function renderImageList() {
+  imageList.innerHTML = '';
+  if (!state.images.length) {
+    imageList.innerHTML = '<div class="empty">No images imported yet.</div>';
+    return;
+  }
+  state.images.forEach((image) => {
+    const item = document.createElement('div');
+    item.className = `image-item ${state.selectedImageId === image.id ? 'active' : ''}`;
+    item.innerHTML = `
+      <div><strong>${image.filename}</strong></div>
+      <div class="muted">${image.width}x${image.height} px</div>
+      <div class="muted">${image.box_count} boxes</div>
+    `;
+    item.onclick = () => loadImage(image.id);
+    imageList.appendChild(item);
+  });
+}
+
+function renderBoxList() {
+  boxList.innerHTML = '';
+  if (!state.annotations.length) {
+    boxList.innerHTML = '<div class="empty">No boxes on this image.</div>';
+    return;
+  }
+  state.annotations.forEach((box, index) => {
+    const item = document.createElement('div');
+    item.className = `box-item ${state.selectedBoxId === box.id ? 'active' : ''}`;
+    item.innerHTML = `
+      <div><strong>${index + 1}. ${box.label}</strong></div>
+      <div class="muted">${box.class_name}</div>
+      <div class="muted">${box.width.toFixed(3)} x ${box.height.toFixed(3)}</div>
+    `;
+    item.onclick = () => {
+      state.selectedBoxId = box.id;
+      renderBoxes();
+    };
+    boxList.appendChild(item);
+  });
+}
+
+function updateSelectionEditor() {
+  const editor = document.getElementById('selectionEditor');
+  const empty = document.getElementById('selectionEmpty');
+  const selected = state.annotations.find((box) => box.id === state.selectedBoxId);
+  const classSelect = document.getElementById('selectedClass');
+  classSelect.innerHTML = state.classes.map((className) => `<option value="${className}">${className}</option>`).join('');
+  if (!selected) {
+    editor.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  editor.style.display = 'block';
+  empty.style.display = 'none';
+  classSelect.value = selected.class_name;
+  document.getElementById('selectedLabel').value = selected.label || '';
+}
+
+function scaleBox(box) {
+  return {
+    left: box.x * state.imageWidth,
+    top: box.y * state.imageHeight,
+    width: box.width * state.imageWidth,
+    height: box.height * state.imageHeight,
+  };
+}
+
+function renderBoxes() {
+  overlay.innerHTML = '';
+  state.annotations.forEach((box) => {
+    const node = document.createElement('div');
+    node.className = `box ${state.selectedBoxId === box.id ? 'selected' : ''}`;
+    node.style.setProperty('--box-color', colorForClass(box.class_name));
+    const scaled = scaleBox(box);
+    node.style.left = `${scaled.left}px`;
+    node.style.top = `${scaled.top}px`;
+    node.style.width = `${scaled.width}px`;
+    node.style.height = `${scaled.height}px`;
+    node.innerHTML = `<div class="box-label">${box.label}</div>`;
+    node.onclick = (event) => {
+      event.stopPropagation();
+      state.selectedBoxId = box.id;
+      renderBoxes();
+    };
+    overlay.appendChild(node);
+  });
+
+  if (state.draftBox) {
+    const draft = document.createElement('div');
+    draft.className = 'box';
+    draft.style.setProperty('--box-color', colorForClass(state.selectedClass || 'other'));
+    draft.style.left = `${state.draftBox.left}px`;
+    draft.style.top = `${state.draftBox.top}px`;
+    draft.style.width = `${state.draftBox.width}px`;
+    draft.style.height = `${state.draftBox.height}px`;
+    overlay.appendChild(draft);
+  }
+
+  renderBoxList();
+  updateSelectionEditor();
+  updateSummary();
+}
+
+function setZoom(percent) {
+  state.zoomPercent = Number(percent);
+  const scale = state.zoomPercent / 100;
+  boardImage.style.width = `${state.imageWidth * scale}px`;
+  boardImage.style.height = `${state.imageHeight * scale}px`;
+  overlay.style.width = `${state.imageWidth * scale}px`;
+  overlay.style.height = `${state.imageHeight * scale}px`;
+  document.getElementById('zoomText').textContent = `${state.zoomPercent}%`;
+}
+
+function findImageIndex() {
+  return state.images.findIndex((image) => image.id === state.selectedImageId);
+}
+
+function selectPreviousImage() {
+  const index = findImageIndex();
+  if (index > 0) {
+    loadImage(state.images[index - 1].id);
+  }
+}
+
+function selectNextImage() {
+  const index = findImageIndex();
+  if (index !== -1 && index < state.images.length - 1) {
+    loadImage(state.images[index + 1].id);
+  }
+}
+
+function updateImageRecordBoxCount() {
+  const image = state.images.find((item) => item.id === state.selectedImageId);
+  if (image) {
+    image.box_count = state.annotations.length;
+  }
+}
+
+async function refreshState(preferredImageId = null) {
+  const payload = await fetchJson('/state');
+  state.classes = payload.classes;
+  state.classKeys = payload.class_keys;
+  state.images = payload.images;
+  if (!state.selectedClass && state.classes.length) {
+    state.selectedClass = state.classes[0];
+  }
+  renderClassList();
+  renderImageList();
+
+  const targetImageId =
+    preferredImageId ||
+    (state.selectedImageId && state.images.some((image) => image.id === state.selectedImageId) ? state.selectedImageId : null) ||
+    state.images[0]?.id ||
+    null;
+
+  if (targetImageId) {
+    await loadImage(targetImageId, true);
+  } else {
+    state.selectedImageId = null;
+    state.annotations = [];
+    state.selectedBoxId = null;
+    stage.style.display = 'none';
+    emptyState.style.display = 'block';
+    updateSummary();
+  }
+}
+
+async function loadImage(imageId, skipStateRefresh = false) {
+  const payload = await fetchJson(`/annotations/${encodeURIComponent(imageId)}`);
+  state.selectedImageId = imageId;
+  state.annotations = payload.annotation.boxes || [];
+  state.selectedBoxId = state.annotations[0]?.id || null;
+  state.imageWidth = payload.image.width;
+  state.imageHeight = payload.image.height;
+  boardImage.onload = () => {
+    stage.style.display = 'inline-block';
+    emptyState.style.display = 'none';
+    setZoom(state.zoomPercent);
+    renderBoxes();
+  };
+  boardImage.src = payload.image.url;
+  renderImageList();
+  if (!skipStateRefresh) {
+    updateImageRecordBoxCount();
+  }
+  setStatus(`Loaded ${payload.image.filename}`);
+}
+
+function pointerToNormalized(event) {
+  const rect = overlay.getBoundingClientRect();
+  const scaleX = state.imageWidth / rect.width;
+  const scaleY = state.imageHeight / rect.height;
+  const px = (event.clientX - rect.left) * scaleX;
+  const py = (event.clientY - rect.top) * scaleY;
+  return {
+    x: Math.max(0, Math.min(px / state.imageWidth, 1)),
+    y: Math.max(0, Math.min(py / state.imageHeight, 1)),
+  };
+}
+
+function normalizedToDraftBox(start, end) {
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const width = Math.abs(start.x - end.x);
+  const height = Math.abs(start.y - end.y);
+  return { x, y, width, height };
+}
+
+function draftPixels(box) {
+  return {
+    left: box.x * state.imageWidth * (state.zoomPercent / 100),
+    top: box.y * state.imageHeight * (state.zoomPercent / 100),
+    width: box.width * state.imageWidth * (state.zoomPercent / 100),
+    height: box.height * state.imageHeight * (state.zoomPercent / 100),
+  };
+}
+
+overlay.addEventListener('mousedown', (event) => {
+  if (!state.selectedImageId) {
+    return;
+  }
+  state.isDrawing = true;
+  const start = pointerToNormalized(event);
+  state.draftStart = start;
+  state.draftBox = { left: 0, top: 0, width: 0, height: 0 };
+  state.selectedBoxId = null;
+  renderBoxes();
+});
+
+overlay.addEventListener('mousemove', (event) => {
+  if (!state.isDrawing || !state.draftStart) {
+    return;
+  }
+  const box = normalizedToDraftBox(state.draftStart, pointerToNormalized(event));
+  state.draftNormalized = box;
+  state.draftBox = draftPixels(box);
+  renderBoxes();
+});
+
+window.addEventListener('mouseup', () => {
+  if (!state.isDrawing || !state.draftNormalized) {
+    state.isDrawing = false;
+    state.draftStart = null;
+    state.draftBox = null;
+    return;
+  }
+  const box = state.draftNormalized;
+  state.isDrawing = false;
+  state.draftStart = null;
+  state.draftBox = null;
+  state.draftNormalized = null;
+
+  if (box.width < 0.003 || box.height < 0.003) {
+    renderBoxes();
+    return;
+  }
+
+  const className = state.selectedClass || state.classes[0];
+  const newBox = {
+    id: crypto.randomUUID(),
+    class_name: className,
+    label: className,
+    x: Number(box.x.toFixed(6)),
+    y: Number(box.y.toFixed(6)),
+    width: Number(box.width.toFixed(6)),
+    height: Number(box.height.toFixed(6)),
+  };
+  state.annotations.push(newBox);
+  state.selectedBoxId = newBox.id;
+  updateImageRecordBoxCount();
+  renderBoxes();
+  setStatus(`Added ${className} box. Save when ready.`);
+});
+
+function updateSelectedBoxClass(className) {
+  const box = state.annotations.find((item) => item.id === state.selectedBoxId);
+  if (!box) {
+    return;
+  }
+  box.class_name = className;
+  if (!box.label || state.classes.includes(box.label)) {
+    box.label = className;
+  }
+  renderBoxes();
+}
+
+function updateSelectedBoxLabel(label) {
+  const box = state.annotations.find((item) => item.id === state.selectedBoxId);
+  if (!box) {
+    return;
+  }
+  box.label = label.trim() || box.class_name;
+  renderBoxes();
+}
+
+function deleteSelectedBox() {
+  if (!state.selectedBoxId) {
+    return;
+  }
+  state.annotations = state.annotations.filter((box) => box.id !== state.selectedBoxId);
+  state.selectedBoxId = state.annotations[0]?.id || null;
+  updateImageRecordBoxCount();
+  renderBoxes();
+  setStatus('Deleted selected box.');
+}
+
+function duplicateSelectedBox() {
+  const selected = state.annotations.find((box) => box.id === state.selectedBoxId);
+  if (!selected) {
+    return;
+  }
+  const next = {
+    ...selected,
+    id: crypto.randomUUID(),
+    x: Number(Math.min(selected.x + 0.01, 1 - selected.width).toFixed(6)),
+    y: Number(Math.min(selected.y + 0.01, 1 - selected.height).toFixed(6)),
+  };
+  state.annotations.push(next);
+  state.selectedBoxId = next.id;
+  updateImageRecordBoxCount();
+  renderBoxes();
+  setStatus('Duplicated selected box.');
+}
+
+async function saveAnnotations() {
+  if (!state.selectedImageId) {
+    return;
+  }
+  const payload = await fetchJson('/save-annotations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image_id: state.selectedImageId,
+      boxes: state.annotations,
+    }),
+  });
+  state.annotations = payload.annotation.boxes;
+  updateImageRecordBoxCount();
+  renderBoxes();
+  renderImageList();
+  setStatus(`Saved ${state.annotations.length} boxes.`);
+}
+
+async function exportCurrentImage() {
+  if (!state.selectedImageId) {
+    return;
+  }
+  const payload = await fetchJson('/export-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_id: state.selectedImageId }),
+  });
+  setStatus(`Exported ${payload.crop_count} crops and YOLO labels for ${payload.image_id}.`);
+}
+
+document.getElementById('fileInput').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const payload = await fetchJson('/import-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          image: reader.result,
+        }),
+      });
+      await refreshState(payload.image.id);
+      setStatus(`Imported ${payload.image.filename}`);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      event.target.value = '';
+    }
   };
   reader.readAsDataURL(file);
 });
 
-// Mouse events
-canvas.addEventListener('mousedown', e => {
-  if (!img) return;
-  isDrawing = true;
-  const r = canvas.getBoundingClientRect();
-  startX = e.clientX - r.left;
-  startY = e.clientY - r.top;
-  endX = startX; endY = startY;
-});
-
-canvas.addEventListener('mousemove', e => {
-  if (!isDrawing) return;
-  const r = canvas.getBoundingClientRect();
-  endX = e.clientX - r.left;
-  endY = e.clientY - r.top;
-  redraw();
-  // Draw selection box
-  ctx.strokeStyle = '#4ecca3';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5, 3]);
-  ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-  ctx.fillStyle = 'rgba(78, 204, 163, 0.1)';
-  ctx.fillRect(startX, startY, endX - startX, endY - startY);
-});
-
-canvas.addEventListener('mouseup', e => {
-  if (!isDrawing) return;
-  isDrawing = false;
-  const w = Math.abs(endX - startX);
-  const h = Math.abs(endY - startY);
-  if (w < 10 || h < 10) return; // Bỏ qua click quá nhỏ
-  
-  // Lấy crop từ ảnh gốc
-  const x0 = Math.min(startX, endX) / scale;
-  const y0 = Math.min(startY, endY) / scale;
-  const cw = w / scale;
-  const ch = h / scale;
-  
-  const tmpCanvas = document.createElement('canvas');
-  tmpCanvas.width = cw; tmpCanvas.height = ch;
-  const tmpCtx = tmpCanvas.getContext('2d');
-  tmpCtx.drawImage(img, x0, y0, cw, ch, 0, 0, cw, ch);
-  currentCrop = tmpCanvas.toDataURL('image/jpeg', 0.95);
-  
-  // Nếu đã chọn class → lưu ngay
-  if (selectedClass) {
-    saveWithLabel(selectedClass);
+document.addEventListener('keydown', (event) => {
+  if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
     return;
   }
-  
-  // Hiện popup chọn label
-  document.getElementById('cropPreview').src = currentCrop;
-  document.getElementById('overlay').style.display = 'flex';
-  setStatus('Chọn label cho component...');
-});
-
-// Select class
-function selectClass(cls, key) {
-  selectedClass = cls;
-  document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector(`.class-btn[data-key="${key}"]`).classList.add('active');
-  setStatus(`Class đang chọn: ${cls.toUpperCase()} | Kéo để crop component`);
-}
-
-// Save crop
-function saveWithLabel(label) {
-  if (!currentCrop) return;
-  document.getElementById('overlay').style.display = 'none';
-  
-  fetch('/save', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({image: currentCrop, label: label})
-  })
-  .then(r => r.json())
-  .then(data => {
-    lastSaved = {label, filename: data.filename};
-    counters[label] = (counters[label] || 0) + 1;
-    updateStats();
-    showToast(`✅ Đã lưu: ${label} #${counters[label]}`);
-    setStatus(`Lưu thành công: ${data.filename}`);
-    currentCrop = null;
-    redraw();
-  });
-}
-
-function cancelCrop() {
-  document.getElementById('overlay').style.display = 'none';
-  currentCrop = null;
-  redraw();
-  setStatus('Đã hủy. Kéo để chọn component khác.');
-}
-
-// Undo
-function undoLast() {
-  if (!lastSaved) return;
-  fetch('/undo', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({filename: lastSaved.filename, label: lastSaved.label})
-  })
-  .then(r => r.json())
-  .then(data => {
-    counters[lastSaved.label] = Math.max(0, (counters[lastSaved.label] || 1) - 1);
-    updateStats();
-    showToast(`↩ Đã undo: ${lastSaved.label}`);
-    lastSaved = null;
-  });
-}
-
-function clearCanvas() {
-  document.getElementById('overlay').style.display = 'none';
-  currentCrop = null;
-  isDrawing = false;
-  redraw();
-  setStatus('Đã xóa. Kéo để chọn component mới.');
-}
-
-function redraw() {
-  if (!img) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-}
-
-function updateStats() {
-  const classes = ['ok','shift','missing','tombstone','wrong_part','polarity','solder_fail'];
-  let total = 0;
-  classes.forEach(cls => {
-    const cnt = counters[cls] || 0;
-    const el = document.getElementById(`cnt-${cls}`);
-    if (el) el.textContent = cnt;
-    total += cnt;
-  });
-  document.getElementById('cnt-total').textContent = total;
-}
-
-// Load initial counts
-fetch('/counts').then(r => r.json()).then(data => {
-  counters = data;
-  updateStats();
-});
-
-function setStatus(msg) {
-  document.getElementById('statusBar').textContent = msg;
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
-}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
-  const key = e.key.toLowerCase();
-  const keyMap = {o:'ok',s:'shift',m:'missing',t:'tombstone',w:'wrong_part',p:'polarity',f:'solder_fail'};
-  
-  if (document.getElementById('overlay').style.display !== 'none') {
-    if (key === 'escape') { cancelCrop(); return; }
-    if (keyMap[key]) { saveWithLabel(keyMap[key]); return; }
+  const key = event.key.toLowerCase();
+  if (state.classKeys[key]) {
+    state.selectedClass = state.classKeys[key];
+    renderClassList();
+    setStatus(`Selected class: ${state.selectedClass}`);
+    return;
   }
-  
-  if (key === 'escape') { clearCanvas(); return; }
-  if (key === 'u') { undoLast(); return; }
-  if (keyMap[key]) { selectClass(keyMap[key], key); return; }
+  if (key === 'delete' || key === 'backspace') {
+    deleteSelectedBox();
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && key === 's') {
+    event.preventDefault();
+    saveAnnotations();
+    return;
+  }
+  const selected = state.annotations.find((box) => box.id === state.selectedBoxId);
+  if (!selected) {
+    return;
+  }
+  const step = event.shiftKey ? 0.01 : 0.0025;
+  if (key === 'arrowleft') selected.x = Number(Math.max(0, selected.x - step).toFixed(6));
+  if (key === 'arrowright') selected.x = Number(Math.min(1 - selected.width, selected.x + step).toFixed(6));
+  if (key === 'arrowup') selected.y = Number(Math.max(0, selected.y - step).toFixed(6));
+  if (key === 'arrowdown') selected.y = Number(Math.min(1 - selected.height, selected.y + step).toFixed(6));
+  renderBoxes();
 });
+
+refreshState().catch((error) => setStatus(error.message));
 </script>
 </body>
-</html>"""
+</html>
+"""
 
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, format, *args): pass  # Tắt log
+    def log_message(self, format: str, *args: object) -> None:
+        return
 
-    def do_GET(self):
+    def _send_json(self, payload: dict[str, object], status_code: int = 200) -> None:
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
+
+    def _read_json(self) -> dict[str, object]:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length).decode("utf-8")
+        return json.loads(body) if body else {}
+
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path == "/":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(HTML.encode("utf-8"))
+            return
+
+        if path == "/state":
+            self._send_json(
+                {
+                    "status": "ok",
+                    "classes": COMPONENT_CLASSES,
+                    "class_keys": CLASS_KEYS,
+                    "images": _list_images(),
+                }
+            )
+            return
+
+        if path.startswith("/annotations/"):
+            image_id = unquote(path.removeprefix("/annotations/"))
+            image_path = IMAGE_DIR / image_id
+            if not image_path.exists():
+                self._send_json({"status": "error", "message": "image not found"}, status_code=404)
+                return
+            annotation = _load_annotation(image_id)
+            image = _image_record(image_path)
+            self._send_json({"status": "ok", "image": image, "annotation": annotation})
+            return
+
+        if path.startswith("/image/"):
+            image_id = unquote(path.removeprefix("/image/"))
+            image_path = IMAGE_DIR / image_id
+            if not image_path.exists() or not image_path.is_file():
+                self.send_response(404)
+                self.end_headers()
+                return
+            media_type = "image/png"
+            suffix = image_path.suffix.lower()
+            if suffix in {".jpg", ".jpeg"}:
+                media_type = "image/jpeg"
+            elif suffix == ".webp":
+                media_type = "image/webp"
+            elif suffix == ".bmp":
+                media_type = "image/bmp"
+            self.send_response(200)
+            self.send_header("Content-Type", media_type)
+            self.end_headers()
+            self.wfile.write(image_path.read_bytes())
+            return
+
+        self.send_response(404)
+        self.end_headers()
+
+    def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path == '/':
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html; charset=utf-8')
-            self.end_headers()
-            self.wfile.write(HTML.encode())
-        elif path == '/counts':
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(counters).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
+        try:
+            body = self._read_json()
 
-    def do_POST(self):
-        length = int(self.headers['Content-Length'])
-        body = json.loads(self.rfile.read(length))
-        path = urlparse(self.path).path
+            if path == "/import-image":
+                filename = str(body.get("filename") or "").strip()
+                image_data = str(body.get("image") or "")
+                if not filename or not image_data:
+                    raise ValueError("filename and image are required")
+                image = _import_image(filename, image_data)
+                self._send_json({"status": "ok", "image": image})
+                return
 
-        if path == '/save':
-            label = body['label']
-            img_data = body['image'].split(',')[1]
-            img_bytes = base64.b64decode(img_data)
-            
-            counters[label] = counters.get(label, 0) + 1
-            cnt = counters[label]
-            
-            # 80% train, 20% val
-            split = 'train' if cnt % 5 != 0 else 'val'
-            filename = f"{label}_{cnt:04d}.jpg"
-            save_path = OUTPUT_DIR / split / label / filename
-            
-            with open(save_path, 'wb') as f:
-                f.write(img_bytes)
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                'filename': str(save_path),
-                'count': cnt
-            }).encode())
+            if path == "/save-annotations":
+                image_id = str(body.get("image_id") or "").strip()
+                boxes = body.get("boxes")
+                if not image_id or not isinstance(boxes, list):
+                    raise ValueError("image_id and boxes are required")
+                if not (IMAGE_DIR / image_id).exists():
+                    raise FileNotFoundError("image not found")
+                annotation = _save_boxes(image_id, boxes)
+                self._send_json({"status": "ok", "annotation": annotation})
+                return
 
-        elif path == '/undo':
-            label = body['label']
-            filename = body['filename']
-            try:
-                os.remove(filename)
-                if label in counters and counters[label] > 0:
-                    counters[label] -= 1
-                result = {'ok': True}
-            except Exception as e:
-                result = {'ok': False, 'error': str(e)}
-            
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
+            if path == "/export-image":
+                image_id = str(body.get("image_id") or "").strip()
+                if not image_id:
+                    raise ValueError("image_id is required")
+                payload = _export_image(image_id)
+                self._send_json({"status": "ok", **payload})
+                return
+
+            self._send_json({"status": "error", "message": "route not found"}, status_code=404)
+        except FileNotFoundError as exc:
+            self._send_json({"status": "error", "message": str(exc)}, status_code=404)
+        except ValueError as exc:
+            self._send_json({"status": "error", "message": str(exc)}, status_code=400)
+        except Exception as exc:
+            self._send_json({"status": "error", "message": str(exc)}, status_code=500)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     port = 5000
-    server = HTTPServer(('localhost', port), Handler)
-    print(f"""
-╔══════════════════════════════════════════╗
-║      PCB Component Labeling Tool         ║
-╠══════════════════════════════════════════╣
-║  Mở browser: http://localhost:{port}       ║
-║  Ảnh lưu vào: ./dataset/                ║
-║  Dừng: Ctrl+C                           ║
-╚══════════════════════════════════════════╝
-    """)
+    server = HTTPServer(("localhost", port), Handler)
+    print(
+        f"""
+╔══════════════════════════════════════════════╗
+║        PCB Board Annotation Tool            ║
+╠══════════════════════════════════════════════╣
+║  Browser: http://localhost:{port:<18}║
+║  Images:   ./board_dataset/images           ║
+║  Labels:   ./board_dataset/annotations      ║
+║  Exports:  ./board_dataset/exports          ║
+╚══════════════════════════════════════════════╝
+"""
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nĐã dừng. Dataset lưu tại ./dataset/")
+        print("\nStopped.")

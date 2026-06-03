@@ -2,6 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { clamp } from '../app/utils'
 
+const KEYBOARD_SHORTCUTS = [
+  { key: 'Arrow keys', description: 'Pan the canvas' },
+  { key: 'Shift + Arrows', description: 'Pan faster (3×)' },
+  { key: '+ / =', description: 'Zoom in' },
+  { key: '- / _', description: 'Zoom out' },
+  { key: '0', description: 'Reset view' },
+  { key: 'P', description: 'Confirm Pass (Zen Mode)' },
+  { key: 'F', description: 'Confirm Fail (Zen Mode)' },
+  { key: 'Scroll wheel', description: 'Zoom in / out' },
+  { key: 'Click + drag', description: 'Pan' },
+  { key: 'Double-click overlay', description: 'Focus & centre defect' },
+]
+
 export default function PcbViewer({
   image,
   run,
@@ -20,6 +33,7 @@ export default function PcbViewer({
   const [viewerScale, setViewerScale] = useState(1)
   const [viewerOffset, setViewerOffset] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const [imageDimensions, setImageDimensions] = useState({
     width: image?.image_width || 1600,
     height: image?.image_height || 900,
@@ -193,6 +207,15 @@ export default function PcbViewer({
               >
                 Center Defect
               </button>
+              <button
+                type="button"
+                className="ghost-button viewer-toolbar-button viewer-help-button"
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+                onClick={() => setShowShortcuts((prev) => !prev)}
+              >
+                ?
+              </button>
             </div>
           </div>
         </div>
@@ -315,6 +338,37 @@ export default function PcbViewer({
           <div className="empty-state">No inspection image.</div>
         )}
       </div>
+
+      {showShortcuts ? (
+        <div
+          className="shortcuts-overlay"
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          onClick={() => setShowShortcuts(false)}
+        >
+          <div className="shortcuts-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="shortcuts-header">
+              <p className="eyebrow">Keyboard Shortcuts</p>
+              <button
+                type="button"
+                className="ghost-button"
+                aria-label="Close shortcuts"
+                onClick={() => setShowShortcuts(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="shortcuts-list">
+              {KEYBOARD_SHORTCUTS.map((shortcut) => (
+                <li key={shortcut.key} className="shortcuts-item">
+                  <kbd className="shortcut-key">{shortcut.key}</kbd>
+                  <span className="shortcut-desc">{shortcut.description}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -76,7 +76,7 @@ export function useWorkspacePrefs(effectiveSelectedImageId) {
     }
     return rawValue !== 'false'
   })
-  const [hudGhostOpacity, setHudGhostOpacity] = useState(0.2)
+  const [hudGhostOpacity, setHudGhostOpacity] = useState(0.85)
   const [isKbNavEnabled, setIsKbNavEnabled] = useState(true)
   const [kbNavSensitivity, setKbNavSensitivity] = useState(1.0)
   const fileInputRef = useRef(null)

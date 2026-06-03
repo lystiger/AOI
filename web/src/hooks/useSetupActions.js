@@ -34,6 +34,8 @@ export function useSetupActions({
   const [fiducialError, setFiducialError] = useState('')
   const [barcodeError, setBarcodeError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const analyzeTimerRef = useRef(null)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
   const [isSavingFovs, setIsSavingFovs] = useState(false)
@@ -110,6 +112,33 @@ export function useSetupActions({
         currentRuns.map((run) => (run.id === detailPayload.run.id ? { ...run, ...detailPayload.run } : run)),
       )
       toast.success('PCB scan uploaded successfully')
+
+      // Poll for component detection completion so the UI shows "Analyzing..." feedback.
+      if (analyzeTimerRef.current) {
+        clearInterval(analyzeTimerRef.current)
+      }
+      setIsAnalyzing(true)
+      let pollCount = 0
+      analyzeTimerRef.current = setInterval(async () => {
+        pollCount += 1
+        try {
+          const pollPayload = await fetchJson(`/runs/${selectedRunId}${buildQuery(detailFilters)}`)
+          const status = pollPayload.run?.component_detection_status
+          if (status === 'detected' || status === 'failed' || pollCount >= 10) {
+            clearInterval(analyzeTimerRef.current)
+            analyzeTimerRef.current = null
+            setIsAnalyzing(false)
+            updateSelectedRun(pollPayload.run)
+            setRuns((currentRuns) =>
+              currentRuns.map((run) => (run.id === pollPayload.run.id ? { ...run, ...pollPayload.run } : run)),
+            )
+          }
+        } catch {
+          clearInterval(analyzeTimerRef.current)
+          analyzeTimerRef.current = null
+          setIsAnalyzing(false)
+        }
+      }, 2000)
     } catch (err) {
       setUploadError(`Upload Error: ${err.message}`)
       toast.error(`Upload failed: ${err.message}`)
@@ -564,6 +593,7 @@ export function useSetupActions({
     handleSaveManualFiducials,
     handleSaveFovs,
     handleSaveModel,
+    isAnalyzing,
     isCreatingRun,
     isDeletingRun,
     isDetectingBarcode,

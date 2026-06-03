@@ -73,6 +73,9 @@ export function DefectListItem({ defect, active, hovered, onSelect, onHover }) {
       <div className="defect-list-meta">
         <StatusChip value={defect.inspection_result} />
         <span className="defect-confidence">{Number(defect.confidence_score ?? 0).toFixed(2)}</span>
+        {defect.inference_latency_ms != null ? (
+          <span className="defect-confidence">{defect.inference_latency_ms}ms</span>
+        ) : null}
         {defect.operator_review && defect.operator_review !== 'NONE' ? (
           <span className="defect-reviewed" title={`Reviewed as ${defect.operator_review}`}>
             Reviewed

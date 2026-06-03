@@ -19,6 +19,7 @@ export default function ReviewWorkspace({ workspace }) {
     runImages,
     effectiveSelectedImageId,
     setSelectedImageId,
+    isAnalyzing,
     isUploading,
     openImagePicker,
     handleDeleteRun,
@@ -150,11 +151,11 @@ export default function ReviewWorkspace({ workspace }) {
             ) : null}
             <button
               type="button"
-              className={`ghost-button upload-button ${isUploading ? 'loading' : ''}`}
+              className={`ghost-button upload-button ${isUploading || isAnalyzing ? 'loading' : ''}`}
               onClick={openImagePicker}
-              disabled={isUploading || !selectedRunId}
+              disabled={isUploading || isAnalyzing || !selectedRunId}
             >
-              {isUploading ? 'Uploading Scan...' : 'Upload PCB Scan'}
+              {isUploading ? 'Uploading Scan...' : isAnalyzing ? 'Analyzing...' : 'Upload PCB Scan'}
             </button>
             <button
               type="button"
@@ -166,11 +167,30 @@ export default function ReviewWorkspace({ workspace }) {
             </button>
             {!showSetupMode ? (
               <div className="review-stepper" role="group" aria-label="Step defects">
-                <button type="button" className="ghost-button review-nav-button" onClick={() => stepDefect(-1)}>
-                  &lt;
+                <button
+                  type="button"
+                  className="ghost-button review-nav-button"
+                  aria-label="Previous defect"
+                  title="Previous defect"
+                  onClick={() => stepDefect(-1)}
+                >
+                  ‹
                 </button>
-                <button type="button" className="ghost-button review-nav-button" onClick={() => stepDefect(1)}>
-                  &gt;
+                {visibleDefects.length > 0 ? (
+                  <span className="stepper-position">
+                    {Math.max(0, visibleDefects.findIndex((d) => d.id === selectedDefect?.id)) + (selectedDefect ? 1 : 0)}
+                    {' / '}
+                    {visibleDefects.length}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="ghost-button review-nav-button"
+                  aria-label="Next defect"
+                  title="Next defect"
+                  onClick={() => stepDefect(1)}
+                >
+                  ›
                 </button>
               </div>
             ) : null}
@@ -381,6 +401,12 @@ export default function ReviewWorkspace({ workspace }) {
                         <span className="eyebrow">Confidence</span>
                         <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
                       </div>
+                      {selectedDefect.inference_latency_ms != null ? (
+                        <div className="inspector-item">
+                          <span className="eyebrow">Latency</span>
+                          <strong>{selectedDefect.inference_latency_ms}ms</strong>
+                        </div>
+                      ) : null}
                       {selectedDefect.operator_review && selectedDefect.operator_review !== 'NONE' ? (
                         <div className="inspector-item inspector-item-wide">
                           <span className="eyebrow">Human Review</span>

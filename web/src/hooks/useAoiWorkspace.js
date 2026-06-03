@@ -100,6 +100,7 @@ export function useAoiWorkspace() {
     handleSaveModel: actions.handleSaveModel,
     hoveredDefectId: runData.hoveredDefectId,
     hudGhostOpacity: prefs.hudGhostOpacity,
+    isAnalyzing: actions.isAnalyzing,
     isCreatingRun: actions.isCreatingRun,
     isDeletingRun: actions.isDeletingRun,
     isDetectingBarcode: actions.isDetectingBarcode,

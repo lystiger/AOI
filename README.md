@@ -114,13 +114,57 @@ Tracked reports:
 
 ## Current UI
 
+> All screenshots below are live captures from the running application (June 2026).
+
+### Review Workspace
+
 <p align="center">
-  <img src="assets/readme/review-workspace.png" alt="AOI review workspace captured from the running application" width="48%" />
-  <img src="assets/readme/setup-workflow.png" alt="AOI setup workflow captured from the running application" width="48%" />
+  <img src="assets/readme/review-workspace.png" alt="AOI review workspace — PCB viewer with defect overlays and floating inspector" width="90%" />
 </p>
 
 <p align="center">
-  <em>Fresh captures from the live application: defect review and pre-program setup workflow.</em>
+  <em>Full review workspace: run history rail (left), defect list sidebar, PCB viewer with component and defect overlays, and the floating Defect Inspector (bottom-right) showing component ID, defect type, severity, confidence, and inference latency.</em>
+</p>
+
+### Defect Selection and Inspector
+
+<p align="center">
+  <img src="assets/readme/defect-selected.png" alt="Defect selected — inspector panel showing latency chip" width="60%" />
+  <img src="assets/readme/defect-sidebar.png" alt="Defect sidebar showing per-defect confidence and inference latency" width="30%" />
+</p>
+
+<p align="center">
+  <em>Left: selecting a FAIL defect focuses the overlay and surfaces the inspector. Right: each defect card in the sidebar now shows confidence score and inference latency (ms) side by side.</em>
+</p>
+
+### Keyboard Shortcuts Overlay
+
+<p align="center">
+  <img src="assets/readme/keyboard-shortcuts.png" alt="Keyboard shortcuts overlay opened via ? button in the viewer toolbar" width="90%" />
+</p>
+
+<p align="center">
+  <em>The <strong>?</strong> button in the viewer toolbar opens this overlay listing all pan, zoom, and Zen Mode review bindings.</em>
+</p>
+
+### Zen Mode
+
+<p align="center">
+  <img src="assets/readme/zen-mode.png" alt="Zen Mode — focused single-defect review with P/F key bindings" width="90%" />
+</p>
+
+<p align="center">
+  <em>Zen Mode collapses the run rail and sidebar and dims all non-selected overlays. Press <kbd>P</kbd> to confirm pass or <kbd>F</kbd> to confirm fail, then automatically advance to the next defect.</em>
+</p>
+
+### Topbar
+
+<p align="center">
+  <img src="assets/readme/topbar.png" alt="Workspace topbar showing run summary, theme toggle, and tool dock" width="90%" />
+</p>
+
+<p align="center">
+  <em>Topbar: live summary stats (runs, fail count, events), theme toggle, and panel controls for run rail, sidebar, filters, and settings.</em>
 </p>
 
 The operator-facing flow in the repo today is:
