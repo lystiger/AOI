@@ -1,0 +1,6 @@
+Chapter 1 — Introduction: why AI inference monitoring matters
+Chapter 2 — Related work: Loki stack, observability in ML systems
+Chapter 3 — System design: the logging and monitoring architecture
+Chapter 4 — Case study implementation: PCB AOI as the AI service under monitoring
+Chapter 5 — Experiments: inject normal runs, error runs, high-latency runs — show Grafana detecting each one
+Chapter 6 — Evaluation: does the system catch anomalies? latency benchmarks? log query performance?
