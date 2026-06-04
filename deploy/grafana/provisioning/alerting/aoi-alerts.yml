@@ -1,0 +1,185 @@
+# Grafana alert rules for AOI anomaly detection.
+# Provisioned via /etc/grafana/provisioning/alerting (mounted from deploy/grafana/provisioning).
+# These fire during experiments and produce thesis-level evidence in
+# Grafana Alerting -> Alert rules / Alert history.
+#
+# Each rule uses a 3-stage data pipeline:
+#   A = Loki range query (the metric)
+#   B = reduce A to a single number (last value)
+#   C = threshold on B (the firing condition)
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: aoi-anomaly-alerts
+    folder: AOI
+    interval: 1m
+    rules:
+
+      - uid: aoi-high-fail-rate
+        title: "High Defect Rate — S02 trigger"
+        condition: C
+        for: 1m
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: grafana-loki
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: grafana-loki
+              expr: >
+                sum(count_over_time({job="aoi-inference",inspection_result="FAIL"}[5m]))
+                /
+                sum(count_over_time({job="aoi-inference"}[5m]))
+              queryType: range
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 0.6
+        annotations:
+          summary: "Defect rate exceeds 60% — possible production line fault"
+          description: "FAIL rate is {{ $values.B }}. Threshold: 0.60. Scenario S02 active."
+        labels:
+          severity: critical
+          scenario: S02
+
+      - uid: aoi-latency-spike
+        title: "Latency Spike — S03 trigger"
+        condition: C
+        for: 1m
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: grafana-loki
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: grafana-loki
+              expr: >
+                avg_over_time(
+                  {job="aoi-inference"} | json | unwrap inference_latency_ms [5m]
+                )
+              queryType: range
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - type: query
+                  evaluator:
+                    type: gt
+                    params:
+                      - 500
+        annotations:
+          summary: "Inference latency exceeds 500ms — possible resource starvation"
+          description: "Avg latency is {{ $values.B }}ms. Threshold: 500ms. Scenario S03 active."
+        labels:
+          severity: warning
+          scenario: S03
+
+      - uid: aoi-low-confidence
+        title: "Low Confidence Storm — S04 trigger"
+        condition: C
+        for: 2m
+        noDataState: NoData
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: grafana-loki
+            model:
+              refId: A
+              datasource:
+                type: loki
+                uid: grafana-loki
+              expr: >
+                avg_over_time(
+                  {job="aoi-inference"} | json | unwrap confidence_score [5m]
+                )
+              queryType: range
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              conditions:
+                - type: query
+                  evaluator:
+                    type: lt
+                    params:
+                      - 0.6
+        annotations:
+          summary: "Average confidence below 0.60 — model may be out-of-distribution"
+          description: "Avg confidence is {{ $values.B }}. Threshold: 0.60. Scenario S04 active."
+        labels:
+          severity: warning
+          scenario: S04

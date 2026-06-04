@@ -1,341 +1,189 @@
 # AOI Industrial AI System
-## PCB Defect Detection, Review, and Monitoring Platform
+## Inference Logging, Review, and Monitoring Platform
 
-Author: Lys  
 Target environment: Industrial AOI workflow / PCB inspection  
-Document role: Thesis-stage system overview aligned to the current repository
+Document role: Repository-aligned system overview for the monitoring thesis
 
 ---
 
 ## 1. System Overview
 
-This project implements an AI-assisted AOI (Automated Optical Inspection) workflow for PCB defect detection and operator review. The system is intended to demonstrate how an industrial inspection pipeline can be extended with:
+This project implements an AI-assisted AOI (Automatic Optical Inspection)
+workflow for PCB review with a strong emphasis on inference observability. The
+system combines:
 
-- AI-based defect detection
-- structured inference logging
-- backend-served inspection data
-- review-oriented frontend visualization
-- a path toward benchmarking and future model experimentation
+- an AOI backend for runs, images, and event ingestion
+- a review workstation for operator inspection
+- structured logging for inference events
+- a Loki--Promtail--Grafana stack for operational monitoring
 
-The current repository already contains an end-to-end software skeleton for this workflow: a FastAPI backend, a React frontend workstation, domain models for runs and events, and a mock inference/event pipeline. The thesis objective at this stage is not to describe a generic future platform, but to document the implemented system architecture and the remaining steps required to replace mock inference with a real model pipeline.
+The current thesis direction is monitoring-first. The central claim is that an
+AI inference service should be observable as an operational system, not treated
+only as a source of offline model predictions.
 
 ---
 
-## 2. Thesis Scope at the Current Stage
+## 2. Thesis Scope
 
-At this stage of the thesis, the project should be understood as an **AOI review and logging platform with AI integration points already defined**, rather than as a completed production AI stack.
+At the current stage, the project should be understood as an AOI review and
+monitoring platform with AI integration points already defined.
 
 ### Implemented now
 
-- Review workstation frontend for browsing runs, reviewing defects, and inspecting PCB images
-- FastAPI backend with run, event, and review endpoints
-- Domain schema for defect events, confidence scores, overlays, and operator review state
-- Mock inference/event ingestion flow for simulating AOI activity
-- Persistent logging/storage layer for runs and inspection events
+- FastAPI backend with routes for runs, setup, health, and event ingestion
+- React review workstation for image and defect inspection
+- structured event schema for inference-like outputs
+- JSONL log persistence for downstream observability
+- Docker-based Loki, Promtail, and Grafana stack
+- mock inference/event generation for controlled testing
 
-### Partially implemented / integration stage
+### Thesis emphasis
 
-- Real AI inference replacing mock event generation
-- richer inference provenance and model metadata
-- run-level analytics surfaced directly in the frontend
-- benchmark-ready experiment reporting
+The thesis focuses on:
 
-### Future work
+- structured inference logging
+- anomaly visibility in Grafana
+- queryable event history in Loki
+- latency and failure monitoring
+- evaluation through controlled anomaly scenarios
 
-- dataset management and training pipelines inside this repository
-- comparative model benchmarking across multiple architectures
-- deployment optimization such as ONNX or TensorRT
-- live camera feeds, edge deployment, and multi-line industrial rollout
+### Supporting but secondary work
+
+- real model integration
+- dataset preparation
+- detector benchmarking
+- model architecture experimentation
+
+These matter to the broader project, but they are not the main thesis claim.
 
 ---
 
-## 3. Current Repository-Aligned Architecture
-
-The current system architecture in this repository is:
+## 3. Repository-Aligned Architecture
 
 ```text
-PCB image / simulated event source
+PCB image / synthetic event source
         ↓
-Mock inference or future AI inference service
+Inference or mock inference layer
         ↓
-Structured defect event payloads
+Structured AOI event payloads
         ↓
 FastAPI backend
         ↓
-Run + event persistence
+SQLite persistence + JSONL logs
         ↓
-React review workstation
+Promtail → Loki → Grafana
         ↓
-Operator review / monitoring
+Operator review and monitoring
 ```
 
-### Actual project structure
+Actual implementation layers:
 
-```text
-AOI/
-├── docs/
-├── src/aoi/
-│   ├── api/
-│   ├── database.py
-│   ├── log_manager.py
-│   ├── mock_inference.py
-│   ├── schema.py
-│   ├── setup_service.py
-│   └── vision_service.py
-└── web/
-    ├── src/components/
-    ├── src/hooks/
-    ├── src/styles/
-    └── package.json
-```
-
-This matters for the thesis: the implemented system is currently a Python package plus a separate React web client. It is not yet organized as a large multi-service MLOps monorepo, and the document should not imply otherwise.
+- `src/aoi/api/`: HTTP application surface
+- `src/aoi/schema.py`: structured event contract
+- `src/aoi/database.py`: persistence layer
+- `src/aoi/log_manager.py`: JSONL event logging
+- `src/aoi/mock_inference.py`: simulation path for controlled tests
+- `web/`: operator-facing AOI workstation
+- `deploy/`: observability stack configuration
 
 ---
 
-## 4. Implemented System Modules
+## 4. Core System Modules
 
-## 4.1 Frontend Review Workstation
+### 4.1 Review Workstation
 
-Purpose:
-Provide an operator-facing AOI review interface for inspecting runs, selecting defects, viewing defect overlays, and reviewing detection outcomes.
+The frontend provides the human-review layer for AOI runs. It supports run
+navigation, PCB viewing, overlay inspection, defect review, and setup flow
+operations.
 
-Current characteristics:
+### 4.2 Backend API
 
-- React frontend under `web/`
-- JSX + CSS styling, not TypeScript/Tailwind at present
-- review workspace with run browser, defect list, PCB viewer, setup flow, and workspace top bar
-- existing support for overlay rendering, zoom/pan, defect selection, and operator review actions
+The backend operationalizes AI outputs by accepting structured event payloads,
+persisting them, and exposing them to the review interface. This boundary is
+important because it turns raw predictions into inspectable system records.
 
-Role in the thesis:
-This module demonstrates the human-review layer of the AI-enhanced AOI workflow, which is a critical distinction from a pure offline detector.
+### 4.3 Event Schema
 
-## 4.2 Backend API Layer
+The event schema is the backbone of the monitoring design. It records:
 
-Purpose:
-Expose run, event, and review data to the frontend and act as the integration boundary between inference output and the operator workstation.
+- board identity
+- component identity
+- pass/fail result
+- defect type
+- confidence score
+- inference latency
+- optional overlay geometry
+- operator review status
 
-Current characteristics:
+This schema supports both operational dashboards and post-event analysis.
 
-- FastAPI application under `src/aoi/api/`
-- routes for health, runs, and events
-- request validation through Pydantic models
-- defect review update flow for operator confirmation
+### 4.4 Logging and Observability
 
-Role in the thesis:
-This layer demonstrates how AI outputs are operationalized into inspectable system records instead of staying as isolated notebook results.
+Accepted events are written as structured JSON lines. Promtail ships them to
+Loki, and Grafana visualizes:
 
-## 4.3 Event and Run Data Model
+- event volume
+- failure counts
+- distinct boards seen
+- latency trends
+- raw event streams
 
-Purpose:
-Represent AOI detections as structured events that can be persisted, visualized, and reviewed.
+This is the core technical mechanism behind the thesis.
 
-Current characteristics:
+### 4.5 Mock Inference and Scenario Testing
 
-- run creation and update request models
-- event payload schema with:
-  - `pcb_id`
-  - `component_id`
-  - `inspection_result`
-  - `defect_type`
-  - `confidence_score`
-  - `inference_latency_ms`
-  - normalized overlay coordinates:
-    - `overlay_x`
-    - `overlay_y`
-    - `overlay_width`
-    - `overlay_height`
-  - operator review state
-- image metadata associated with runs
+The repository includes a synthetic inference path that allows the system to be
+tested before the final detector is fully integrated. For the monitoring thesis,
+this is valuable because it enables controlled experiments for:
 
-Role in the thesis:
-This is the core contract that connects detection results, logging, and visualization. It is one of the strongest implemented parts of the current project.
-
-## 4.4 Mock Inference / Simulation Layer
-
-Purpose:
-Provide a controlled stand-in for AI predictions while the real model pipeline is still being integrated.
-
-Current characteristics:
-
-- mock inference/event flow already present in the backend package
-- allows frontend and backend behavior to be developed before the full model stack is ready
-
-Role in the thesis:
-This supports staged system development, but it must be clearly labeled as simulation rather than final AI inference.
-
-## 4.5 Storage and Logging Layer
-
-Purpose:
-Persist run history, defect records, and review actions.
-
-Current characteristics:
-
-- local persistence/logging utilities already present in the Python package
-- supports the current review workstation and event history behavior
-
-Role in the thesis:
-This demonstrates traceability, which is essential for an industrial AI system and more defensible than a detector that only returns transient predictions.
+- baseline traffic
+- fail-rate spikes
+- latency anomalies
+- confidence degradation
+- recovery after anomaly
 
 ---
 
-## 5. Data Flow and API Contract
+## 5. Monitoring Value
 
-The system currently revolves around structured AOI events rather than raw model internals.
+The monitoring stack adds capabilities that a plain detector demo does not
+provide:
 
-### Inference event payload
+- traceability of individual AOI events
+- visibility into service latency and failure behavior
+- board-level investigation using log queries
+- repeatable anomaly demonstrations for thesis evaluation
 
-The implemented event model already supports the following data:
-
-```json
-{
-  "timestamp": "2026-04-19T10:36:44Z",
-  "pcb_id": "PCB-001",
-  "component_id": "R42",
-  "inspection_result": "FAIL",
-  "defect_type": "solder_bridge",
-  "confidence_score": 0.94,
-  "inference_latency_ms": 14,
-  "overlay_x": 0.34,
-  "overlay_y": 0.51,
-  "overlay_width": 0.08,
-  "overlay_height": 0.04,
-  "operator_review": "NONE"
-}
-```
-
-### Data flow interpretation
-
-1. A PCB image or simulated inspection input produces a detection event.
-2. The backend validates and stores the event against a run.
-3. The frontend retrieves run detail and associated defect logs.
-4. The operator reviews the defects on the PCB canvas and updates review state.
-
-This contract is already suitable for a thesis demonstration because it captures:
-
-- defect class
-- confidence
-- latency
-- localization
-- review traceability
-
-What is still missing for the final AI stage is richer provenance, such as:
-
-- model identifier
-- model version/hash
-- backend/runtime type
-- aggregate run-level inference statistics
+This is the clearest differentiator between a model prototype and an operational
+AI system.
 
 ---
 
-## 6. Model Training and Inference Scope
+## 6. Current Limitations
 
-The project vision includes both training and inference, but the current repository is more mature on the inference logging and review side than on the in-repo training side.
+The present repository should not be described as a fully mature production AI
+platform.
 
-### Realistic thesis scope
+Known limits:
 
-For this thesis stage, the most defensible scope is:
+- inference is still partly represented by synthetic or mock flows
+- alert rules and advanced dashboards are still under active refinement
+- model provenance metadata is limited
+- the real detector path is less mature than the monitoring path
 
-- one practical baseline detector integrated into the system
-- structured inference output routed through the backend
-- frontend review and logging of model predictions
-- optional comparison against one additional baseline model if time allows
-
-### Recommended model scope
-
-Do not present the project as if it already supports a broad model zoo unless that is actually implemented. A tighter and more credible scope would be:
-
-- Primary model: `YOLOv8` or another object-detection baseline suited to PCB defect localization
-- Optional comparison model: one secondary baseline for benchmark comparison
-
-### What should remain future work
-
-- multiple advanced architectures at once
-- full experiment management platform
-- large-scale MLOps orchestration
-- production deployment optimization
-
-This framing keeps the thesis rigorous and prevents the documented scope from exceeding the implemented system.
+These limits do not invalidate the thesis. They define its boundary.
 
 ---
 
-## 7. Evaluation and Benchmark Plan
+## 7. Future Work
 
-The benchmarking section should support the thesis, but it should be framed as an evaluation plan tied to the implemented system.
+Future work can extend the platform in several directions:
 
-### Primary evaluation dimensions
+- replace mock inference with a production detector
+- attach model version and runtime metadata to every event
+- expand Grafana dashboards and alert rules
+- compare observed behavior across multiple inference backends
+- add long-term retention and trend analysis
 
-- detection quality
-  - precision
-  - recall
-  - F1 score
-  - mAP
-- runtime behavior
-  - inference latency
-  - throughput / FPS
-- operational usefulness
-  - review visibility in the frontend
-  - run/event traceability
-  - defect localization clarity
-
-### Benchmark objective
-
-The benchmark is not only to find the most accurate model, but to identify the model and system configuration that best supports an industrial AOI review workflow.
-
-### Thesis-friendly outputs
-
-- model comparison table
-- example detections with overlays
-- inference latency summary
-- run/event log screenshots
-- operator review workflow demonstration
-
----
-
-## 8. Current Limitations
-
-The current repository still has clear limitations that should be stated directly.
-
-- inference is still partially represented by mock or simulated flows
-- the frontend improvement plan for provenance, event streaming, and richer confidence visualization is not fully implemented yet
-- model training and dataset management are not yet fully represented as first-class repository modules
-- the repository structure is still a development-stage application layout rather than a finalized industrial deployment layout
-- benchmarking outputs are not yet fully integrated into the dashboard layer
-
-These are acceptable limitations for a thesis-stage system as long as they are described honestly and the implemented pipeline is demonstrated clearly.
-
----
-
-## 9. Final Thesis Positioning
-
-The strongest position for this project is:
-
-This thesis presents an AI-assisted AOI review platform for PCB defect detection that already implements the software pathway from structured inspection events to backend logging and operator-facing review. The final integration stage is the replacement of mock inference with a real trained model and the addition of stronger inference provenance, benchmarking evidence, and analytics surfaces.
-
-That claim is stronger and more defensible than presenting the current repository as a fully completed industrial AI platform.
-
----
-
-## 10. Near-Term Completion Priorities
-
-To move from the current repository state to a strong thesis demonstration, the next priorities should be:
-
-1. Integrate one real defect detection model into the event pipeline.
-2. Add inference provenance fields and display them in the frontend.
-3. Improve event log visibility and confidence-oriented review behavior.
-4. Produce benchmark outputs for the selected model scope.
-5. Document the implemented architecture, limitations, and results with evidence from the running system.
-
----
-
-## 11. Summary
-
-The AOI project already contains the essential skeleton of an AI-enabled inspection system:
-
-- backend API
-- event schema
-- persistence/logging
-- review workstation frontend
-- simulated AOI event flow
-
-The final thesis value will come from showing that this skeleton can be connected to a real model pipeline and used as a credible operator-facing industrial inspection workflow, not merely as a UI mockup or a standalone detector.
+The key point is sequencing: the monitoring architecture is already a credible
+thesis contribution even before the full production model stack is complete.

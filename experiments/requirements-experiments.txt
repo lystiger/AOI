@@ -1,0 +1,8 @@
+# Anomaly detection experiment suite.
+# All scenario scripts, the runner, and the report generator rely only on the
+# Python standard library (urllib, json, dataclasses), so there are no runtime
+# dependencies beyond CPython 3.11+.
+#
+# Optional: Playwright is used to capture Grafana dashboard screenshots for the
+# README. Install it only if you want to regenerate those images.
+# playwright>=1.44
