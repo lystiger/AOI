@@ -1,12 +1,9 @@
-\documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
+\documentclass[12pt,a4paper]{article}
 
 \usepackage{cite}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[utf8]{vietnam}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -15,14 +12,12 @@
 \usepackage{multirow}
 \usepackage{array}
 \usepackage{listings}
-
-\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
-    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\usepackage[margin=1in]{geometry}
+\usepackage{placeins}
 
 \AtBeginDocument{\renewcommand{\refname}{References}}
 \AtBeginDocument{\renewcommand{\figurename}{Figure}}
 \AtBeginDocument{\renewcommand{\tablename}{Table}}
-\AtBeginDocument{\renewcommand{\abstract}{Abstract:}}
 
 \lstset{
     basicstyle=\ttfamily\footnotesize,
@@ -131,10 +126,10 @@ inference service can be monitored as an operational system rather than treated
 as an isolated model artifact.
 \end{abstract}
 
-\begin{IEEEkeywords}
-AI monitoring, AOI, PCB inspection, inference logging, Loki, Grafana, Promtail,
-FastAPI, observability, industrial AI
-\end{IEEEkeywords}
+\noindent\textbf{Keywords:} AI monitoring, AOI, PCB inspection, inference
+logging, Loki, Grafana, Promtail, FastAPI, observability, industrial AI
+
+\bigskip
 
 \section{Introduction}
 
@@ -249,9 +244,9 @@ focuses on a realistic and defensible contribution: making an AI-based AOI
 service observable and evaluable in practice.
 
 \thesisfigure
-{../../docs/pics/seq.png}
-{Insert sequence diagram showing AOI image submission, inference execution, JSON logging, and monitoring response.}
-{Sequence view of image submission, inference execution, JSON event logging, and monitoring response.}
+{../../docs/pics/usecase.png}
+{Insert conceptual AOI monitoring loop showing operator action, inspection monitoring, root-cause analysis, and model improvement.}
+{Conceptual AOI monitoring loop linking operator decisions, inspection monitoring, root-cause analysis, and model improvement.}
 
 \section{Related Work}
 
@@ -279,6 +274,21 @@ features, but smaller projects frequently need a narrower and more direct
 approach. For a local AOI workstation, the most relevant signals are event
 volume, board throughput, failure frequency, confidence patterns, and per-event
 latency.
+
+This report is also informed by a broader software-engineering literature on ML
+systems. Sculley et al. argue that production ML systems accumulate system-level
+technical debt through entanglement, hidden feedback loops, undeclared
+consumers, and brittle interfaces rather than only through poor model
+performance. Breck et al. propose the ML Test Score as a production-readiness
+rubric, emphasizing data validation, infrastructure testing, and monitoring
+discipline around deployed models. Amershi et al. show, through an industrial
+case study at Microsoft, that developing ML-enabled products requires a wider
+process change than conventional software engineering, especially around data,
+versioning, and integration. Shankar et al. extend this discussion by arguing
+that production ML pipelines require end-to-end observability because silent
+failures often occur outside the model itself. These works strengthen the
+motivation for a thesis that treats AOI inference as an operational system to
+be monitored, not only a predictor to be benchmarked.
 
 \subsection{Monitoring in Industrial Inspection}
 Industrial inspection systems differ from generic web services because they are
@@ -739,6 +749,19 @@ a drift-like process rather than a sudden fault event.
 {Insert Grafana screenshot for S09 showing declining confidence and gradually increasing fail rate over time.}
 {Scenario S09: Gradual model degradation.}
 
+S09 is the most analytically important scenario in the suite because it
+resembles the way many production ML failures actually emerge. Unlike S02 or
+S03, which cross an obvious threshold quickly, S09 degrades along two coupled
+dimensions: confidence falls steadily while the probability of failure rises
+over successive batches. This pattern is operationally significant because it
+may not trigger immediate human attention if operators inspect only recent
+single values. In the AOI context, such a trend could correspond to a slow
+change in incoming board characteristics, a calibration drift in upstream image
+capture, or a model that is becoming less suitable for the current production
+mix. The fact that the dashboard preserves this long-horizon shape is therefore
+one of the strongest arguments for using a log-centric observability pipeline
+rather than relying only on coarse aggregate counters.
+
 \subsection{Measurements}
 The proposed measurements are:
 \begin{itemize}
@@ -793,6 +816,8 @@ Defect-type concentration & \texttt{\{job="aoi-inference", defect\_type="SOLDER\
 \end{tabular}
 \end{table}
 
+\FloatBarrier
+
 \subsection{Measured Results Summary}
 The current repository already contains one Loki-backed report generated after
 executing the anomaly suite. Within a 60-minute lookback window, the system
@@ -808,6 +833,12 @@ because the suite deliberately mixes normal and abnormal traffic. Their purpose
 is to demonstrate that the monitoring stack preserves a sufficiently rich event
 history to reconstruct both system-wide behavior and defect composition after
 the experiments finish.
+
+The suite-level totals are complemented by the scenario-by-scenario quantitative
+profile in Table~\ref{tab:scenario_quantitative_profile}. That table is derived
+from the experiment generators themselves: event counts are deterministic from
+the batch construction logic, while fail rates and value ranges reflect the
+configured scenario distributions and randomized jitter used during execution.
 
 \begin{table}[h]
 \centering
@@ -825,6 +856,27 @@ Most frequent defect label & \texttt{NO\_DEFECT} (466) \\
 Most frequent failure label & \texttt{SOLDER\_BRIDGE} (180) \\
 Provisioned alert rules & 3 \\
 Observed alert states in capture & 2 firing, 1 pending \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Per-Scenario Quantitative Profile From Experiment Generators}
+\label{tab:scenario_quantitative_profile}
+\begin{tabular}{p{0.08\columnwidth} p{0.12\columnwidth} p{0.18\columnwidth} p{0.19\columnwidth} p{0.17\columnwidth}}
+\toprule
+\textbf{ID} & \textbf{Events} & \textbf{Fail Profile} & \textbf{Latency Profile} & \textbf{Confidence Profile} \\
+\midrule
+S01 & 120 & 30\% FAIL baseline & 20--45\,ms normal & 0.76--1.00 high confidence \\
+S02 & 100 & 90\% FAIL spike & 22--36\,ms stable & 0.77--0.93 high confidence \\
+S03 & 70 & 40\% FAIL mixed & escalating to \(\sim\)2000\,ms & 0.78--0.97 stable confidence \\
+S04 & 72 & 50\% FAIL mixed & 25--45\,ms normal & 0.40--0.55 low confidence \\
+S05 & 88 & \(\sim\)85\% FAIL & 22--40\,ms stable & 0.78--0.94 with one dominant defect label \\
+S06 & 120 & 3 dead boards, 24 guaranteed FAIL events & 20--50\,ms mixed & 0.75--0.99 mixed confidence \\
+S07 & 90 & phase shift: 90\% FAIL to near-baseline & fault phase: 800--1800\,ms; recovery phase: 20--42\,ms & 0.75--0.98 across fault and recovery phases \\
+S08 & 120 & 3 full fault bursts inside mostly normal traffic & 20--50\,ms stable & 0.79--0.98 mixed confidence \\
+S09 & 140 & gradual rise from 20\% to 75\% FAIL & 20--45\,ms stable & 0.95 down to 0.40 drift profile \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -862,6 +914,8 @@ arrive, and recovery scenarios produced clear state transitions over time.
 {../../assets/readme/anomaly/dashboard-overview.png}
 {Suggested content: overview Grafana screenshot showing baseline traffic, fail-rate spike, latency spike, confidence drop, and recovery.}
 {Overview of the anomaly-detection dashboard used in the experiment suite.}
+
+\FloatBarrier
 
 \section{Evaluation and Discussion}
 
@@ -927,9 +981,15 @@ gradual degradation are important because industrial systems do not fail only in
 sudden, permanent ways. A useful monitoring system must also capture return to
 normality and slow deterioration over time.
 
-\subsection{How the Final Submission Should Report Results}
-For each selected scenario in the final submission, the results section should
-still include:
+\subsection{Reporting Structure for Final Results}
+The final submitted version of this report should present scenario evidence in a
+consistent structure so that the reader can compare anomaly types without
+switching interpretive frameworks between sections. For each selected scenario,
+the results discussion should include the visual dashboard evidence, the query
+used to isolate the behavior, the corresponding numeric summary, and a short
+interpretation of why that behavior matters operationally in AOI inspection.
+
+In practice, that means each scenario write-up should still include:
 \begin{itemize}
     \item one Grafana screenshot or chart excerpt;
     \item one supporting LogQL query;
@@ -949,6 +1009,25 @@ and model-drift monitoring are also outside the present scope. In addition, the
 evaluation scenarios are controlled rather than derived from a deployed factory
 line. These limitations should be stated clearly in the final report to avoid
 overclaiming maturity.
+
+The most important limitation is external validity. The anomaly suite was
+designed to test whether the monitoring stack reacts correctly to known
+conditions, not to estimate how frequently these conditions occur in a real
+factory. Scenario generators intentionally exaggerate some signals, such as a
+90\% fail spike or an abrupt confidence collapse, so that dashboard and alert
+behavior can be inspected clearly. This is appropriate for a system-design and
+monitoring thesis, but it means the resulting figures should be interpreted as
+validation of observability mechanics rather than direct evidence of production
+rates in the host company.
+
+A second limitation is that the current system uses a local AOI workstation and
+synthetic event injection rather than a full online production line with
+hardware-triggered image acquisition, operator shift variation, and delayed or
+partial human labels. In a deployed industrial setting, additional factors would
+need to be monitored, including equipment state, label latency, board-mix
+changes, and line-level throughput constraints. The present report therefore
+demonstrates a strong monitoring prototype and experiment harness, but not a
+completed factory observability rollout.
 
 \subsection{Future Work}
 Future work can extend the platform in four directions:
@@ -985,9 +1064,23 @@ specialized inference servers such as NVIDIA Triton, the design answers the
 actual research question of this internship: how to make an AOI inference
 service operationally visible, diagnosable, and testable in practice.
 
+In terms of the report's four guiding questions, the work built a structured
+logging and monitoring system for AOI inference events; it was needed because
+model accuracy alone does not provide the operational visibility required for
+industrial inspection; it was implemented through a FastAPI backend, JSONL log
+emission, Promtail ingestion, Loki query storage, Grafana dashboards, and a
+reproducible anomaly-test harness; and it achieved the main intended result of
+making normal behavior, fail-rate spikes, latency anomalies, confidence drops,
+recovery, and gradual degradation visible through the same observability stack.
+
 \begin{thebibliography}{00}
 \bibitem{burns2016sre} B. Beyer, C. Jones, J. Petoff, and N. Murphy, \textit{Site Reliability Engineering}. O'Reilly Media, 2016.
 \bibitem{turnbull2018grafana} R. Turnbull, \textit{Grafana 2nd Edition}. Packt, 2018.
+\bibitem{sculley2015debt} D. Sculley, G. Holt, D. Golovin, E. Davydov, T. Phillips, D. Ebner, V. Chaudhary, M. Young, J.-F. Crespo, and D. Dennison, ``Hidden Technical Debt in Machine Learning Systems,'' in \textit{Advances in Neural Information Processing Systems 28}, 2015.
+\bibitem{breck2017mltestscore} E. Breck, S. Cai, E. Nielsen, M. Salib, and D. Sculley, ``The ML Test Score: A Rubric for ML Production Readiness and Technical Debt Reduction,'' in \textit{Proc. IEEE International Conference on Big Data}, 2017.
+\bibitem{amershi2019case} S. Amershi, A. Begel, C. Bird, R. DeLine, H. Gall, E. Kamar, N. Nagappan, B. Nushi, and T. Zimmermann, ``Software Engineering for Machine Learning: A Case Study,'' in \textit{Proc. IEEE/ACM 41st International Conference on Software Engineering: Software Engineering in Practice}, 2019.
+\bibitem{shankar2022observability} S. Shankar and A. G. Parameswaran, ``Towards Observability for Production Machine Learning Pipelines,'' \textit{PVLDB}, vol. 15, no. 13, pp. 4015--4022, 2022.
+\bibitem{shankar2022interview} S. Shankar, R. Garcia, J. M. Hellerstein, and A. G. Parameswaran, ``Operationalizing Machine Learning: An Interview Study,'' in \textit{Proc. IEEE/ACM 1st Workshop on AI Engineering -- Software Engineering for AI}, 2021.
 \bibitem{loki} Grafana Labs, ``Loki: like Prometheus, but for logs,'' online documentation, \url{https://grafana.com/oss/loki}.
 \bibitem{fastapi} S. Ram\'irez, ``FastAPI,'' online documentation, \url{https://fastapi.tiangolo.com/}.
 \bibitem{mlops} M. Treveil and A. Omont, \textit{Introducing MLOps}. O'Reilly Media, 2020.
