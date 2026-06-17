@@ -57,10 +57,10 @@ def send_events(
 def make_event(
     pcb_id: str,
     component_id: str,
-    inspection_result: str,        # "PASS" or "FAIL"
-    defect_type: str,              # e.g. "NO_DEFECT", "SOLDER_BRIDGE"
-    confidence_score: float,       # 0.0 – 1.0
-    inference_latency_ms: int,     # ms
+    inspection_result: str,        # return "PASS" or "FAIL"
+    defect_type: str,              # example: "NO_DEFECT", "SOLDER_BRIDGE"
+    confidence_score: float,       # range from 0.0 to 1.0
+    inference_latency_ms: int,     # miliseconds, non-negative
     overlay_x: float | None = None,
     overlay_y: float | None = None,
     overlay_width: float | None = None,
