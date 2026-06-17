@@ -77,9 +77,9 @@
 
         {\large \textbf{\usthdoctype}}\\[3.5em]
 
-        {\Large \textbf{Design and Evaluation of an AI Model Logging and Monitoring System}}\\[0.4em]
-        {\Large \textbf{Using the Loki Stack}}\\[0.6em]
-        {\large A PCB AOI Case Study}\\[3.0em]
+        {\Large \textbf{Design and Evaluation of an Observability System}}\\[0.4em]
+        {\Large \textbf{for AI-Assisted PCB Inspection}}\\[0.4em]
+        {\Large \textbf{Using Grafana Loki}}\\[3.0em]
 
         \begin{tabular}{rl}
             \textbf{Student:} & \usthstudent \\
@@ -101,29 +101,25 @@
 
 \usthcoverpage
 
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
 \begin{center}
-{\LARGE \textbf{Design and Evaluation of an AI Model Logging and Monitoring System}}\\[0.3em]
-{\LARGE \textbf{Using the Loki Stack}}\\[0.5em]
-{\large A PCB AOI Case Study}\\[1.0em]
+{\LARGE \textbf{Design and Evaluation of an Observability System}}\\[0.3em]
+{\LARGE \textbf{for AI-Assisted PCB Inspection}}\\[0.3em]
+{\LARGE \textbf{Using Grafana Loki}}\\[1.0em]
 {\normalsize Bachelor Internship Report}\\[1.5em]
 \end{center}
 
 \begin{abstract}
-This report presents the design and evaluation of a logging and monitoring
-system for AI model inference services using the Grafana Loki stack. The study
-is grounded in an industrial Automatic Optical Inspection (AOI) workflow for
-printed circuit board (PCB) review, where operational visibility is as
-important as prediction output. A repository-aligned case study is used in
-which a FastAPI-based AOI backend produces structured inference events, a React
-workstation supports human review, and a Loki--Promtail--Grafana stack captures
-and visualizes system behavior. The report is organized into six chapters
-covering motivation, related work, system design, implementation, experiments,
-and evaluation. The proposed system emphasizes structured JSON logs,
-defect-level traceability, latency observation, historical queryability, and
-anomaly detection for normal, failure, and degraded inference conditions. The
-resulting document provides a practical foundation for demonstrating how an AI
-inference service can be monitored as an operational system rather than treated
-as an isolated model artifact.
+This report presents the design and evaluation of an observability system for an AI-assisted printed circuit board (PCB) inspection service using Grafana Loki. The work is motivated by an industrial Automatic Optical Inspection (AOI) workflow, where understanding how an AI inference service behaves during operation is as important as the prediction results themselves.
+
+To investigate this problem, a case study based on a PCB AOI platform was developed. The system consists of a FastAPI backend responsible for generating and managing structured inference events, a React-based workstation for operator review, and a Loki–Promtail–Grafana stack used to collect, store, query, and visualize operational data. Through this architecture, inference events can be traced, analyzed, and monitored in near real time.
+
+The monitoring approach focuses on structured JSON logging, defect-level traceability, latency tracking, historical log analysis, and anomaly detection under different operating conditions. A series of controlled experiments was conducted to inject known anomaly patterns representing normal operation, failure scenarios, and degraded inference performance. Because the inference events are generated synthetically, the evaluation validates the observability pipeline rather than the predictive accuracy of the underlying detector: the results show that a lightweight stack can reliably surface the injected conditions---fail-rate spikes, latency degradation, low-confidence inputs, and gradual drift---and preserve queryable evidence to support debugging, evaluation, and future system improvements.
+
 \end{abstract}
 
 \noindent\textbf{Keywords:} AI monitoring, AOI, PCB inspection, inference
@@ -133,54 +129,16 @@ logging, Loki, Grafana, Promtail, FastAPI, observability, industrial AI
 
 \section{Introduction}
 
-Automatic Optical Inspection (AOI) is an industrial quality-control process in
-which cameras and software are used to inspect manufactured products
-automatically. In electronics manufacturing, AOI is widely used to inspect
-Printed Circuit Boards (PCBs), which are the boards that mechanically support
-and electrically connect electronic components such as resistors, capacitors,
-integrated circuits, and connectors. In a PCB production line, AOI systems help
-detect visible problems before defective boards continue to later assembly or
-shipping stages.
+Automatic Optical Inspection (AOI) systems are widely used in electronics manufacturing to inspect Printed Circuit Boards (PCBs) for defects such as missing components, misalignment, solder bridges, and insufficient solder. Modern AOI workflows increasingly incorporate AI-based models to classify or localize potential defects automatically, helping operators process inspection results more efficiently.
 
-Typical PCB inspection examples include missing components, component
-misalignment, solder bridges, insufficient solder, incorrect part placement,
-and unusual board-level failure patterns. In modern production environments,
-these checks are increasingly supported by AI-based inference services that
-classify or localize suspicious regions on board images. Once AI is introduced
-into the inspection workflow, however, the challenge is no longer limited to
-prediction quality. It becomes a system-engineering problem in which operators
-and engineers must know whether the inference service is healthy, responsive,
-consistent, and traceable during operation.
+While model accuracy remains important, deploying AI in a production workflow introduces additional operational challenges. Engineers need to understand not only what the model predicts, but also how the inference service behaves during runtime. High latency, unstable responses, missing records, or abnormal prediction patterns can reduce the reliability of an inspection system even when the model itself performs well.
 
-Artificial intelligence models are often evaluated through offline metrics such
-as accuracy, precision, recall, or mAP. While those metrics are necessary, they
-are not sufficient once the model becomes part of a running system. In a real
-inspection line, operators and engineers need to know not only whether a model
-can produce predictions, but also whether the service remains responsive,
-whether failures are traceable, and whether abnormal behavior can be detected
-quickly enough to prevent operational disruption.
+During an AOI workflow, inference results are connected to multiple stages including image acquisition, inspection management, defect review, and operator decisions. For this reason, prediction outputs alone are often insufficient. Additional information such as timestamps, board identifiers, confidence scores, inference latency, and review outcomes is required to support troubleshooting, auditing, and performance analysis.
 
-This requirement is especially important in AI-assisted AOI systems for PCB
-inspection. AOI services interact with image acquisition, run management,
-defect review, and operator decisions. A defect result without metadata such as
-timestamp, board identity, latency, confidence, or review outcome provides only
-partial value. In practice, inference must therefore be observable as an
-operational process rather than treated only as a prediction output.
+This report investigates how observability techniques can be applied to an AI-assisted AOI system. The proposed approach treats inference events as operational data and records them through structured logging. Instead of using logs only for debugging, the system generates machine-readable events that describe what happened, when it happened, and how the inference service responded.
 
-The central argument of this report is that an AI model logging and monitoring
-system should be designed as a first-class capability. Instead of treating logs
-as an afterthought, the system should generate structured events that record
-what happened, when it happened, how long it took, and what downstream
-consequence it produced. This makes the AI pipeline easier to audit, debug,
-benchmark, and improve.
+To evaluate this approach, a repository-aligned AOI platform was developed using FastAPI, React, JSONL event logging, and a Loki–Promtail–Grafana observability stack. The monitoring system is designed to support real-time observation, historical log analysis, latency tracking, and anomaly detection under different operating conditions. The goal is to demonstrate that AI inference services can be monitored and evaluated as operational systems rather than treated solely as prediction engines.
 
-The study uses a repository-aligned AOI workstation as the case environment.
-The software stack includes a FastAPI backend, a React review interface, local
-storage, JSONL event logging, and a Docker-based observability stack with Loki,
-Promtail, and Grafana. The monitoring goal is to support real-time observation,
-historical log search, performance-trend analysis, and detection of three broad
-operating states: normal behavior, explicit failure behavior, and degraded
-high-latency behavior.
 
 \subsection{Problem Context: What AOI Monitoring Must Support}
 
@@ -194,16 +152,16 @@ monitoring system should support at least four needs:
     \item support for operator review and post-incident investigation.
 \end{itemize}
 
-Without these capabilities, an AOI system may still generate predictions, but
+Without these needs, an AOI system may still generate predictions, but
 it remains difficult to trust, debug, or operate reliably in an industrial
-setting.
+environment.
 
 \subsection{Research Framing: What, Why, How, and Results}
 
-This report is structured around four guiding questions.
+This report is structured around four questions.
 
 \textbf{What is being built?}
-An AI inference logging and monitoring system for a PCB AOI workflow, using
+An AI inference logging and monitoring system for a simulated PCB AOI workflow, using
 structured event logging and the Loki--Promtail--Grafana stack.
 
 \textbf{Why is it needed?}
@@ -212,12 +170,12 @@ addition to model accuracy. Engineers and operators need real-time monitoring,
 historical log search, and anomaly detection to maintain reliability.
 
 \textbf{How is it implemented?}
-Through a repository-aligned case study that combines a FastAPI backend, a
+Through a case study that combines a FastAPI backend, a
 React review workstation, JSONL event logs, Promtail for log shipping, Loki for
 aggregation and querying, and Grafana for dashboards.
 
 \textbf{What results are expected?}
-The system should make it possible to distinguish healthy behavior from failure
+The system makes it possible to distinguish healthy behavior from failure
 spikes and latency degradation, while also preserving traceable evidence for
 evaluation and debugging.
 
@@ -225,12 +183,12 @@ evaluation and debugging.
 
 The objectives of this report are as follows:
 \begin{itemize}
-    \item explain why inference monitoring matters in operational AI systems;
-    \item review observability practices relevant to ML services;
-    \item design a monitoring architecture suitable for a local AOI platform;
-    \item describe a concrete implementation grounded in the PCB AOI project;
-    \item propose experiments that simulate multiple runtime conditions; and
-    \item evaluate whether the system supports practical anomaly detection.
+    \item Explain why inference monitoring matters in operational AI systems;
+    \item Review observability practices relevant to ML services;
+    \item Design a monitoring architecture suitable for a local AOI platform;
+    \item Describe a concrete implementation grounded in the PCB AOI project;
+    \item Propose experiments that simulate multiple runtime conditions; and
+    \item Evaluate whether the system supports practical anomaly detection.
 \end{itemize}
 
 \subsection{Why This Work Is a Suitable Bachelor Internship Topic}
@@ -238,7 +196,7 @@ The objectives of this report are as follows:
 This topic is appropriate for a bachelor internship because it combines several
 important skills in one applied engineering problem: backend integration,
 structured data design, industrial software workflow understanding, dashboard
-construction, and system evaluation. The work is also concrete and bounded. It
+construction, and system evaluation. The work is also concrete and contained. It
 does not attempt to solve all of AOI or all of machine learning. Instead, it
 focuses on a realistic and defensible contribution: making an AI-based AOI
 service observable and evaluable in practice.
@@ -251,7 +209,7 @@ service observable and evaluable in practice.
 \section{Related Work}
 
 \subsection{Observability in Software Systems}
-Observability is a core idea in distributed systems and production software.
+Observability is a core idea in distributed systems and production software~\cite{burns2016sre}.
 Traditional monitoring emphasizes aggregate counters and infrastructure health,
 while observability aims to make internal system behavior understandable through
 logs, metrics, and traces. In AI systems, this distinction is important because
@@ -259,9 +217,9 @@ model-serving failures may appear even when CPU, memory, or network indicators
 seem normal.
 
 \subsection{Monitoring Stacks Based on Logs}
-The Loki stack is a pragmatic logging solution for lightweight deployments.
+The Loki stack is a pragmatic logging solution for lightweight deployments~\cite{loki}.
 Loki aggregates logs, Promtail ships them from services, and Grafana provides
-queries, dashboards, and alert-friendly visualization. Compared with heavyweight
+queries, dashboards, and alert-friendly visualization~\cite{turnbull2018grafana}. Compared with heavyweight
 full observability platforms, this stack is attractive for report-scale or
 prototype environments because it is easy to deploy locally and integrates well
 with structured JSON logs.
@@ -270,21 +228,21 @@ with structured JSON logs.
 Monitoring in machine learning systems usually covers several categories:
 system health, inference latency, prediction distribution, data drift, model
 versioning, and human feedback loops. Large MLOps platforms often include these
-features, but smaller projects frequently need a narrower and more direct
+features~\cite{mlops}, but smaller projects frequently need a narrower and more direct
 approach. For a local AOI workstation, the most relevant signals are event
 volume, board throughput, failure frequency, confidence patterns, and per-event
 latency.
 
 This report is also informed by a broader software-engineering literature on ML
-systems. Sculley et al. argue that production ML systems accumulate system-level
+systems. Sculley et al.~\cite{sculley2015debt} argue that production ML systems accumulate system-level
 technical debt through entanglement, hidden feedback loops, undeclared
 consumers, and brittle interfaces rather than only through poor model
-performance. Breck et al. propose the ML Test Score as a production-readiness
+performance. Breck et al.~\cite{breck2017mltestscore} propose the ML Test Score as a production-readiness
 rubric, emphasizing data validation, infrastructure testing, and monitoring
-discipline around deployed models. Amershi et al. show, through an industrial
+discipline around deployed models. Amershi et al.~\cite{amershi2019case} show, through an industrial
 case study at Microsoft, that developing ML-enabled products requires a wider
 process change than conventional software engineering, especially around data,
-versioning, and integration. Shankar et al. extend this discussion by arguing
+versioning, and integration. Shankar et al.~\cite{shankar2022observability, shankar2022interview} extend this discussion by arguing
 that production ML pipelines require end-to-end observability because silent
 failures often occur outside the model itself. These works strengthen the
 motivation for a thesis that treats AOI inference as an operational system to
@@ -295,19 +253,20 @@ Industrial inspection systems differ from generic web services because they are
 tightly connected to physical workflows. Missing logs can make defect review
 non-reproducible, while unstable latency can slow operator decisions. This
 means monitoring must support both engineering needs and operational review.
-The literature and industry practice converge on the same lesson: trustworthy
-inspection requires traceability.
+This requirement mirrors the observability and MLOps principles discussed
+above~\cite{burns2016sre, shankar2022observability}: trustworthy inspection
+requires end-to-end traceability of each inference event.
 
 \subsection{Comparison With Large-Scale Monitoring Platforms}
 Large industrial AI systems often operate at a scale far beyond a bachelor
 internship project, and it is useful to state this difference clearly. Netflix
 reports that its Mantis platform has been in production since 2014 and
-processes trillions of events and peta-bytes of data every day. The same public
+processes trillions of events and peta-bytes of data every day~\cite{mantis}. The same public
 documentation describes use cases that analyze data from thousands of servers,
 millions of interactions across dozens of microservices, and hundreds of
-Cassandra and ElasticSearch clusters. In separate Netflix platform material,
+Cassandra and ElasticSearch clusters~\cite{mantisusecases}. In separate Netflix platform material,
 the company also reports tens of thousands of running instances across its
-deployment environment.
+deployment environment~\cite{netflixoss}.
 
 This report does not attempt to replicate that scale. Instead, it adopts a
 similar engineering principle at a much smaller scope: preserve structured raw
@@ -317,12 +276,12 @@ time a new anomaly is suspected.
 
 It is also useful to compare the present design with specialized inference
 servers such as NVIDIA Triton. Triton exposes a rich metrics surface including
-request duration, queue duration, inference count, and execution count. Those
+request duration, queue duration, inference count, and execution count~\cite{tritonmetrics}. Those
 capabilities are important in high-throughput GPU-serving environments. By
 contrast, the AOI workstation in this report is optimized for local
 deployability, defect traceability, and end-to-end observability of an AOI
 review workflow rather than raw serving throughput. The tradeoff is deliberate:
-FastAPI plus structured JSONL logging is easier to audit, easier to modify, and
+FastAPI plus structured JSONL logging~\cite{fastapi} is easier to audit, easier to modify, and
 better matched to a repository-scale case study than a full production-grade
 inference platform.
 
@@ -336,11 +295,11 @@ inference platform.
 \subsection{Design Principles}
 The proposed monitoring architecture follows five principles:
 \begin{enumerate}
-    \item structured logs instead of free-form strings;
-    \item event schemas aligned with AOI domain entities;
-    \item separation between inference, persistence, and visualization;
-    \item local deployability for development and report demonstration; and
-    \item support for anomaly detection through simple, inspectable queries.
+    \item Structured logs instead of free-form strings;
+    \item Event schemas aligned with AOI domain entities;
+    \item Separation between inference, persistence, and visualization;
+    \item Local deployability for development and report demonstration; and
+    \item Support for anomaly detection through simple, inspectable queries.
 \end{enumerate}
 
 \subsection{Architecture Overview}
@@ -358,7 +317,12 @@ run metadata in SQLite. Promtail scrapes \texttt{/var/log/aoi/*.jsonl},
 extracts selected fields from each JSON object, and promotes a subset of those
 fields to labels. Loki stores the resulting log streams, while Grafana provides
 the dashboard and alerting surface. This design keeps the event source, log
-transport, query model, and visual layer clearly separated.
+transport, query model, and visual layer clearly separated. End to end, an event
+becomes visible on the dashboards within a few seconds: Promtail tails the JSONL
+files continuously and forwards them to Loki within roughly a second, and the
+Grafana panels refresh on a 5-second interval. This 5-second refresh is the
+practical bound on the ``near real time'' freshness referred to throughout this
+report.
 
 \subsection{Event Model}
 The event schema is the core monitoring contract. An effective schema should
@@ -397,14 +361,11 @@ These questions map directly to Loki queries and make the dashboard useful for
 both live monitoring and retrospective investigation.
 
 \subsection{Anomaly Types}
-The design targets three anomaly classes:
-\begin{itemize}
-    \item absence or drop in expected event traffic;
-    \item elevated failure concentration; and
-    \item latency spikes indicating degraded inference service behavior.
-\end{itemize}
-This is intentionally simple. The goal is not to claim full MLOps maturity, but
-to build a robust foundation that supports future alerting and model analytics.
+The design groups anomalies by the operational signal that changes: traffic
+volume, prediction outcomes, latency, confidence, or domain identifiers such as
+\texttt{pcb\_id} and \texttt{defect\_type}. This compact taxonomy determines
+which fields must be logged and which dashboard queries must be supported; the
+specific test scenarios are defined once in Chapter~5.
 
 \subsection{Why This Design Pattern Was Chosen}
 The monitoring architecture follows a log-centric MLOps pattern for four
@@ -467,11 +428,11 @@ output.
 \subsection{Implemented Monitoring Components}
 The implementation contains the following concrete monitoring-relevant modules:
 \begin{itemize}
-    \item a schema layer defining \texttt{InferenceEvent} and inspection states;
-    \item a log manager that appends JSON records to persistent log files;
-    \item a mock inference generator for controlled event simulation;
+    \item a Schema layer defining \texttt{InferenceEvent} and inspection states;
+    \item a Log manager that appends JSON records to persistent log files;
+    \item a Mock inference generator for controlled event simulation;
     \item a Docker Compose stack containing Loki, Promtail, and Grafana; and
-    \item a provisioned Grafana dashboard for AOI event inspection.
+    \item a Provisioned Grafana dashboard for AOI event inspection.
 \end{itemize}
 
 Two implementation details are especially important. First, the Promtail
@@ -534,7 +495,7 @@ all nine scenarios are measured in the same way.
 \label{tab:case_components}
 \begin{tabular}{p{0.22\columnwidth} p{0.23\columnwidth} p{0.42\columnwidth}}
 \toprule
-\textbf{Layer} & \textbf{Repository Component} & \textbf{Monitoring Role} \\
+\textbf{Layer} & \textbf{Component} & \textbf{Monitoring Role} \\
 \midrule
 API backend & FastAPI service & Accepts events, exposes health, supports run review \\
 Schema & \texttt{InferenceEvent} & Defines structured monitoring payload \\
@@ -644,100 +605,48 @@ S09 & Gradual model degradation & detect long-horizon confidence decline and fai
 \end{tabular}
 \end{table}
 
-\subsection{Baseline and Core Anomaly Cases}
+\subsection{Representative Scenario Evidence}
 \textbf{S01: Normal baseline.}
 The baseline scenario sends mixed \texttt{PASS}/\texttt{FAIL} events with a
 roughly 70/30 ratio, high confidence values, and realistic latency in the
-20--45\,ms range. Its role is to establish the control condition against which
-all anomaly scenarios are compared. Under this scenario, the expected Grafana
-behavior is steady traffic, fail rate around 30\%, and average latency below
-50\,ms.
+18--43\,ms range. It establishes the control condition against which the
+anomaly scenarios are compared.
 
 \thesisfigure
 {../../assets/readme/anomaly/s01-baseline.png}
 {Insert Grafana baseline screenshot for S01 showing stable traffic, fail rate near 30\%, and latency below 50\,ms.}
 {Scenario S01: Normal baseline dashboard view.}
 
-\textbf{S02: High defect rate spike.}
-This scenario simulates a production anomaly in which more than 80\% of events
-are failures. The monitoring question is whether the dashboard and alert rules
-can identify a sudden abnormal prediction pattern. The expected behavior is a
-dominant \texttt{FAIL} trend in the inspection-result panel and a triggered
-fail-rate alert once the proportion exceeds the configured threshold.
-
-\thesisfigure
-{../../assets/readme/anomaly/s02-high-defect.png}
-{Insert Grafana screenshot for S02 showing dominant FAIL traffic and fail-rate alert activation.}
-{Scenario S02: High defect-rate spike.}
-
 \textbf{S03: Latency spike.}
 This scenario preserves plausible prediction outputs while forcing
-\texttt{inference\_latency\_ms} into the 500--2500\,ms range. It represents
-resource starvation, model loading issues, or runtime degradation. The expected
-observation is a strong increase in the latency panel and activation of a
-latency-focused alert condition.
+\texttt{inference\_latency\_ms} to escalate from a normal $\sim$30\,ms baseline
+to a $\sim$2000\,ms plateau (peaking near 2150\,ms with jitter). It represents
+resource starvation, model loading issues, or runtime degradation. The latency
+panel and alert rule expose the slowdown even though inference outputs continue
+to arrive.
 
 \thesisfigure
 {../../assets/readme/anomaly/s03-latency.png}
-{Insert Grafana screenshot for S03 showing the latency panel increasing into the 500--2500\,ms range.}
+{Insert Grafana screenshot for S03 showing the latency panel climbing from the $\sim$30\,ms baseline toward the $\sim$2000\,ms plateau.}
 {Scenario S03: Latency spike anomaly.}
 
-\textbf{S04: Low confidence storm.}
-This scenario simulates model uncertainty by reducing confidence values to the
-0.40--0.55 range. It is intended to represent out-of-distribution boards or
-other inputs for which the model becomes uncertain. The expected behavior is a
-clear drop in average confidence and straightforward retrieval of the affected
-events through LogQL filters on \texttt{confidence\_score}.
-
-\thesisfigure
-{../../assets/readme/anomaly/s04-low-confidence.png}
-{Insert Grafana screenshot for S04 showing the confidence panel dropping below 0.55 and corresponding low-confidence events.}
-{Scenario S04: Low-confidence storm.}
-
-\subsection{Extended Cases}
-The remaining scenarios test more specific but still realistic operational
-patterns.
-
-\textbf{S05: Single defect-type flood.}
-This scenario checks whether a single defect type, such as
-\texttt{SOLDER\_BRIDGE}, can be isolated when it dominates all failures. Its
-purpose is to determine whether the log schema and Grafana panels can reveal a
-systematic production issue rather than random defect variation.
-
-\thesisfigure
-{../../assets/readme/anomaly/s05-defect-flood.png}
-{Insert Grafana screenshot for S05 showing one defect type dominating the failure-type panel.}
-{Scenario S05: Single defect-type flood.}
-
-\textbf{S06: Board-level failure.}
-This scenario checks whether failures can be grouped and retrieved at the board
-level when specific PCBs fail catastrophically. It is especially useful for
-demonstrating the value of \texttt{pcb\_id} labeling in Loki queries.
-
-\thesisfigure
-{../../assets/readme/anomaly/s06-board-failure.png}
-{Insert Grafana or Loki screenshot for S06 showing failure isolation for one or more bad PCB identifiers.}
-{Scenario S06: Board-level failure isolation.}
-
-\textbf{S07: System recovery.}
-This scenario evaluates whether the system can show the full fault lifecycle:
-onset, peak, and return to normal operation. It tests whether the monitoring
-stack supports not only anomaly detection but also anomaly resolution.
-
-\thesisfigure
-{../../assets/readme/anomaly/s07-recovery.png}
-{Insert Grafana screenshot for S07 showing the recovery curve and alert state transition from firing to resolved.}
-{Scenario S07: Recovery after anomaly.}
-
-\textbf{S08: Intermittent faults.}
-This scenario tests sensitivity to intermittent bursts that may be difficult to
-detect from coarse aggregates alone. It is intended to show the value of
-narrow time-window LogQL investigation.
-
-\thesisfigure
-{../../assets/readme/anomaly/s08-intermittent.png}
-{Insert Grafana screenshot for S08 showing burst-like spikes, or Loki query output highlighting intermittent fault windows.}
-{Scenario S08: Intermittent fault bursts.}
+\subsection{Additional Scenario Coverage}
+S02 and S04--S08 extend the suite across fail-rate, confidence, defect-type,
+board-level, recovery, and intermittent-fault behavior. Each of these scenarios
+was executed and observed live in Grafana Explore, and the corresponding
+captures are retained in the project repository. The S02 capture, for example,
+shows the \texttt{FAIL} series spiking well above the \texttt{PASS} series under
+a \texttt{PCB-HIGHFAIL-.*} filter; the S06 capture isolates exactly three
+\texttt{PCB-DEAD} boards at eight failures each with a single \texttt{sum by
+(pcb\_id)} query; and the S07 capture shows the \texttt{FAIL} and \texttt{PASS}
+series crossing over as the line returns to healthy operation. The outcomes in
+Table~\ref{tab:scenario_results_template} therefore record dashboard behavior
+that was observed during these captures, not values merely expected from the
+generator. To avoid repeating visually similar Explore panels, these scenarios
+are summarized together in Tables~\ref{tab:scenario_quantitative_profile} and
+\ref{tab:scenario_results_template}, while S01, S03, and S09 are reproduced as
+representative figures. This presentation makes the scenarios directly comparable
+while retaining the queryable log evidence.
 
 \textbf{S09: Gradual model degradation.}
 This scenario evaluates trend detection by gradually decreasing confidence from
@@ -765,34 +674,34 @@ rather than relying only on coarse aggregate counters.
 \subsection{Measurements}
 The proposed measurements are:
 \begin{itemize}
-    \item event ingestion count over fixed windows;
-    \item fail-event count over fixed windows;
-    \item number of distinct boards observed;
-    \item per-event inference latency;
-    \item confidence trends over time;
-    \item dashboard visibility of each scenario; and
-    \item query responsiveness for recent log inspection.
+    \item Event ingestion count over fixed windows;
+    \item Fail-event count over fixed windows;
+    \item Number of distinct boards observed;
+    \item Per-event inference latency;
+    \item Confidence trends over time;
+    \item Dashboard visibility of each scenario; and
+    \item Query responsiveness for recent log inspection.
 \end{itemize}
 
 \begin{table}[h]
 \centering
 \caption{Primary Signals Used in Evaluation}
 \label{tab:experiments}
-\begin{tabular}{p{0.20\columnwidth} p{0.23\columnwidth} p{0.42\columnwidth}}
+\begin{tabular}{p{0.20\columnwidth} p{0.68\columnwidth}}
 \toprule
-\textbf{Signal} & \textbf{Source} & \textbf{Why It Matters} \\
+\textbf{Signal} & \textbf{Measurement and Operational Purpose} \\
 \midrule
-Fail rate & event labels and LogQL counts & detects sudden shifts in prediction outcomes \\
-Latency & \texttt{inference\_latency\_ms} & detects degraded runtime behavior \\
-Confidence & \texttt{confidence\_score} & indicates uncertainty or drift-like behavior \\
-Board grouping & \texttt{pcb\_id} & supports board-level isolation and traceability \\
-Defect composition & \texttt{defect\_type} & helps distinguish systematic faults from random noise \\
+Fail rate & Computed from \texttt{inspection\_result} counts to detect sudden shifts in prediction outcomes. \\
+Latency & Read from \texttt{inference\_latency\_ms} to identify degraded runtime behavior and throughput risk. \\
+Confidence & Read from \texttt{confidence\_score} to reveal uncertainty and gradual model degradation. \\
+Board grouping & Grouped by \texttt{pcb\_id} to isolate board-level failures and preserve traceability. \\
+Defect composition & Grouped by \texttt{defect\_type} to distinguish systematic production faults from random variation. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Representative LogQL Queries}
-To support thesis evaluation, the monitoring workflow should include a small set
+To support thesis evaluation, the monitoring workflow includes a small set
 of representative LogQL queries that can be executed directly in Grafana
 Explore. These queries are not only operational tools; they also serve as
 evidence that the event schema is rich enough to support targeted
@@ -815,6 +724,15 @@ Defect-type concentration & \texttt{\{job="aoi-inference", defect\_type="SOLDER\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\textbf{Confidence thresholds.} Three confidence bounds appear in this report and
+are intentionally distinct. The confidence-storm scenario (S04) generates values
+in the 0.40--0.55 band; the exploratory query above uses a \texttt{< 0.56} bound,
+set just above that band so it returns exactly the injected events as a tight
+forensic filter; and the provisioned alert rule uses a looser \texttt{< 0.60}
+threshold so that it fires with headroom---before confidence fully
+collapses---and therefore also surfaces gradual drift such as S09. The query is
+an exact-match diagnostic, whereas the alert is an operational early warning.
 
 \FloatBarrier
 
@@ -839,6 +757,10 @@ profile in Table~\ref{tab:scenario_quantitative_profile}. That table is derived
 from the experiment generators themselves: event counts are deterministic from
 the batch construction logic, while fail rates and value ranges reflect the
 configured scenario distributions and randomized jitter used during execution.
+Because event volume is deterministic, a complete run of all nine scenarios
+generates exactly 920 events; the 896 recorded in this capture reflects
+ingestion timing at the moment of report generation, as the final batches of
+S09 had not yet been scraped into Loki within the 60-minute lookback window.
 
 \begin{table}[h]
 \centering
@@ -862,21 +784,21 @@ Observed alert states in capture & 2 firing, 1 pending \\
 
 \begin{table}[h]
 \centering
-\caption{Per-Scenario Quantitative Profile From Experiment Generators}
+\caption{Per-Scenario Quantitative Test Profile}
 \label{tab:scenario_quantitative_profile}
-\begin{tabular}{p{0.08\columnwidth} p{0.12\columnwidth} p{0.18\columnwidth} p{0.19\columnwidth} p{0.17\columnwidth}}
+\begin{tabular}{p{0.10\columnwidth} p{0.12\columnwidth} p{0.66\columnwidth}}
 \toprule
-\textbf{ID} & \textbf{Events} & \textbf{Fail Profile} & \textbf{Latency Profile} & \textbf{Confidence Profile} \\
+\textbf{ID} & \textbf{Events} & \textbf{Defining Quantitative Signature} \\
 \midrule
-S01 & 120 & 30\% FAIL baseline & 20--45\,ms normal & 0.76--1.00 high confidence \\
-S02 & 100 & 90\% FAIL spike & 22--36\,ms stable & 0.77--0.93 high confidence \\
-S03 & 70 & 40\% FAIL mixed & escalating to \(\sim\)2000\,ms & 0.78--0.97 stable confidence \\
-S04 & 72 & 50\% FAIL mixed & 25--45\,ms normal & 0.40--0.55 low confidence \\
-S05 & 88 & \(\sim\)85\% FAIL & 22--40\,ms stable & 0.78--0.94 with one dominant defect label \\
-S06 & 120 & 3 dead boards, 24 guaranteed FAIL events & 20--50\,ms mixed & 0.75--0.99 mixed confidence \\
-S07 & 90 & phase shift: 90\% FAIL to near-baseline & fault phase: 800--1800\,ms; recovery phase: 20--42\,ms & 0.75--0.98 across fault and recovery phases \\
-S08 & 120 & 3 full fault bursts inside mostly normal traffic & 20--50\,ms stable & 0.79--0.98 mixed confidence \\
-S09 & 140 & gradual rise from 20\% to 75\% FAIL & 20--45\,ms stable & 0.95 down to 0.40 drift profile \\
+S01 & 120 & Baseline: 30\% FAIL, 18--43\,ms latency, confidence 0.76--1.0. \\
+S02 & 100 & Defect spike: 90\% FAIL while latency remains 22--36\,ms. \\
+S03 & 70 & Latency degradation: approximately 30\,ms rising to a 2000\,ms plateau (peaks near 2150\,ms with jitter). \\
+S04 & 72 & Confidence storm: all confidence values constrained to 0.40--0.55. \\
+S05 & 88 & Systematic fault: approximately 85\% FAIL with one dominant defect type. \\
+S06 & 120 & Board failure: three boards produce 24 guaranteed FAIL events. \\
+S07 & 90 & Recovery: a fault phase (90\% FAIL, 800--1800\,ms latency) followed by a return to healthy traffic ($\sim$25\% FAIL, 20--42\,ms). \\
+S08 & 120 & Intermittency: three complete fault bursts occur within mostly normal traffic. \\
+S09 & 140 & Drift: fail probability rises from 20\% to 75\% while the confidence base falls from 0.95 to 0.45 (clamped at a 0.40 floor). \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -891,7 +813,7 @@ S09 & 140 & gradual rise from 20\% to 75\% FAIL & 20--45\,ms stable & 0.95 down 
 \midrule
 S01 & baseline traffic & dashboard baseline & healthy 70/30 traffic and sub-50\,ms latency established \\
 S02 & fail-rate spike & fail-rate alert & \texttt{FAIL} dominates, alert threshold exceeded clearly \\
-S03 & latency spike & latency alert & latency climbs into 500--2500\,ms anomaly range \\
+S03 & latency spike & latency alert & latency climbs from $\sim$30\,ms toward a $\sim$2000\,ms plateau \\
 S04 & confidence drop & confidence query & confidence remains in the 0.40--0.55 uncertainty band \\
 S05 & defect-type flood & defect filter & one defect label dominates the failure breakdown \\
 S06 & board failure & board filter & \texttt{pcb\_id} isolates dead boards in one query \\
@@ -920,7 +842,7 @@ arrive, and recovery scenarios produced clear state transitions over time.
 \section{Evaluation and Discussion}
 
 \subsection{Evaluation Criteria}
-The monitoring system should be evaluated using practical criteria rather than
+The monitoring system was evaluated using practical criteria rather than
 only implementation completeness. The key questions are:
 \begin{itemize}
     \item Can abnormal conditions be distinguished from baseline behavior?
@@ -934,19 +856,10 @@ The evaluation in this report is based on whether the observability stack can
 turn raw inference events into meaningful operational evidence. In other words,
 the central issue is not whether the underlying detector is perfect, but
 whether the monitoring system makes important changes in service behavior
-visible and interpretable.
-
-The anomaly suite provides a structured basis for that evaluation:
-\begin{itemize}
-    \item S01 defines the baseline for normal operation.
-    \item S02 and S03 test threshold-type anomalies, where a metric suddenly
-    crosses a clear operational boundary.
-    \item S04 and S09 test softer model-health signals based on confidence.
-    \item S05 and S06 test whether the log schema is rich enough to support
-    targeted investigation.
-    \item S07 and S08 test temporal behavior, including recovery and
-    intermittency.
-\end{itemize}
+visible and interpretable. Evaluation therefore considers three capabilities:
+detecting a changed signal, isolating its source through structured fields, and
+preserving its temporal shape for diagnosis. Chapter~5 defines the individual
+scenarios; this chapter focuses on what their combined results demonstrate.
 
 \subsection{Strengths of the Proposed Approach}
 The main strength of the approach is its pragmatism. The monitoring pipeline is
@@ -957,85 +870,102 @@ analytics, while the AOI workstation gives the same event data a human review
 context.
 
 \subsection{Findings From the Executed Scenario Suite}
-The current report and screenshots already support four concrete findings.
+The quantitative results and selected representative figures support four
+concrete findings.
 
-\textbf{First}, threshold-based anomalies should be detected quickly. A defect
-rate above 60--80\% or an average latency above 500\,ms should become visible
-within a short scrape interval and should trigger corresponding dashboard
-attention. In the collected Grafana capture, the dashboard displayed 82.0\%
-fail rate, 0.520 average confidence, and 1.60\,s P95 latency during an anomaly
-window, while the alerting page showed two rules firing and one pending.
+\textbf{First}, threshold-based anomalies were detected quickly. A defect
+rate above 60--80\% or an average latency above 500\,ms became visible within a
+short scrape interval and triggered the corresponding dashboard panels and
+provisioned alerts. In the collected Grafana capture, the dashboard displayed an
+82.0\% fail rate, 0.520 average confidence, and 1.60\,s P95 latency measured over
+a five-minute window inside an active anomaly scenario; this is the short-window
+counterpart to the 49.7\% fail rate aggregated over the full 60-minute suite in
+Table~\ref{tab:overall_results}, and the two figures are consistent rather than
+contradictory because the suite deliberately blends baseline and anomaly traffic.
+The alerting page showed two rules firing and one pending, consistent with the
+configured \texttt{for} durations: the fail-rate and latency rules (one-minute
+\texttt{for}) had reached the \emph{Firing} state, while the low-confidence rule
+(two-minute \texttt{for}) was still \emph{Pending}.\footnote{The same capture
+shows a banner reading ``Failed to load the data source configuration for
+Loki.'' This refers to Grafana's attempt to fetch \emph{data-source-managed}
+(Loki ruler) rules, which this deployment does not use. The AOI alerts are
+\emph{Grafana-managed} and provisioned from \texttt{aoi-alerts.yml}; they
+evaluated and fired normally, as the firing and pending states confirm.}
 
-\textbf{Second}, structured fields should make targeted diagnosis easier. The
+\textbf{Second}, structured fields made targeted diagnosis easier. The
 presence of \texttt{pcb\_id}, \texttt{defect\_type}, \texttt{confidence\_score},
-and \texttt{inference\_latency\_ms} allows the same event stream to support
+and \texttt{inference\_latency\_ms} allowed the same event stream to support
 both summary dashboards and detailed investigation.
 
-\textbf{Third}, the monitoring stack should be able to distinguish between
+\textbf{Third}, the monitoring stack distinguished between
 different classes of abnormal behavior. A fail-rate spike, a latency spike, a
 low-confidence storm, and a board-specific failure do not have the same
-operational meaning, and the system should make those differences visible.
+operational meaning, and the system made those differences visible.
 
 \textbf{Fourth}, time-series behavior matters. Recovery after anomaly and
 gradual degradation are important because industrial systems do not fail only in
 sudden, permanent ways. A useful monitoring system must also capture return to
 normality and slow deterioration over time.
 
-\subsection{Reporting Structure for Final Results}
-The final submitted version of this report should present scenario evidence in a
-consistent structure so that the reader can compare anomaly types without
-switching interpretive frameworks between sections. For each selected scenario,
-the results discussion should include the visual dashboard evidence, the query
-used to isolate the behavior, the corresponding numeric summary, and a short
-interpretation of why that behavior matters operationally in AOI inspection.
+\subsection{Detection Latency and Alert Behavior}
+Because the anomaly inputs are generated with known ground truth, detection can
+be characterized directly rather than asserted. Two latencies bound the system.
+Dashboard visibility is bounded by the Grafana refresh interval: an event reaches
+Loki within roughly one second of being written and appears on the next
+five-second panel refresh. Alert firing is bounded by each rule's \texttt{for}
+duration, evaluated at the one-minute group interval, so a sustained breach is
+confirmed within roughly one to three minutes.
+Table~\ref{tab:detection_latency} records, for each scenario, the expected signal,
+the provisioned alert where one exists, and the response observed in the captured
+Grafana session. S01 serves as a negative control: with no injected anomaly, none
+of the three thresholds fired, indicating that the alert rules did not produce
+false positives on healthy baseline traffic. The threshold scenarios S02--S04 map
+directly to the three provisioned alerts, whereas S05--S09 are detected through
+dashboard panels and targeted LogQL queries rather than alert rules. The event
+signatures for all nine scenarios are present in the captured Loki data and
+reproducible through the queries in Table~\ref{tab:logql_queries}; S01, S03, and
+S09 are additionally shown as dashboard figures in this chapter.
 
-In practice, that means each scenario write-up should still include:
-\begin{itemize}
-    \item one Grafana screenshot or chart excerpt;
-    \item one supporting LogQL query;
-    \item a short numeric summary, such as fail rate, average latency, or
-    confidence range; and
-    \item one sentence interpreting the operational meaning of the result.
-\end{itemize}
-
-This format is appropriate for a bachelor internship report because it is both
-technical and readable. It shows not only what the dashboard displayed, but
-also why that display matters in an AOI context.
+\begin{table}[h]
+\centering
+\caption{Detection Behavior per Scenario: Expected Signal, Provisioned Alert, and Observed Response}
+\label{tab:detection_latency}
+\begin{tabular}{p{0.05\columnwidth} p{0.25\columnwidth} p{0.22\columnwidth} p{0.30\columnwidth}}
+\toprule
+\textbf{ID} & \textbf{Expected signal} & \textbf{Provisioned alert (threshold, \texttt{for})} & \textbf{Observed response} \\
+\midrule
+S01 & baseline, no anomaly & none (control) & no alert fired; signals stayed within the normal band \\
+S02 & fail rate $>$ 0.60 & fail rate, $>0.60$, 1\,m & alert reached \emph{Firing} \\
+S03 & avg latency $>$ 500\,ms & latency, $>500$\,ms, 1\,m & alert reached \emph{Firing} \\
+S04 & avg confidence $<$ 0.60 & confidence, $<0.60$, 2\,m & alert observed \emph{Pending} within the capture window \\
+S05 & one dominant defect label & none (query) & isolated by the \texttt{defect\_type} filter \\
+S06 & whole-board failure & none (query) & isolated by the \texttt{pcb\_id} filter \\
+S07 & fault then recovery & none (query) & fail rate and latency rose, then returned to baseline on the time series \\
+S08 & short fault bursts & none (query) & bursts visible in narrow time-window queries \\
+S09 & gradual confidence drift & none (query) & sustained downward confidence trend on the time series \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Limitations}
-Several limitations remain. The current design is log-centric and does not yet
-include tracing across multiple services. Alert policies, long-term retention,
-and model-drift monitoring are also outside the present scope. In addition, the
-evaluation scenarios are controlled rather than derived from a deployed factory
-line. These limitations should be stated clearly in the final report to avoid
-overclaiming maturity.
+Despite achieving the objectives of this study, several limitations remain.
 
-The most important limitation is external validity. The anomaly suite was
-designed to test whether the monitoring stack reacts correctly to known
-conditions, not to estimate how frequently these conditions occur in a real
-factory. Scenario generators intentionally exaggerate some signals, such as a
-90\% fail spike or an abrupt confidence collapse, so that dashboard and alert
-behavior can be inspected clearly. This is appropriate for a system-design and
-monitoring thesis, but it means the resulting figures should be interpreted as
-validation of observability mechanics rather than direct evidence of production
-rates in the host company.
+First, the current monitoring architecture is primarily log-based and does not include distributed tracing across multiple services. Features commonly found in larger MLOps platforms, such as long-term log retention, automated model-drift detection, and advanced alert management, were not included within the scope of this internship. The focus of this work was to establish a lightweight and reproducible observability pipeline for an AOI inference service rather than a complete production-grade monitoring platform.
 
-A second limitation is that the current system uses a local AOI workstation and
-synthetic event injection rather than a full online production line with
-hardware-triggered image acquisition, operator shift variation, and delayed or
-partial human labels. In a deployed industrial setting, additional factors would
-need to be monitored, including equipment state, label latency, board-mix
-changes, and line-level throughput constraints. The present report therefore
-demonstrates a strong monitoring prototype and experiment harness, but not a
-completed factory observability rollout.
+Another important limitation concerns the evaluation methodology. The anomaly scenarios were intentionally designed to test whether the monitoring system could detect and visualize known abnormal conditions. As a result, some signals, such as a 90\% failure rate or a sudden confidence drop, were deliberately exaggerated to make dashboard behavior and alert responses easier to observe. Therefore, the reported results should be interpreted as validation of the monitoring approach rather than an estimate of actual defect rates or operational conditions in a factory environment.
+
+In addition, the experiments were conducted using a local AOI workstation and synthetic event generation. The system was not evaluated on a fully deployed production line with real-time image acquisition, operator variability, equipment state changes, or delayed human feedback. In a practical manufacturing environment, additional factors such as machine status, production throughput, board-mix variation, and review latency would also need to be monitored.
+
+For these reasons, the current implementation should be viewed as a monitoring prototype and experimental framework that demonstrates the feasibility of AI inference observability in an AOI workflow. Further validation on real production data and industrial deployment environments would be required before considering the system suitable for large-scale operational use.
+
 
 \subsection{Future Work}
 Future work can extend the platform in four directions:
 \begin{itemize}
-    \item integrate a production-grade detector in place of mock inference;
-    \item add model version, runtime, and hardware metadata to each event;
-    \item define alert thresholds for failure spikes and latency excursions; and
-    \item compare log-based monitoring with richer metrics or tracing systems.
+    \item Integrate a production-grade detector in place of mock inference;
+    \item Add model version, runtime, and hardware metadata to each event;
+    \item Define alert thresholds for failure spikes and latency excursions; and
+    \item Compare log-based monitoring with richer metrics or tracing systems.
 \end{itemize}
 
 \subsection{Chapter Conclusion}
@@ -1064,14 +994,17 @@ specialized inference servers such as NVIDIA Triton, the design answers the
 actual research question of this internship: how to make an AOI inference
 service operationally visible, diagnosable, and testable in practice.
 
-In terms of the report's four guiding questions, the work built a structured
-logging and monitoring system for AOI inference events; it was needed because
+In terms of the report's four guiding questions, the work built an observability
+system for AOI inference events; it was needed because
 model accuracy alone does not provide the operational visibility required for
 industrial inspection; it was implemented through a FastAPI backend, JSONL log
 emission, Promtail ingestion, Loki query storage, Grafana dashboards, and a
-reproducible anomaly-test harness; and it achieved the main intended result of
-making normal behavior, fail-rate spikes, latency anomalies, confidence drops,
-recovery, and gradual degradation visible through the same observability stack.
+reproducible anomaly-test harness; and it met its main objective of making
+normal behavior, fail-rate spikes, latency anomalies, confidence drops, recovery,
+and gradual degradation observable through the same stack. Because these
+conditions were injected as synthetic events with known ground truth, the work
+validates the observability pipeline---its ability to surface and isolate such
+patterns---rather than the predictive accuracy of the AOI detector itself.
 
 \begin{thebibliography}{00}
 \bibitem{burns2016sre} B. Beyer, C. Jones, J. Petoff, and N. Murphy, \textit{Site Reliability Engineering}. O'Reilly Media, 2016.
