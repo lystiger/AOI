@@ -59,3 +59,13 @@ docs/paper/*.fls
 docs/paper/*.fdb_latexmk
 docs/paper/*.synctex.gz
 !docs/paper/*.pdf
+
+# Thesis template conversion artifacts (local, generated)
+docs/paper/*.docx
+docs/paper/thesis_usth.tex
+docs/paper/thesis_usth.pdf
+docs/paper/thesis_imrad.tex
+docs/paper/usth-logo.png
+docs/paper/build_imrad.py
+docs/paper/build_usth_latex.py
+docs/paper/merge_docx.py
