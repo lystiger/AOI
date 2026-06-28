@@ -1,0 +1,16 @@
+%% Human-in-the-loop review loop (folder 03)
+%% Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B","secondaryColor":"#EAECEF","tertiaryColor":"#F5F8FC","clusterBkg":"#F5F8FC","clusterBorder":"#9AA0A6"}}}%%
+flowchart LR
+  AOI["AI-assisted AOI inference<br/>PASS/FAIL + defect_type<br/>+ confidence + overlay"] --> EV["InferenceEvent<br/>(logged)"]
+  EV --> WS["React review<br/>workstation"]
+  WS --> OP{"Operator review<br/>confirm / override"}
+  OP -- "confirm" --> REC["operator_review<br/>recorded in SQLite"]
+  OP -- "override" --> REC
+  REC -. "feedback (future work)" .-> RETRAIN["model retraining<br/>(out of scope)"]
+  EV --> OBS[("Loki / Grafana<br/>monitoring")]
+
+  classDef store fill:#EAECEF,stroke:#6B7682,color:#0B2545;
+  classDef future fill:#F0F0F0,stroke:#9AA0A6,color:#5F6368,stroke-dasharray:4 3;
+  class OBS store;
+  class RETRAIN future;

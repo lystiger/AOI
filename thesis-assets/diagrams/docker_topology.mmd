@@ -1,0 +1,24 @@
+%% Docker Compose topology (folder 08) — grounded in docker-compose.yml
+%% Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B","secondaryColor":"#EAECEF","tertiaryColor":"#F5F8FC","clusterBkg":"#F5F8FC","clusterBorder":"#9AA0A6"}}}%%
+flowchart TB
+  subgraph host["Docker Compose (single host)"]
+    web["aoi-web<br/>React/Vite :5173"]
+    app["aoi-app<br/>FastAPI :8000"]
+    mock["aoi-mock-sender<br/>profile: mock"]
+    promtail["promtail"]
+    loki["loki :3100"]
+    grafana["grafana :3000<br/>admin/admin"]
+    vlogs[("volume: aoi-logs")]
+    vdata[("volume: aoi-data")]
+  end
+  web -->|"proxy http://aoi-app:8000"| app
+  mock -->|"POST /events"| app
+  app -->|"write JSONL"| vlogs
+  app -->|"SQLite"| vdata
+  promtail -->|"read-only"| vlogs
+  promtail --> loki
+  grafana --> loki
+
+  classDef store fill:#EAECEF,stroke:#6B7682,color:#0B2545;
+  class vlogs,vdata store;

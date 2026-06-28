@@ -1,0 +1,132 @@
+{
+  "captured_at": "2026-06-28T12:57:23.569541+00:00",
+  "summary_ms": {
+    "maximum": 1400.675461,
+    "mean": 1258.0024652,
+    "median": 1246.5055595,
+    "minimum": 1137.098209
+  },
+  "trial_count": 10,
+  "trials": [
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "0943ae38-2ae7-4f54-b2bf-1f5f15950975",
+        "status": "accepted"
+      },
+      "freshness_ms": 1400.675461,
+      "injected_at": "2026-06-28T12:57:10.989024+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-2a1da004d17649f2a2dc5e3e3ab78e0b",
+      "trial": 1,
+      "visible_at": "2026-06-28T12:57:12.384854+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "38b6b00f-54ce-4a10-a1e1-5b44197a98d0",
+        "status": "accepted"
+      },
+      "freshness_ms": 1218.401893,
+      "injected_at": "2026-06-28T12:57:12.389760+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-dce88dce7dd64f5c934133819170809e",
+      "trial": 2,
+      "visible_at": "2026-06-28T12:57:13.601693+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "e84b196d-3ad9-41fe-af36-48c2df60398e",
+        "status": "accepted"
+      },
+      "freshness_ms": 1290.563091,
+      "injected_at": "2026-06-28T12:57:13.608219+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-fdff4f527aae417e9fffeeefef656d49",
+      "trial": 3,
+      "visible_at": "2026-06-28T12:57:14.893110+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "58aa2dd6-ebe7-4bf9-8cc0-6ccd629106c9",
+        "status": "accepted"
+      },
+      "freshness_ms": 1207.920689,
+      "injected_at": "2026-06-28T12:57:14.898850+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-8c76ec2985db40bcb938733669f0e855",
+      "trial": 4,
+      "visible_at": "2026-06-28T12:57:16.066551+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "6b06c900-3053-4a1f-b323-3839483ceaee",
+        "status": "accepted"
+      },
+      "freshness_ms": 1274.609226,
+      "injected_at": "2026-06-28T12:57:16.106813+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-d6b0be357ad544d791baa18ab12a93d9",
+      "trial": 5,
+      "visible_at": "2026-06-28T12:57:17.376340+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "f23e047c-a197-4cca-adfb-3eac7f2abf37",
+        "status": "accepted"
+      },
+      "freshness_ms": 1137.098209,
+      "injected_at": "2026-06-28T12:57:17.381462+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-6a4199b8f3e74a209a0d2fec0a20442e",
+      "trial": 6,
+      "visible_at": "2026-06-28T12:57:18.513144+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "6602e2ac-da67-4b00-973c-cbb9d37b9d07",
+        "status": "accepted"
+      },
+      "freshness_ms": 1319.687945,
+      "injected_at": "2026-06-28T12:57:18.518602+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-f958a9dc02ee423f979885148ca59c75",
+      "trial": 7,
+      "visible_at": "2026-06-28T12:57:19.833464+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "dd2d6004-668b-4efa-b662-51b37fb3b7ce",
+        "status": "accepted"
+      },
+      "freshness_ms": 1208.574127,
+      "injected_at": "2026-06-28T12:57:19.838349+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-12a543999b67475fb17fd0d51bf30011",
+      "trial": 8,
+      "visible_at": "2026-06-28T12:57:21.041906+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "2d9d12d4-9f1a-493c-88f9-888e39736878",
+        "status": "accepted"
+      },
+      "freshness_ms": 1311.596844,
+      "injected_at": "2026-06-28T12:57:21.046976+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-ba2004ad4127409198defeff423d9ca1",
+      "trial": 9,
+      "visible_at": "2026-06-28T12:57:22.352761+00:00"
+    },
+    {
+      "api_response": {
+        "accepted": 1,
+        "run_id": "8eddc25d-35a7-462a-8b17-f07e1c78c0ac",
+        "status": "accepted"
+      },
+      "freshness_ms": 1210.897167,
+      "injected_at": "2026-06-28T12:57:22.358616+00:00",
+      "pcb_id": "MEASURE-FRESHNESS-4250add2a89f4075a4a9867ac0b88552",
+      "trial": 10,
+      "visible_at": "2026-06-28T12:57:23.562832+00:00"
+    }
+  ]
+}

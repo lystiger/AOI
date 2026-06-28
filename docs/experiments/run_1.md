@@ -1,6 +1,6 @@
 # Anomaly Detection Experiment Results
 
-**Generated:** 2026-06-28 12:56 UTC
+**Generated:** 2026-06-28 13:13 UTC
 **Lookback window:** 120 minutes
 **Loki endpoint:** `http://localhost:3100`
 
@@ -10,22 +10,22 @@
 
 | Metric | Value |
 |--------|-------|
-| Total events logged | 5000 |
-| PASS events | 2973 |
-| FAIL events | 2220 |
-| Overall fail rate | 44.4% |
+| Total events logged | 913 |
+| PASS events | 460 |
+| FAIL events | 453 |
+| Overall fail rate | 49.6% |
 
 ## Defect Type Distribution
 
 | Defect Type | Event Count |
 |-------------|-------------|
-| NO_DEFECT | 2973 |
-| INSUFFICIENT_SOLDER | 825 |
-| MISALIGNMENT | 699 |
-| SOLDER_BRIDGE | 360 |
-| MISSING_COMPONENT | 188 |
-| BENT_LEAD | 138 |
-| SOLDER_BALL | 10 |
+| NO_DEFECT | 469 |
+| SOLDER_BRIDGE | 186 |
+| MISSING_COMPONENT | 104 |
+| INSUFFICIENT_SOLDER | 82 |
+| BENT_LEAD | 54 |
+| MISALIGNMENT | 12 |
+| SOLDER_BALL | 6 |
 
 ---
 

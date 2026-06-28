@@ -1,0 +1,23 @@
+%% Event lifecycle — replaces ASCII fig:experiment_workflow
+%% Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B","actorBkg":"#DBE9FF","actorBorder":"#3B6FB0","actorTextColor":"#0B2545","signalColor":"#5A6B7B","signalTextColor":"#15202B","labelBoxBkgColor":"#EAECEF","labelBoxBorderColor":"#9AA0A6","labelTextColor":"#15202B","noteBkgColor":"#F5F8FC","noteBorderColor":"#9AA0A6","activationBkgColor":"#EAECEF","sequenceNumberColor":"#FFFFFF"}}}%%
+sequenceDiagram
+  autonumber
+  participant G as Scenario / Operator
+  participant A as FastAPI /events
+  participant D as SQLite
+  participant J as JSONL log
+  participant P as Promtail
+  participant L as Loki
+  participant V as Grafana
+  participant R as report.py
+  G->>A: POST /events (batch)
+  A->>A: validate schema (enums, bounds, ids)
+  A->>D: persist run + defect rows
+  A->>J: append structured JSON lines
+  P->>J: tail file (shared aoi-logs volume)
+  P->>L: push streams (labels: pcb_id, defect_type, ...)
+  V->>L: LogQL queries (5 s refresh)
+  V->>V: evaluate alert rules (for: 1-2 min)
+  R->>L: range queries (lookback window)
+  R-->>R: write docs/experiments/anomaly_results.md

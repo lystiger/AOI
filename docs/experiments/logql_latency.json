@@ -1,0 +1,314 @@
+{
+  "captured_at": "2026-06-28T12:57:00.513148+00:00",
+  "limit": 1000,
+  "lookback_minutes": 120,
+  "queries": {
+    "all_recent_events": {
+      "query": "{job=\"aoi-inference\"} | json",
+      "samples": [
+        {
+          "latency_ms": 110.402061,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 100.542923,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 97.963057,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 84.726343,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 99.991269,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 89.869403,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 81.523417,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 109.20394,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 85.406692,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 84.46926,
+          "returned_entries": 1000
+        }
+      ],
+      "summary_ms": {
+        "maximum": 110.402061,
+        "mean": 94.40983650000001,
+        "median": 93.91623000000001,
+        "minimum": 81.523417
+      }
+    },
+    "board_isolation": {
+      "query": "{job=\"aoi-inference\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+      "samples": [
+        {
+          "latency_ms": 24.936108,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 16.160349,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 18.102677,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 18.952166,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 18.345781,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 16.383702,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 16.430187,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 19.502525,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 19.242937,
+          "returned_entries": 48
+        },
+        {
+          "latency_ms": 19.561422,
+          "returned_entries": 48
+        }
+      ],
+      "summary_ms": {
+        "maximum": 24.936108,
+        "mean": 18.7617854,
+        "median": 18.648973499999997,
+        "minimum": 16.160349
+      }
+    },
+    "defect_concentration": {
+      "query": "{job=\"aoi-inference\", defect_type=\"SOLDER_BRIDGE\"}",
+      "samples": [
+        {
+          "latency_ms": 24.572952,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 27.195727,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 29.398796,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 21.916603,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 21.941449,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 21.939368,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 22.916827,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 24.409037,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 23.490936,
+          "returned_entries": 361
+        },
+        {
+          "latency_ms": 24.420441,
+          "returned_entries": 361
+        }
+      ],
+      "summary_ms": {
+        "maximum": 29.398796,
+        "mean": 24.2202136,
+        "median": 23.9499865,
+        "minimum": 21.916603
+      }
+    },
+    "latency_anomaly": {
+      "query": "{job=\"aoi-inference\"} | json | inference_latency_ms > 500",
+      "samples": [
+        {
+          "latency_ms": 34.098473,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 33.244971,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 35.725456,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 37.938197,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 40.592084,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 30.822702,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 32.593825,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 36.915242,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 33.528131,
+          "returned_entries": 180
+        },
+        {
+          "latency_ms": 30.77359,
+          "returned_entries": 180
+        }
+      ],
+      "summary_ms": {
+        "maximum": 40.592084,
+        "mean": 34.6232671,
+        "median": 33.813302,
+        "minimum": 30.77359
+      }
+    },
+    "low_confidence": {
+      "query": "{job=\"aoi-inference\"} | json | confidence_score < 0.56",
+      "samples": [
+        {
+          "latency_ms": 31.491583,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 35.160866,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 39.597528,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 43.0365,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 39.09957,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 36.592246,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 43.108581,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 31.593934,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 32.596641,
+          "returned_entries": 209
+        },
+        {
+          "latency_ms": 29.628247,
+          "returned_entries": 209
+        }
+      ],
+      "summary_ms": {
+        "maximum": 43.108581,
+        "mean": 36.190569599999996,
+        "median": 35.876556,
+        "minimum": 29.628247
+      }
+    },
+    "recent_failures": {
+      "query": "{job=\"aoi-inference\", inspection_result=\"FAIL\"} | json",
+      "samples": [
+        {
+          "latency_ms": 72.361292,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 83.13636,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 70.744817,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 80.052504,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 81.248257,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 75.062848,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 70.114732,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 78.391364,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 83.176518,
+          "returned_entries": 1000
+        },
+        {
+          "latency_ms": 70.818632,
+          "returned_entries": 1000
+        }
+      ],
+      "summary_ms": {
+        "maximum": 83.176518,
+        "mean": 76.5107324,
+        "median": 76.72710599999999,
+        "minimum": 70.114732
+      }
+    }
+  },
+  "repeats": 10
+}

@@ -1,0 +1,47 @@
+%% SQLite ER diagram (folder 08) — grounded in the real aoi.db schema
+%% Note: model_fovs associates by model_name (no enforced FK).
+%% Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B","attributeBackgroundColorOdd":"#F5F8FC","attributeBackgroundColorEven":"#EAECEF"}}}%%
+erDiagram
+  inspection_runs ||--o{ defect_logs : "has"
+  inspection_runs ||--o{ run_images : "has"
+
+  inspection_runs {
+    text id PK
+    text pcb_id
+    text timestamp
+    text model_name
+    text status
+    text setup_status
+    text component_detection_status
+  }
+  defect_logs {
+    int  id PK
+    text run_id FK
+    text component_id
+    text defect_type
+    text severity
+    real confidence_score
+    int  inference_latency_ms
+    text inspection_result
+    text operator_review
+    real overlay_x
+    real overlay_y
+  }
+  run_images {
+    text id PK
+    text run_id FK
+    text image_path
+    text image_role
+    int  image_width
+    int  image_height
+  }
+  model_fovs {
+    text id PK
+    text model_name
+    text label
+    real x
+    real y
+    real width
+    real height
+  }

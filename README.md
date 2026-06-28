@@ -9,6 +9,32 @@ An Automatic Optical Inspection (AOI) workstation for PCB review, setup validati
 ![SQLite](https://img.shields.io/badge/SQLite-Persistence-0f6ab4?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square)
 
+<p align="center">
+  <img src="assets/readme/review-workspace.png" alt="AOI review workstation with PCB defect overlays and inspector" width="92%" />
+</p>
+
+## Results at a Glance
+
+The latest controlled local evaluation exercised nine anomaly patterns through the
+complete FastAPI → JSONL → Promtail → Loki → Grafana path.
+
+| Measured result | Latest result |
+| --- | ---: |
+| End-to-end event freshness | **1.25 s median** across 10 trials |
+| Representative LogQL query latency | **18.6–93.9 ms median** |
+| Storage growth per 1,000 events | **380 KiB JSONL / 388 KiB Loki** |
+| Injected events visible in Loki | **1,000 / 1,000** |
+| Anomaly scenarios evaluated | **9** |
+
+<p align="center">
+  <img src="assets/readme/anomaly/dashboard-overview.png" alt="Grafana dashboard surfacing AOI fail-rate, confidence, and latency anomalies" width="92%" />
+</p>
+
+The measurements, raw results, and reproduction scripts are available in
+[`docs/experiments/`](docs/experiments/), [`scripts/`](scripts/), and
+[`experiments/`](experiments/). The full findings and per-scenario dashboard captures
+appear in [Anomaly Detection & Monitoring Evaluation](#anomaly-detection--monitoring-evaluation).
+
 ## Overview
 
 The current project state includes:

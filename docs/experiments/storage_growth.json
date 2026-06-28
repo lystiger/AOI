@@ -1,0 +1,25 @@
+{
+  "after_kib": {
+    "jsonl_kib": 2064,
+    "loki_kib": 4036
+  },
+  "api_response": {
+    "accepted": 1000,
+    "run_id": "ab548b87-b92b-41e9-9c86-99f4c81924f7",
+    "status": "accepted"
+  },
+  "before_kib": {
+    "jsonl_kib": 1684,
+    "loki_kib": 3648
+  },
+  "captured_at": "2026-06-28T12:57:10.910944+00:00",
+  "event_count": 1000,
+  "growth_kib": {
+    "jsonl_kib": 380,
+    "loki_kib": 388
+  },
+  "loki_visible_count": 1000,
+  "measurement_resolution": "KiB reported by du -sk inside each container",
+  "pcb_id": "MEASURE-STORAGE-fc05d3239bf7453cbd4ddb5ddb7acb14",
+  "settle_seconds": 5.0
+}

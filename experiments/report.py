@@ -76,9 +76,9 @@ def generate_report(output_path: Path, lookback_minutes: int = 120) -> None:
     lines = [
         "# Anomaly Detection Experiment Results",
         "",
-        f"**Generated:** {now_str}  ",
-        f"**Lookback window:** {lookback_minutes} minutes  ",
-        f"**Loki endpoint:** `{LOKI_URL}`  ",
+        f"**Generated:** {now_str}",
+        f"**Lookback window:** {lookback_minutes} minutes",
+        f"**Loki endpoint:** `{LOKI_URL}`",
         "",
         "---",
         "",
@@ -169,7 +169,7 @@ def generate_report(output_path: Path, lookback_minutes: int = 120) -> None:
         "1. **Structured log labels** (inspection_result, defect_type, pcb_id) enabled per-scenario isolation without full-text search.",
         "2. **Time-series detection** (S07, S09) captured gradual trends invisible in aggregate counters.",
         "3. **Per-board queries** (S06) isolated complete board failures in a single LogQL expression.",
-        "4. **Latency anomalies** (S03) were visible in the Avg Latency Grafana panel within one 5-second scrape interval.",
+        "4. **Latency anomalies** (S03) were visible in the Avg Latency Grafana panel; practical visibility delay is bounded by log ingestion and the dashboard refresh interval.",
         "5. **Low-frequency anomalies** (S08) were detectable via narrow time-window queries but not via 5-minute aggregate stats — demonstrating the value of log-level storage.",
     ]
 

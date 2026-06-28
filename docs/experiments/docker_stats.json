@@ -1,0 +1,61 @@
+{
+  "captured_at": "2026-06-28T12:57:46.266968+00:00",
+  "command": "docker stats --no-stream",
+  "containers": [
+    {
+      "BlockIO": "336kB / 9.4MB",
+      "CPUPerc": "0.23%",
+      "Container": "3414dc86411d3a6956b19aaeb31af3d3025167780d32afdd30c8e3fb29751e9c",
+      "ID": "3414dc86411d",
+      "MemPerc": "0.36%",
+      "MemUsage": "42.86MiB / 11.49GiB",
+      "Name": "aoi-app",
+      "NetIO": "555kB / 90.3kB",
+      "PIDs": "2"
+    },
+    {
+      "BlockIO": "2.34MB / 25.8MB",
+      "CPUPerc": "0.08%",
+      "Container": "6228ce1180dcd13249c3526950f81816d476eddfc130e64b8ce7645ea476aa68",
+      "ID": "6228ce1180dc",
+      "MemPerc": "0.41%",
+      "MemUsage": "48.71MiB / 11.49GiB",
+      "Name": "aoi-grafana",
+      "NetIO": "61.7kB / 32.7kB",
+      "PIDs": "15"
+    },
+    {
+      "BlockIO": "1.99MB / 5.94MB",
+      "CPUPerc": "0.84%",
+      "Container": "337afb30e15d7b2ef8d9391e687caa169d5fd66e42ff955c89c9db3b31c1e56a",
+      "ID": "337afb30e15d",
+      "MemPerc": "1.52%",
+      "MemUsage": "179.5MiB / 11.49GiB",
+      "Name": "aoi-loki",
+      "NetIO": "600kB / 33.8MB",
+      "PIDs": "14"
+    },
+    {
+      "BlockIO": "2.72MB / 319kB",
+      "CPUPerc": "0.64%",
+      "Container": "2b2b37085cc9968f6c150cfc9191b6d230a33755efb9b3cbde759a771327a5ec",
+      "ID": "2b2b37085cc9",
+      "MemPerc": "0.21%",
+      "MemUsage": "24.88MiB / 11.49GiB",
+      "Name": "aoi-promtail",
+      "NetIO": "22.4kB / 375kB",
+      "PIDs": "13"
+    },
+    {
+      "BlockIO": "0B / 3.31MB",
+      "CPUPerc": "0.00%",
+      "Container": "7479cea59864e57e3e5360a113692e3e2be215a6c5f5f044cb2223049979a95a",
+      "ID": "7479cea59864",
+      "MemPerc": "1.69%",
+      "MemUsage": "198.4MiB / 11.49GiB",
+      "Name": "aoi-web",
+      "NetIO": "2.11kB / 126B",
+      "PIDs": "36"
+    }
+  ]
+}
