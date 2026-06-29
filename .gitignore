@@ -20,6 +20,12 @@ env/
 .env
 .env.*
 
+# Secrets / API tokens (never commit credentials)
+kaggle.json
+**/kaggle.json
+*.pem
+*_credentials.json
+
 # Logs
 *.log
 logs/
