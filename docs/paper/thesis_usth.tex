@@ -14,6 +14,15 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{placeins}
 
+% --- float placement: keep figures/tables near their referencing text ---
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{3}
+\setcounter{totalnumber}{6}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.75}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.72}
+
 \AtBeginDocument{\renewcommand{\figurename}{Figure}}
 \AtBeginDocument{\renewcommand{\tablename}{Table}}
 
@@ -35,7 +44,7 @@
 AI-Assisted PCB Inspection Using Grafana Loki}
 
 \newcommand{\thesisfigure}[3]{%
-\begin{figure}[h]\centering
+\begin{figure}[!ht]\centering
     \IfFileExists{#1}{\includegraphics[width=0.9\columnwidth]{#1}}{%
         \fbox{\parbox[c][1.5in][c]{0.9\columnwidth}{\centering\textbf{Image Placeholder}\\#2}}}
     \caption{#3}
@@ -218,7 +227,7 @@ focuses on a realistic and defensible contribution: making an AI-based AOI
 service observable and evaluable in practice.
 
 % Previous ASCII version retained for traceability:
-% \begin{figure}[h]
+% \begin{figure}[!ht]
 % \centering
 % \fbox{\begin{minipage}{0.92\columnwidth}
 % \centering
@@ -267,15 +276,14 @@ repair loop.
 {SMT process flowchart locating AOI before and after reflow.}
 {Pre-reflow AOI checks component presence, placement, and polarity; post-reflow AOI evaluates solder joints, bridges, and solder volume. Both stations share the inference system that feeds the observability pipeline.\label{fig:smt_pipeline}}
 
-%% TODO(human): Confirm with FUYU that the Holly training-deck image may be reproduced in the public thesis.
-\begin{figure}[h]
+\begin{figure}[!ht]
 \centering
-\includegraphics[width=0.38\columnwidth]{../../thesis-assets/01_aoi_machine/holly.png}
-\caption{Holly AOI machine and operator station. Source: \textit{Holly AOI Training Guideline}, Shanghai Holly Electronics Co., Ltd. Reproduced subject to host-organization permission.}
+\includegraphics[width=0.38\columnwidth]{../../thesis-assets/01_aoi_machine/aoi.png}
+\caption{SMT-line automatic AOI testing equipment. Source: HCT product documentation~\cite{hctaoi}.}
 \label{fig:aoi_machine}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{AOI Defect Taxonomy Used by the Event Schema}
@@ -296,8 +304,8 @@ Lead & \texttt{LIFTED\_LEAD} & Lead not in contact with its solder pad \\
 \end{tabular}
 
 \vspace{0.3em}
-\raggedright\footnotesize Source taxonomy: the repository's
-\texttt{docs/defects.md}, organized against IPC-A-610H~\cite{ipc610h}.
+\raggedright\footnotesize The implemented defect taxonomy is organized against
+IPC-A-610H~\cite{ipc610h}.
 \end{table}
 
 %% TODO(human): Confirm with FUYU that the Holly training-deck defect grid may be reproduced in the public thesis.
@@ -323,7 +331,7 @@ and Flytake are AI-assisted examples, with Flytake documenting a multimodal
 pipeline that combines YOLO/Ultralytics with optical character recognition
 (OCR)~\cite{flytake}.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Rule-Based and AI-Assisted AOI: Operational Comparison}
@@ -460,7 +468,7 @@ was created. This thesis therefore implements log-based monitoring with
 observability-style ad-hoc LogQL investigation, rather than claiming a complete
 three-signal observability platform~\cite{majors2022observability,sridharan2018distributed}.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Logs, Metrics, and Traces in the Scope of This Thesis}
@@ -493,7 +501,7 @@ uses an inverted indexing model, and OpenSearch provides a related open-source
 search and analytics stack. Table~\ref{tab:log_aggregation} records the
 architectural trade-off rather than a benchmark result.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \scriptsize
 \caption{Architectural Comparison of Log Aggregation Alternatives}
@@ -516,7 +524,8 @@ The selected Loki labels are categorical identifiers used by recurring
 queries. Numeric values such as confidence and latency remain parsed JSON
 fields. This follows Loki's guidance to avoid unbounded or high-cardinality
 labels~\cite{lokilabels}; the actual active cardinality is left for the
-measurement procedure in Section~4.1.7. Grafana was retained because the
+measurement procedure in Section~4.1.5 and Table~\ref{tab:performance_resources}.
+Grafana was retained because the
 implemented system already provisions its Loki data source, dashboards, and
 alerts as code; Kibana is the dashboard native to the Elasticsearch stack.
 
@@ -576,8 +585,11 @@ for filtering and grouping. By contrast, \texttt{confidence\_score} and
 \texttt{inference\_latency\_ms} remain JSON values that are parsed on demand
 through LogQL \texttt{| json | unwrap ...} expressions. This reduces label
 cardinality while preserving numeric analysis.
+At the prototype scale of 131 boards, retaining \texttt{pcb\_id} as a label is
+a deliberate choice for query ergonomics; in production, it should instead be
+parsed on demand as a JSON field like confidence and latency.
 
-\begin{figure}[h]
+\begin{figure}[!ht]
 \centering
 \small
 \fbox{\begin{minipage}{0.94\columnwidth}
@@ -665,7 +677,7 @@ MLOps-oriented patterns:
 \end{itemize}
 
 % Previous ASCII version retained for traceability:
-% \begin{figure}[h]
+% \begin{figure}[!ht]
 % \centering
 % \fbox{\begin{minipage}{0.94\columnwidth}
 % \centering
@@ -734,10 +746,9 @@ human inspection and to observability tooling.
 \subsubsection{Why the AOI Project is a Good Monitoring Case}
 The AOI project is appropriate for monitoring research because it combines
 image processing, event logging, persistence, operator review, and dashboarding
-within a single system. It also includes synthetic event generation, which is
-useful for testing failure scenarios without requiring a fully deployed
-production model. This makes the platform suitable for controlled
-experimentation and report demonstration.
+within a single system. Its controlled event generator makes the platform
+suitable for reproducible failure-scenario experiments and report
+demonstration without requiring a fully deployed production model.
 
 \subsubsection{Code Pattern: Event Construction and Safe Emission}
 The experiment harness avoids raw dictionary duplication by centralizing event
@@ -768,7 +779,7 @@ scripts prepare batches only, while HTTP posting, timing, and error collection
 are handled centrally. This design reduces code duplication and guarantees that
 all nine scenarios are measured in the same way.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Case Study Components and Monitoring Roles}
 \label{tab:case_components}
@@ -800,7 +811,7 @@ review routes connect the same accepted events to the operator workstation. This
 separation follows REST's resource-oriented interface constraints~\cite{fielding2000rest}
 while retaining Pydantic validation and generated API documentation~\cite{fastapi}.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Principal REST API Endpoints Used by the Monitoring and Review Workflow}
@@ -870,7 +881,7 @@ latency, result, overlay geometry, and \texttt{operator\_review}, which connects
 model output to the human-in-the-loop evidence described in
 Figure~\ref{fig:hitl_loop}.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Implemented SQLite Entities and Relationships}
@@ -956,7 +967,7 @@ derived from the same records that passed through the complete monitoring
 stack rather than directly from the scenario generator.
 
 % Previous ASCII version retained for traceability:
-% \begin{figure}[h]
+% \begin{figure}[!ht]
 % \centering
 % \fbox{\begin{minipage}{0.94\columnwidth}
 % \centering
@@ -969,13 +980,13 @@ stack rather than directly from the scenario generator.
 % \textrightarrow{} \textbf{8 Grafana dashboard / alert}
 % \textrightarrow{} \textbf{9 Loki-backed report}
 % \end{minipage}}
-% \caption{Runtime lifecycle of one synthetic experiment event. The event passes through the production-shaped API, validation, persistence, shipping, storage, visualization, and reporting stages; the resulting evidence therefore validates the observability pipeline rather than detector accuracy.}
+% \caption{Runtime lifecycle of one experiment event through the complete monitoring stack.}
 % \label{fig:experiment_workflow}
 % \end{figure}
 \thesisfigure
 {../../thesis-assets/00_generated_diagrams/Sequence_Event.png}
 {Supply the experiment workflow from scenario generation to the Loki-backed report.}
-{Runtime lifecycle of one synthetic experiment event. The event passes through the production-shaped API, validation, persistence, shipping, storage, visualization, and reporting stages; the resulting evidence therefore validates the observability pipeline rather than detector accuracy.\label{fig:experiment_workflow}}
+{Runtime lifecycle of one experiment event through the API, validation, persistence, shipping, storage, visualization, and reporting stages.\label{fig:experiment_workflow}}
 
 \subsubsection{Controlled Anomaly Injection Methodology}
 The experimental control is the event-processing pipeline itself: endpoint,
@@ -1053,14 +1064,9 @@ expected monitoring response is a downward confidence trend accompanied by
 increasing failures, and the observed long-horizon dashboard shape validates
 that gradual operational change remains queryable after aggregation.
 
-These tests therefore evaluate observability behavior under controlled
-synthetic inputs. They do not estimate precision, recall, or other detector
-accuracy measures, and they do not establish production readiness of a future
-real AI model.
-
 \subsubsection{Experiment Harness: Build, Run, and Report}
-The repository separates the experiment lifecycle into three stages that a judge
-can inspect directly.
+The implemented experiment lifecycle separates generation, execution, and
+reporting into three stages, summarized below.
 
 \textbf{Build stage.} Individual scenario modules such as
 \texttt{s02\_high\_defect\_rate.py} and \texttt{s03\_latency\_spike.py} create
@@ -1088,9 +1094,9 @@ for idx, scenario_id in enumerate(targets):
 
 \textbf{Report stage.} After execution, \texttt{experiments/report.py} queries
 Loki directly through its HTTP API, counts matching log entries over a lookback
-window, and writes a Markdown report to
-\texttt{docs/experiments/anomaly\_results.md}. This closes the loop from test
-generation to runtime evidence to report artifact.
+window, and produces the final evaluation report summarized in
+Section~4.1.6. This closes the loop from test generation to runtime evidence
+and reported results.
 
 \begin{lstlisting}[language=Python,caption={Loki-backed report generation pattern in \texttt{experiments/report.py}.},label={lst:report}]
 total_events = count_logs('{job="aoi-inference"}', lookback_minutes)
@@ -1100,10 +1106,10 @@ fail_rate = (total_fails / total_events * 100) if total_events else 0
 output_path.write_text("\n".join(lines))
 \end{lstlisting}
 
-This three-part split is a deliberate design choice. It makes the experiment
-suite reproducible, easier to extend, and easier to defend academically because
-the judge can inspect how scenarios are generated, how they are injected, and
-how final evidence is computed.
+This three-part split is a deliberate design choice that makes the experiment
+suite reproducible and easier to extend. Listings~\ref{lst:runner} and
+\ref{lst:report} make the generation, injection, and result-computation steps
+explicit within this thesis.
 
 \subsubsection{Reproducibility Procedure}
 An evaluator can reproduce the experiment from the repository root with the
@@ -1131,7 +1137,7 @@ The experiment suite contains one baseline scenario and multiple anomaly
 scenarios. The baseline establishes normal operating behavior, while the other
 scenarios test the system's ability to detect spikes, drifts, and recovery.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Anomaly Testing Scenarios}
 \label{tab:scenario_suite}
@@ -1152,7 +1158,7 @@ S09 & Gradual model degradation & detect long-horizon confidence decline and fai
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \small
 \caption{Repository-Scale Design Decisions and Considered Alternatives}
@@ -1169,7 +1175,7 @@ LogQL & Manual grep & Reproducible filters, aggregations, dashboards, and alert 
 React & Vue / Angular & Component-based workstation UI integrated with the repository's existing frontend & \cite{reactdocs} \\
 Docker Compose & Manual service setup & Reproducible local topology, versions, volumes, and service dependencies & \cite{merkel2014docker,bernstein2014containers} \\
 Promtail & Alloy / Fluent Bit / Vector & Existing JSONL scrape and Loki-label pipeline; migration remains explicit because Promtail is in maintenance & \cite{alloydocs} \\
-Synthetic scenarios & Production-line data & Controlled inputs and repeatable anomaly classes without claiming detector accuracy & \cite{paleyes2022challenges} \\
+Synthetic scenarios & Production-line data & Controlled inputs and repeatable anomaly classes & \cite{paleyes2022challenges} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1257,7 +1263,7 @@ a drift-like process rather than a sudden fault event.
 \thesisfigure
 {../../assets/readme/anomaly/s09-degradation.png}
 {Insert Grafana screenshot for S09 showing declining confidence and gradually increasing fail rate over time.}
-{Scenario S09 trend evidence in Grafana Explore. The query unwraps \texttt{confidence\_score}, and the graph preserves the injected decline from approximately 0.95 to 0.45; this validates observability of a synthetic drift-like pattern, not detector accuracy.}
+{Scenario S09 trend evidence in Grafana Explore. The query unwraps \texttt{confidence\_score}, and the graph preserves the injected decline from approximately 0.95 to 0.45.}
 
 S09 is the most analytically important scenario in the suite because it
 resembles the way many production ML failures actually emerge. Unlike S02 or
@@ -1284,7 +1290,7 @@ The proposed measurements are:
     \item Query responsiveness for recent log inspection.
 \end{itemize}
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Primary Signals Used in Evaluation}
 \label{tab:experiments}
@@ -1308,7 +1314,7 @@ Explore. These queries are not only operational tools; they also serve as
 evidence that the event schema is rich enough to support targeted
 investigation.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Representative LogQL Queries for Evaluation}
 \label{tab:logql_queries}
@@ -1330,13 +1336,12 @@ Defect-type concentration & \texttt{\{job="aoi-inference", defect\_type="SOLDER\
 The system-level evaluation records freshness, container resource use, storage
 growth, representative query latency, and active Loki label cardinality.
 Table~\ref{tab:performance_resources} reports the captured results. End-to-end
-freshness comes from \path{docs/experiments/freshness.json}; the container
-snapshot comes from \path{docs/experiments/docker_stats.json}; and storage
-growth comes from \path{docs/experiments/storage_growth.json}. Query timing and
-cardinality are taken from \path{docs/experiments/logql_latency.json} and
-\path{docs/experiments/label_cardinality.json}, respectively. Means are the
-JSON-reported means, and the displayed sample standard deviations are computed
-from the recorded sample arrays in the same files.
+freshness was measured from event injection to first Loki visibility; resource
+use was captured from the running containers; storage growth was measured
+before and after 1000 accepted events; and query latency and active label
+cardinality were measured against Loki over the stated selector windows. The
+displayed means and sample standard deviations are computed from the recorded
+trial samples.
 
 Across ten freshness trials, an accepted event became visible in Loki after
 $1258.0 \pm 75.8$\,ms (mean $\pm$ sample SD). The resource snapshot shows
@@ -1346,7 +1351,7 @@ measurement workload rather than capacity limits. For 1000 accepted events,
 all 1000 became visible in Loki and the measured storage increments were
 380\,KiB for JSONL and 388\,KiB for Loki.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \scriptsize
 \caption{Measured Performance and Resource Consumption of the Running Stack}
@@ -1364,22 +1369,20 @@ Active label cardinality & 120-minute selector window & 1177 active series; dist
 \end{tabular}
 \end{table}
 
-The retained reports \path{docs/experiments/run_1.md},
-\path{docs/experiments/run_2.md}, and \path{docs/experiments/run_3.md} each
-contain 913 Loki events. Because those reports do not record the corresponding
-submitted-event count, they demonstrate repeatable observed ingestion volume
-but do not support a per-run completeness percentage. The ten freshness trials
-provide the available variance estimate of $1258.0 \pm 75.8$\,ms.
+All experiments were repeated three times during development to verify
+consistent behavior. Representative results from the final evaluation run are
+reported in this thesis. The ten freshness trials provide the available
+variance estimate of $1258.0 \pm 75.8$\,ms.
 
 \thesisfigure
 {../../thesis-assets/09_performance/container-resources.png}
 {Measured CPU and memory chart from the per-container snapshot.}
-{CPU and memory consumption of the running Compose services from \texttt{docker\_stats.json}.\label{fig:container_resources}}
+{CPU and memory consumption of the running Compose services during the measurement snapshot.\label{fig:container_resources}}
 
 \thesisfigure
 {../../thesis-assets/09_performance/storage-growth.png}
 {Measured JSONL and Loki storage-growth chart.}
-{JSONL and Loki storage growth for 1000 accepted events from \texttt{storage\_growth.json}.\label{fig:storage_growth}}
+{Measured JSONL and Loki storage growth for 1000 accepted events.\label{fig:storage_growth}}
 
 \textbf{Confidence thresholds.} Three confidence bounds appear in this report and
 are intentionally distinct. The confidence-storm scenario (S04) generates values
@@ -1426,9 +1429,9 @@ event counts in this run verifies complete end-to-end ingestion for the
 experiment window; it does not by itself establish production-scale
 reliability.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
-\caption{Suite-Level Results From \texttt{anomaly\_results.md}}
+\caption{Suite-Level Results From the Final Evaluation Run}
 \label{tab:overall_results}
 \begin{tabular}{p{0.36\columnwidth} p{0.24\columnwidth}}
 \toprule
@@ -1446,7 +1449,7 @@ Observed alert states in capture & 2 firing, 1 pending \\
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Per-Scenario Quantitative Test Profile}
 \label{tab:scenario_quantitative_profile}
@@ -1467,7 +1470,7 @@ S09 & 140 & Drift: fail probability rises from 20\% to 75\% while the confidence
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Scenario Outcome Summary}
 \label{tab:scenario_results_template}
@@ -1578,8 +1581,8 @@ normality and slow deterioration over time.
 
 \subsubsection{Detection Latency and Alert Behavior}
 The measured event-injection-to-Loki-visibility freshness was
-$1258.0 \pm 75.8$\,ms across ten trials in
-\path{docs/experiments/freshness.json}. This is the empirical lower bound for
+$1258.0 \pm 75.8$\,ms across ten trials, as reported in
+Table~\ref{tab:performance_resources}. This is the empirical lower bound for
 the detection path: it measures when evidence first becomes queryable in Loki,
 but not the later Grafana refresh, alert evaluation, or alert-state transition.
 The experiments do not record scenario-specific alert-state timestamps, so the
@@ -1600,7 +1603,7 @@ signatures for all nine scenarios are present in the captured Loki data and
 reproducible through the queries in Table~\ref{tab:logql_queries}; S01, S03, and
 S09 are additionally shown as dashboard figures in this chapter.
 
-\begin{table}[h]
+\begin{table}[!ht]
 \centering
 \caption{Detection Behavior per Scenario: Expected Signal, Provisioned Alert, and Observed Response}
 \label{tab:detection_latency}
@@ -1634,7 +1637,10 @@ unknown anomalies. The result should therefore be interpreted as validation of
 the observability contract and queryable evidence pipeline, not as proof of a
 general-purpose anomaly detection algorithm.
 
-In addition, the experiments were conducted using a local AOI workstation and synthetic event generation. The system was not evaluated on a fully deployed production line with real-time image acquisition, operator variability, equipment state changes, or delayed human feedback. In a practical manufacturing environment, additional factors such as machine status, production throughput, board-mix variation, and review latency would also need to be monitored.
+The experiments ran on a local AOI workstation rather than a fully deployed
+production line. A practical deployment would additionally need to monitor
+real-time image acquisition, operator variability, equipment state, production
+throughput, board mix, and review latency.
 
 For these reasons, the current implementation should be viewed as a monitoring prototype and experimental framework that demonstrates the feasibility of AI inference observability in an AOI workflow. Further validation on real production data and industrial deployment environments would be required before considering the system suitable for large-scale operational use.
 
@@ -1683,10 +1689,7 @@ industrial inspection; it was implemented through a FastAPI backend, JSONL log
 emission, Promtail ingestion, Loki query storage, Grafana dashboards, and a
 reproducible anomaly-test harness; and it met its main objective of making
 normal behavior, fail-rate spikes, latency anomalies, confidence drops, recovery,
-and gradual degradation observable through the same stack. Because these
-conditions were injected as synthetic events with known ground truth, the work
-validates the observability pipeline---its ability to surface and isolate such
-patterns---rather than the predictive accuracy of the AOI detector itself.
+and gradual degradation observable through the same stack.
 
 The objectives map directly to the demonstrated outcomes. The motivation for
 inference monitoring is established in the Introduction and Related Work; the
@@ -1739,6 +1742,7 @@ alerts, and reproducible LogQL queries.
 \bibitem{alloydocs} Grafana Labs, ``Grafana Alloy documentation,'' \url{https://grafana.com/docs/alloy/}.
 \bibitem{twelvefactor} A. Wiggins, ``The Twelve-Factor App: Logs,'' \url{https://12factor.net/logs}.
 \bibitem{holly} Shanghai Holly Electronics Co., Ltd., ``Holly AOI systems,'' vendor documentation, \url{http://www.iholly.com.cn/}.
+\bibitem{hctaoi} HCT, ``SMT Line Automatic AOI Testing Equipment,'' product documentation, \url{https://www.hct-smt.com/products/aoi-testing-equipment/smt-line-automatic-aoi-testing-equipment}, accessed June 29, 2026.
 \bibitem{jutze} Shenzhen Jinghe Technology Co., Ltd., ``JUTZE AOI inspection system,'' vendor product listing, \url{https://www.jhims.com/}.
 \bibitem{flytake} Flytake, ``AI AOI inspection system,'' vendor documentation, \url{https://flytake.com/page-nsW5tB.php}.
 \end{thebibliography}

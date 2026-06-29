@@ -93,8 +93,7 @@ def plot_container_resources(plt, dpi: int) -> Path | None:
         ax_mem.text(b.get_width(), b.get_y() + b.get_height() / 2,
                     f" {v:.0f}", va="center", fontsize=8)
 
-    fig.suptitle(f"Compose container resource use  (captured {data.get('captured_at', '')})",
-                 fontsize=10)
+    fig.suptitle("Compose container resource use", fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     out = OUTPUT_DIR / "container-resources.png"
     fig.savefig(out, dpi=dpi)
