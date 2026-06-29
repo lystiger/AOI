@@ -1,11 +1,17 @@
 """
-Real inference runner for AOI component/solder defect detection.
+Real inference runner for AOI PCB defect detection.
 
-This module lazy-loads ultralytics so importing it does not require the ML
-stack to be installed until inference is actually invoked.
+Runs a trained YOLOv8 defect detector over PCB scans and emits ``InferenceEvent``s,
+either for a single image or a whole folder, optionally POSTing them to the AOI API so
+they flow through the same JSONL -> Promtail -> Loki -> Grafana pipeline the synthetic
+scenarios use.
+
+ultralytics is imported lazily so importing this module never requires the ML stack
+until inference is actually invoked.
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -16,21 +22,44 @@ if str(SRC_ROOT) not in sys.path:
 
 from aoi.schema import InferenceEvent, InspectionResult
 
-
-DATASET_TO_SCHEMA_DEFECT = {
-    "missing_component": "MISSING_COMPONENT",
-    "misalignment": "MISALIGNMENT",
-    "reversed_polarity": "REVERSED_POLARITY",
-    "bent_lead": "BENT_LEAD",
-    "lifted_lead": "LIFTED_LEAD",
-    "insufficient_solder": "INSUFFICIENT_SOLDER",
-    "solder_bridge": "SOLDER_BRIDGE",
-    "solder_ball": "SOLDER_BALL",
-}
-
 CONFIDENCE_THRESHOLD = 0.40
 NO_DEFECT_TYPE = "NO_DEFECT"
-MODEL_VERSION = "yolov8s-component-solder-v1"
+MODEL_VERSION = "yolov8s-dspcbsd-v1"
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
+
+# Canonical schema defect_type for each known DsPCBSD+ class (full names + paper
+# abbreviations). DsPCBSD+ is a pure-defect dataset, so every detected class is a defect.
+DEFECT_LABELS = {
+    "short": "SHORT",
+    "sh": "SHORT",
+    "spur": "SPUR",
+    "sp": "SPUR",
+    "spurious_copper": "SPURIOUS_COPPER",
+    "sc": "SPURIOUS_COPPER",
+    "open": "OPEN_CIRCUIT",
+    "open_circuit": "OPEN_CIRCUIT",
+    "op": "OPEN_CIRCUIT",
+    "mouse_bite": "MOUSE_BITE",
+    "mousebite": "MOUSE_BITE",
+    "mb": "MOUSE_BITE",
+    "hole_breakout": "HOLE_BREAKOUT",
+    "hb": "HOLE_BREAKOUT",
+    "conductor_scratch": "CONDUCTOR_SCRATCH",
+    "cs": "CONDUCTOR_SCRATCH",
+    "conductor_foreign_object": "CONDUCTOR_FOREIGN_OBJECT",
+    "cfo": "CONDUCTOR_FOREIGN_OBJECT",
+    "base_material_foreign_object": "BASE_MATERIAL_FOREIGN_OBJECT",
+    "bmfo": "BASE_MATERIAL_FOREIGN_OBJECT",
+}
+
+
+def defect_type_for(class_name: str) -> str:
+    """Map a model class name to a schema defect_type, tolerating unknown spellings."""
+    key = class_name.strip().lower().replace(" ", "_").replace("-", "_")
+    if key in DEFECT_LABELS:
+        return DEFECT_LABELS[key]
+    # Every class in a defect dataset is a defect; uppercase unknowns rather than crash.
+    return key.upper() or "UNKNOWN_DEFECT"
 
 
 def _load_model(weights_path: str | Path):
@@ -41,14 +70,17 @@ def _load_model(weights_path: str | Path):
 
 def _default_weights_path() -> Path:
     candidates = [
-        Path(__file__).resolve().parents[2] / "ml" / "models" / "best.pt",
-        Path("ml/models/best.pt"),
+        SRC_ROOT.parent / "ml" / "models" / "defect_detection" / "best.pt",
+        SRC_ROOT.parent / "ml" / "models" / "best.pt",
+        SRC_ROOT.parent / "ml" / "models" / "component_detection" / "best.pt",
+        Path("ml/models/defect_detection/best.pt"),
     ]
     for path in candidates:
         if path.exists():
             return path
     raise FileNotFoundError(
-        "Trained model not found. Run: python -m ml.pipeline.train\nExpected location: ml/models/best.pt"
+        "Trained model not found. Train one (see ml/notebooks/colab_train_dspcbsd.ipynb) "
+        "and place it at ml/models/defect_detection/best.pt, or pass --weights."
     )
 
 
@@ -60,21 +92,47 @@ def _normalise_class_names(names: object) -> dict[int, str]:
     return {}
 
 
+def _board_id(pcb_id: str | None, run_id: str | None, image_path: Path) -> str:
+    if pcb_id:
+        return pcb_id
+    if run_id:
+        return run_id[:8].upper()
+    return image_path.stem.upper()[:24] or "BOARD"
+
+
+def _pass_event(board_id: str, latency_ms: int, run_image_index: int | None) -> InferenceEvent:
+    return InferenceEvent.create(
+        pcb_id=board_id,
+        component_id="BOARD",
+        inspection_result=InspectionResult.PASS,
+        defect_type=NO_DEFECT_TYPE,
+        confidence_score=1.0,
+        inference_latency_ms=latency_ms,
+        run_image_index=run_image_index,
+    )
+
+
 def run_inference(
     image_path: str | Path,
-    run_id: str,
+    *,
+    model=None,
+    run_id: str | None = None,
     pcb_id: str | None = None,
     weights_path: str | Path | None = None,
     confidence_threshold: float = CONFIDENCE_THRESHOLD,
+    run_image_index: int | None = None,
 ) -> list[InferenceEvent]:
-    """
-    Run model inference on a PCB scan image.
+    """Run defect inference on one PCB scan.
 
-    Returns one PASS event when no supported defects are found above threshold.
+    Returns one PASS/NO_DEFECT event when nothing is detected above threshold, otherwise
+    one FAIL event per detected defect with a normalized overlay box. Pass a preloaded
+    ``model`` to avoid reloading weights per image when running over a folder.
     """
-    weights = Path(weights_path) if weights_path else _default_weights_path()
-    board_id = pcb_id or run_id[:8].upper()
-    model = _load_model(weights)
+    image_path = Path(image_path)
+    if model is None:
+        weights = Path(weights_path) if weights_path else _default_weights_path()
+        model = _load_model(weights)
+    board_id = _board_id(pcb_id, run_id, image_path)
 
     t_start = time.perf_counter()
     results = model.predict(
@@ -87,129 +145,216 @@ def run_inference(
     latency_ms = int((time.perf_counter() - t_start) * 1000)
 
     result = results[0]
-    boxes = result.boxes
+    boxes = getattr(result, "boxes", None)
     if boxes is None or len(boxes) == 0:
-        return [
-            InferenceEvent.create(
-                pcb_id=board_id,
-                component_id="BOARD",
-                inspection_result=InspectionResult.PASS,
-                defect_type=NO_DEFECT_TYPE,
-                confidence_score=1.0,
-                inference_latency_ms=latency_ms,
-            )
-        ]
+        return [_pass_event(board_id, latency_ms, run_image_index)]
 
     class_names = _normalise_class_names(getattr(result, "names", getattr(model, "names", {})))
     events: list[InferenceEvent] = []
-    unsupported_labels: set[str] = set()
-
-    for idx, (cls_tensor, conf_tensor, xyxyn_tensor) in enumerate(zip(boxes.cls, boxes.conf, boxes.xyxyn), start=1):
+    for idx, (cls_tensor, conf_tensor, xyxyn_tensor) in enumerate(
+        zip(boxes.cls, boxes.conf, boxes.xyxyn), start=1
+    ):
         class_index = int(cls_tensor.item())
-        dataset_label = class_names.get(class_index, f"class_{class_index}")
-        schema_defect = DATASET_TO_SCHEMA_DEFECT.get(dataset_label)
-        if schema_defect is None:
-            unsupported_labels.add(dataset_label)
-            continue
-
+        label = class_names.get(class_index, f"class_{class_index}")
         confidence = float(conf_tensor.item())
-        x1, y1, x2, y2 = [float(value) for value in xyxyn_tensor.tolist()]
+        x1, y1, x2, y2 = (float(value) for value in xyxyn_tensor.tolist())
         events.append(
             InferenceEvent.create(
                 pcb_id=board_id,
                 component_id=f"DET-{idx:03d}",
                 inspection_result=InspectionResult.FAIL,
-                defect_type=schema_defect,
+                defect_type=defect_type_for(label),
                 confidence_score=round(confidence, 4),
                 inference_latency_ms=latency_ms,
-                overlay_x=round(x1, 4),
-                overlay_y=round(y1, 4),
-                overlay_width=round(x2 - x1, 4),
-                overlay_height=round(y2 - y1, 4),
+                run_image_index=run_image_index,
+                overlay_x=round(min(max(x1, 0.0), 1.0), 4),
+                overlay_y=round(min(max(y1, 0.0), 1.0), 4),
+                overlay_width=round(min(max(x2 - x1, 0.0), 1.0), 4),
+                overlay_height=round(min(max(y2 - y1, 0.0), 1.0), 4),
                 overlay_shape="rect",
             )
         )
 
-    if unsupported_labels:
-        unsupported_csv = ", ".join(sorted(unsupported_labels))
-        raise ValueError(f"Model emitted unsupported dataset classes: {unsupported_csv}")
+    return events or [_pass_event(board_id, latency_ms, run_image_index)]
 
-    if events:
-        return events
 
-    return [
-        InferenceEvent.create(
-            pcb_id=board_id,
-            component_id="BOARD",
-            inspection_result=InspectionResult.PASS,
-            defect_type=NO_DEFECT_TYPE,
-            confidence_score=1.0,
-            inference_latency_ms=latency_ms,
-        )
-    ]
+def _image_metadata(image_path: Path) -> dict[str, object]:
+    from PIL import Image
+
+    with Image.open(image_path) as image:
+        width, height = image.size
+    return {
+        "image_path": image_path.name,
+        "image_role": "scan",
+        "image_width": int(width),
+        "image_height": int(height),
+    }
 
 
 def post_events_to_api(
     events: list[InferenceEvent],
     api_url: str = "http://localhost:8000",
+    *,
+    model_version: str = MODEL_VERSION,
     image_path: str | Path | None = None,
-    run_id: str | None = None,
+    timeout: float = 10.0,
 ) -> dict[str, object]:
-    """POST inference results to the AOI API."""
-    import requests
+    """POST one run's events (and optional scan-image metadata) to the AOI API.
+
+    Uses stdlib urllib (like the experiment scenarios) so the runner needs no extra deps.
+    """
+    from urllib import request as urllib_request
 
     payload: dict[str, object] = {
-        "model_version": MODEL_VERSION,
+        "model_version": model_version,
         "events": [event.to_dict() for event in events],
     }
+    if image_path is not None:
+        payload["images"] = [_image_metadata(Path(image_path))]
 
-    if image_path and run_id:
-        from PIL import Image
-
-        with Image.open(str(image_path)) as image:
-            width, height = image.size
-        payload["images"] = [
-            {
-                "image_path": f"/runs/{run_id}/images/scan.jpg",
-                "image_role": "scan",
-                "image_width": width,
-                "image_height": height,
-            }
-        ]
-
-    response = requests.post(f"{api_url}/events", json=payload, timeout=10)
-    response.raise_for_status()
-    return response.json()
+    body = json.dumps(payload).encode("utf-8")
+    http_request = urllib_request.Request(
+        f"{api_url}/events",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib_request.urlopen(http_request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run AOI inference on a PCB image")
-    parser.add_argument("--image", required=True, help="Path to PCB scan image")
-    parser.add_argument("--run-id", required=True, help="Run UUID")
-    parser.add_argument("--pcb-id", default=None, help="PCB identifier")
-    parser.add_argument("--api-url", default="http://localhost:8000")
-    parser.add_argument("--weights", default=None, help="Path to best.pt")
-    parser.add_argument("--threshold", type=float, default=CONFIDENCE_THRESHOLD)
-    parser.add_argument("--dry-run", action="store_true", help="Print events, do not POST")
-    args = parser.parse_args()
-
-    events = run_inference(
-        image_path=args.image,
-        run_id=args.run_id,
-        pcb_id=args.pcb_id,
-        weights_path=args.weights,
-        confidence_threshold=args.threshold,
+def iter_images(image_dir: str | Path) -> list[Path]:
+    image_dir = Path(image_dir)
+    return sorted(
+        path
+        for path in image_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     )
 
-    print(f"\nDetected {len(events)} event(s):")
+
+def run_inference_dir(
+    image_dir: str | Path,
+    *,
+    weights_path: str | Path | None = None,
+    confidence_threshold: float = CONFIDENCE_THRESHOLD,
+    api_url: str | None = None,
+    model_version: str = MODEL_VERSION,
+    pcb_prefix: str = "PCB",
+    attach_images: bool = True,
+    limit: int | None = None,
+) -> dict[str, object]:
+    """Run defect inference over every image in a folder.
+
+    Each image is treated as one inspection run. When ``api_url`` is set, each run's
+    events are POSTed (mirroring how the experiment scenarios feed the pipeline); when it
+    is ``None`` this is a dry run that only returns the events for inspection.
+    """
+    images = iter_images(image_dir)
+    if limit is not None:
+        images = images[:limit]
+    if not images:
+        raise FileNotFoundError(f"No images found under {image_dir}")
+
+    weights = Path(weights_path) if weights_path else _default_weights_path()
+    model = _load_model(weights)
+
+    runs: list[dict[str, object]] = []
+    total_events = total_fail = total_pass = 0
+    for index, image_path in enumerate(images, start=1):
+        events = run_inference(
+            image_path,
+            model=model,
+            pcb_id=f"{pcb_prefix}-{index:04d}",
+            confidence_threshold=confidence_threshold,
+            run_image_index=0 if attach_images else None,
+        )
+        fails = sum(1 for event in events if event.inspection_result == InspectionResult.FAIL)
+        total_events += len(events)
+        total_fail += fails
+        total_pass += len(events) - fails
+
+        record: dict[str, object] = {"image": str(image_path), "events": events, "fail_count": fails}
+        if api_url:
+            record["response"] = post_events_to_api(
+                events,
+                api_url=api_url,
+                model_version=model_version,
+                image_path=image_path if attach_images else None,
+            )
+        runs.append(record)
+
+    return {
+        "image_dir": str(image_dir),
+        "weights": str(weights),
+        "images": len(images),
+        "events": total_events,
+        "fail_events": total_fail,
+        "pass_events": total_pass,
+        "posted": bool(api_url),
+        "runs": runs,
+    }
+
+
+def _print_events(image_path: Path, events: list[InferenceEvent]) -> None:
+    print(f"\n{image_path.name}: {len(events)} event(s)")
     for event in events:
         print(
             f"  [{event.inspection_result}] {event.defect_type} conf={event.confidence_score} "
-            f"xy=({event.overlay_x},{event.overlay_y}) wh=({event.overlay_width},{event.overlay_height})"
+            f"xywh=({event.overlay_x},{event.overlay_y},{event.overlay_width},{event.overlay_height})"
         )
 
+
+def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run AOI defect inference on a PCB image or folder")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--image", help="Path to a single PCB scan image")
+    source.add_argument("--image-dir", help="Path to a folder of PCB scan images")
+    parser.add_argument("--api-url", default="http://localhost:8000", help="AOI API base URL")
+    parser.add_argument("--weights", default=None, help="Path to trained weights (default: ml/models/defect_detection/best.pt)")
+    parser.add_argument("--threshold", type=float, default=CONFIDENCE_THRESHOLD)
+    parser.add_argument("--model-version", default=MODEL_VERSION)
+    parser.add_argument("--pcb-prefix", default="PCB", help="PCB id prefix for batch runs")
+    parser.add_argument("--limit", type=int, default=None, help="Only process the first N images in a folder")
+    parser.add_argument("--dry-run", action="store_true", help="Print events; do not POST to the API")
+    args = parser.parse_args()
+
+    if args.image_dir:
+        summary = run_inference_dir(
+            args.image_dir,
+            weights_path=args.weights,
+            confidence_threshold=args.threshold,
+            api_url=None if args.dry_run else args.api_url,
+            model_version=args.model_version,
+            pcb_prefix=args.pcb_prefix,
+            limit=args.limit,
+        )
+        for record in summary["runs"]:
+            _print_events(Path(record["image"]), record["events"])
+        print(
+            f"\n{summary['images']} image(s) -> {summary['events']} event(s) "
+            f"({summary['fail_events']} FAIL / {summary['pass_events']} PASS); "
+            f"posted={summary['posted']}"
+        )
+        return
+
+    events = run_inference(
+        args.image,
+        weights_path=args.weights,
+        confidence_threshold=args.threshold,
+        run_image_index=None if args.dry_run else 0,
+    )
+    _print_events(Path(args.image), events)
     if not args.dry_run:
-        response = post_events_to_api(events, api_url=args.api_url, image_path=args.image, run_id=args.run_id)
+        response = post_events_to_api(
+            events,
+            api_url=args.api_url,
+            model_version=args.model_version,
+            image_path=args.image,
+        )
         print(f"\nAPI response: {response}")
+
+
+if __name__ == "__main__":
+    main()
