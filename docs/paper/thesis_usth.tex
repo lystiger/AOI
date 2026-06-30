@@ -149,13 +149,15 @@ analyzed, and monitored in near real time.
 
 The monitoring approach focuses on structured JSON logging, defect-level
 traceability, latency tracking, historical log analysis, and anomaly detection
-under different operating conditions. A series of controlled experiments injected
-known anomaly patterns representing normal operation, failure scenarios, and
-degraded inference performance. Because the inference events are generated
-synthetically, the evaluation validates the observability pipeline rather than the
-predictive accuracy of the underlying detector: the results show that a lightweight
-stack can reliably surface the injected conditions and preserve queryable evidence
-for debugging and evaluation.
+under different operating conditions. The inference events are produced by a real
+fine-tuned YOLOv8 defect detector (mAP@0.5 of 0.82 on the DsPCBSD+ test split),
+and a series of controlled experiments exercises normal operation, failure
+scenarios, and degraded inference performance---driving most scenarios from real
+model output and retaining injection only where a condition, such as a latency
+spike, cannot be triggered on demand. The evaluation therefore validates the
+observability pipeline on authentic model behavior: the results show that a
+lightweight stack can reliably surface these conditions and preserve queryable
+evidence for debugging and evaluation.
 
 \vspace{1em}
 \noindent\textbf{Keywords:} AI monitoring, AOI, PCB inspection, observability,
@@ -950,16 +952,67 @@ containers~\cite{merkel2014docker,bernstein2014containers}.
 {Docker Compose deployment topology and the shared log path from the API container through Promtail to Loki and Grafana.\label{fig:docker_topology}}
 
 
+\subsection{Defect Detection Model and Real Inference Integration}\label{subsec:realmodel}
+
+\subsubsection{Dataset and Model}
+To move the case study from synthetically generated events toward genuine model
+inference, a real defect detector was trained and connected to the same ingestion
+path. The detector targets PCB fabrication and trace defects using the public
+DsPCBSD+ dataset~\cite{dspcbsd} (Creative Commons BY~4.0), which provides
+10{,}259 annotated images across nine defect classes: short, spur, spurious
+copper, open, mouse-bite, hole-breakout, conductor scratch, conductor foreign
+object, and base-material foreign object. A deterministic, seeded conversion
+script normalizes the download into a YOLOv8 layout with a 7{,}388 / 2{,}051 /
+820 train/validation/test split, so the dataset preparation is reproducible.
+
+A YOLOv8s detector~\cite{ultralytics} was fine-tuned on this dataset (a baseline
+configuration and a channel-attention variant), and a deliberately under-trained
+early checkpoint was retained to emulate model degradation. Training was performed
+on a Colab GPU and the exported weights were placed back into the repository;
+inference itself runs comfortably on CPU at the prototype scale.
+
+\subsubsection{Inference Integration}
+A real inference runner loads the trained weights, runs prediction on a PCB
+image, and converts each detection into the same \texttt{InferenceEvent} schema
+used throughout the system: the detected class becomes the \texttt{defect\_type},
+the detector score becomes \texttt{confidence\_score}, the measured wall-clock
+time becomes \texttt{inference\_latency\_ms}, and the normalized bounding box
+becomes the overlay. An image with no detection above threshold yields a single
+\texttt{PASS}/\texttt{NO\_DEFECT} event, while an unreadable or corrupt scan
+yields a board-level \texttt{BOARD\_FAILURE} event rather than crashing the batch.
+These events are POSTed to the identical \texttt{/events} endpoint used by the
+synthetic generator, so real model output traverses the same FastAPI, SQLite and
+JSONL persistence, Promtail, Loki, and Grafana path
+(Figure~\ref{fig:implemented_architecture}) with no downstream change. The
+inference runner also writes a \texttt{model\_version} label with each event,
+making model identity a first-class, queryable monitoring dimension.
+
+This design preserves the monitoring focus of the thesis while removing the main
+authenticity limitation of the earlier mock-only pipeline: the signals observed
+in Grafana---confidence, latency, defect type, and fail rate---are now produced by
+a real convolutional detector rather than by hand-written values.
+
+\subsubsection{Real-Image Corpus and Scenario Coverage}
+A small evaluation corpus is derived from the held-out test split: defect-free
+crops (regions of real boards carrying no annotation, used as the
+\texttt{PASS}-dominated baseline), defective boards, blurred/noisy/downscaled
+copies of defective boards, and intentionally corrupt files. Driven from this
+corpus, eight of the nine anomaly scenarios are produced by real inference; only
+the latency profile of S03 remains injected, because a genuine latency spike
+cannot be summoned on demand. Model degradation (S09) is realized by running the
+same defective boards first through the trained baseline and then through the
+under-trained checkpoint, each tagged with its own \texttt{model\_version}.
+
 \subsection{Experiments}
 
 \subsubsection{Experimental Goal}
 The experimental objective is to determine whether the monitoring stack can
-differentiate between normal and abnormal inference behavior. Because the
-project already supports mock event generation, experiments can be staged in a
-controlled way without depending on a finished production detector. This
-approach is appropriate for a bachelor internship because it allows repeated,
-explainable, and low-risk validation of monitoring behavior before full factory
-deployment.
+differentiate between normal and abnormal inference behavior. The experiments are
+driven by a real trained defect detector (Section~\ref{subsec:realmodel}), with controlled injection
+retained only for conditions---such as a latency spike---that cannot be triggered
+on demand. This staged approach is appropriate for a bachelor internship because
+it allows repeated, explainable, and low-risk validation of monitoring behavior
+before full factory deployment.
 
 \subsubsection{Experiment Design}
 The anomaly-testing plan defines a sequence of controlled scenarios in which
@@ -1205,6 +1258,102 @@ Synthetic scenarios & Production-line data & Controlled inputs and repeatable an
 
 
 \section{RESULTS AND DISCUSSION}
+
+\subsection{Defect Detection Model Performance}
+The detector was evaluated on the held-out test split (820 images) of DsPCBSD+.
+The model is the \emph{subject being monitored} rather than a contribution of
+this thesis, so its accuracy is reported mainly to establish that the monitored
+signals come from a competent detector. Overall it reaches mean average precision
+mAP@0.5 of 0.82, mAP@0.5:0.95 of 0.48, precision 0.78, and recall 0.79; the
+per-class results are summarized in Table~\ref{tab:model_perclass}, and the
+confusion matrix and per-class predictions appear in
+Figure~\ref{fig:model_confusion} and Figure~\ref{fig:model_samples}. These values
+are consistent with published YOLO baselines on comparable trace-defect datasets
+and are more than sufficient for the monitoring evaluation, where realistic
+confidence and detection distributions matter more than state-of-the-art
+accuracy.
+
+\begin{table}[!ht]
+\centering
+\caption{Per-class detection performance on the DsPCBSD+ test split (820 images).}
+\label{tab:model_perclass}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Defect class & Precision & Recall & F1 & AP@0.5 \\
+\midrule
+Short (SH) & 0.81 & 0.87 & 0.84 & 0.91 \\
+Spur (SP) & 0.77 & 0.74 & 0.75 & 0.80 \\
+Spurious copper (SC) & 0.80 & 0.78 & 0.79 & 0.83 \\
+Open (OP) & 0.77 & 0.85 & 0.81 & 0.84 \\
+Mouse-bite (MB) & 0.80 & 0.77 & 0.79 & 0.81 \\
+Hole-breakout (HB) & 0.92 & 0.92 & 0.92 & 0.97 \\
+Conductor scratch (CS) & 0.70 & 0.61 & 0.65 & 0.70 \\
+Conductor foreign object (CFO) & 0.68 & 0.73 & 0.70 & 0.72 \\
+Base-material foreign object (BMFO) & 0.80 & 0.85 & 0.82 & 0.83 \\
+\midrule
+\textbf{Overall} & \textbf{0.78} & \textbf{0.79} & --- & \textbf{0.82} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\thesisfigure
+{../../thesis-assets/10_model_eval/confusion_matrix.png}
+{Supply the YOLOv8 confusion matrix on the DsPCBSD+ test split.}
+{Confusion matrix of the trained defect detector on the DsPCBSD+ test split. Most mass lies on the diagonal; the largest off-diagonal confusion is between the visually similar conductor-scratch and conductor-foreign-object classes.\label{fig:model_confusion}}
+
+\thesisfigure
+{../../thesis-assets/10_model_eval/sample_predictions.jpg}
+{Supply a grid of model predictions on held-out boards.}
+{Representative detector predictions on held-out DsPCBSD+ boards, showing localized trace defects with confidence scores.\label{fig:model_samples}}
+
+Inference latency on the test split averaged 13\,ms (median 12.5\,ms, p95
+16\,ms) under batched GPU evaluation. Single-image CPU inference in the live
+service path is higher---tens to low hundreds of milliseconds---but remains well
+within the human-in-the-loop review budget.
+
+\subsubsection{Real Inference Through the Monitoring Stack}
+With the detector wired into the pipeline, the anomaly suite was re-run end to
+end so that the dashboards reflect genuine inference rather than scripted values.
+The Grafana defect-type breakdown then contains only the real DsPCBSD+ classes
+plus \texttt{BOARD\_FAILURE} (Figure~\ref{fig:ws6_dashboard}), confirming that
+real model output reaches Loki unchanged through the same path used by the
+synthetic generator. Two scenarios are worth highlighting because their signals
+are now \emph{produced} rather than scripted:
+\begin{itemize}
+  \item \textbf{S04 (low confidence).} Running the model over blurred and noisy
+  copies of defective boards lowers the detector's own confidence and causes some
+  defects to be missed---a genuine confidence drop rather than a hand-set value
+  (Figure~\ref{fig:ws6_s04}).
+  \item \textbf{S09 (model degradation).} Feeding identical defective boards
+  first through the trained baseline and then through the under-trained checkpoint
+  produces a sharp, observable drop in detected defects per
+  \texttt{model\_version} (Figure~\ref{fig:ws6_s09}), demonstrating that the
+  monitoring stack can surface a real model-version regression.
+\end{itemize}
+
+\thesisfigure
+{../../thesis-assets/11_ws6_real/dashboard.png}
+{Supply the Grafana overview dashboard from the real-inference run.}
+{Grafana overview during the real-inference run: fail rate, average confidence, and p95 latency tiles, with a defect-type breakdown containing only the real DsPCBSD+ classes and \texttt{BOARD\_FAILURE}.\label{fig:ws6_dashboard}}
+
+\thesisfigure
+{../../thesis-assets/11_ws6_real/s04_confidence.png}
+{Supply the S04 Grafana panel showing reduced detector confidence on degraded boards.}
+{Scenario S04 (low confidence) from real inference: average detector confidence on blurred/noisy copies of defective boards falls below the baseline, a genuine drop produced by the model rather than a scripted value.\label{fig:ws6_s04}}
+
+\thesisfigure
+{../../thesis-assets/11_ws6_real/s09_degradation.png}
+{Supply the S09 Grafana panel showing FAIL counts per model\_version dropping from baseline to the under-trained checkpoint.}
+{Scenario S09 (model degradation) from real inference: detected defects per \texttt{model\_version} collapse when the under-trained checkpoint replaces the baseline on identical boards.\label{fig:ws6_s09}}
+
+A known limitation follows directly from the training data: the detector is
+trained on bare-copper boards, so on fully assembled boards it over-triggers,
+reporting copper-style defects on component and solder features. This is an
+expected out-of-distribution effect and is itself a useful observability finding;
+assembled-board imagery is therefore used only for qualitative illustration, not
+for the quantitative results above.
+
 \subsection{Experimental Results and Evidence}
 \subsubsection{Representative Scenario Evidence}
 \textbf{S01: Normal baseline.}
@@ -1768,6 +1917,8 @@ alerts, and reproducible LogQL queries.
 \bibitem{hctaoi} HCT, ``SMT Line Automatic AOI Testing Equipment,'' product documentation, \url{https://www.hct-smt.com/products/aoi-testing-equipment/smt-line-automatic-aoi-testing-equipment}, accessed June 29, 2026.
 \bibitem{jutze} Shenzhen Jinghe Technology Co., Ltd., ``JUTZE AOI inspection system,'' vendor product listing, \url{https://www.jhims.com/}.
 \bibitem{flytake} Flytake, ``AI AOI inspection system,'' vendor documentation, \url{https://flytake.com/page-nsW5tB.php}.
+\bibitem{dspcbsd} ``DsPCBSD+: A Dataset for Deep-Learning-Based Detection of Printed Circuit Board Surface Defects,'' \textit{Scientific Data}, 2024, doi: 10.1038/s41597-024-03656-8 (CC BY 4.0); dataset mirror: \url{https://www.kaggle.com/datasets/enisteper1/dataset-of-pcb-surface-defects-dspcbsd}.
+\bibitem{ultralytics} G. Jocher, A. Chaurasia, and J. Qiu, ``Ultralytics YOLOv8,'' 2023, \url{https://github.com/ultralytics/ultralytics}.
 \end{thebibliography}
 
 \end{document}
