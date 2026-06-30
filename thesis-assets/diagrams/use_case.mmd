@@ -1,0 +1,37 @@
+%% Use-case diagram (UML) — actors and use cases grounded in the FastAPI routes
+%% (src/aoi/api/routes) and the monitoring workflow. Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B"}}}%%
+flowchart LR
+  operator["Operator"]
+  engineer["ML / Platform Engineer"]
+  infsvc["Inference Service"]
+
+  subgraph SYS["AOI Inference Logging and Monitoring System"]
+    direction TB
+    uc_run(("Create inspection run"))
+    uc_upload(("Upload PCB scan"))
+    uc_setup(("Configure setup:<br/>model, fiducials, barcode"))
+    uc_review(("Review run and defects"))
+    uc_decide(("Confirm or override<br/>defect verdict"))
+    uc_infer(("Run model inference"))
+    uc_emit(("Emit inference events"))
+    uc_dash(("Monitor inference<br/>dashboards"))
+    uc_invest(("Investigate anomalies<br/>via LogQL"))
+  end
+
+  operator --- uc_run
+  operator --- uc_upload
+  operator --- uc_setup
+  operator --- uc_review
+  operator --- uc_decide
+  infsvc --- uc_infer
+  infsvc --- uc_emit
+  engineer --- uc_dash
+  engineer --- uc_invest
+
+  uc_infer -. "include" .-> uc_emit
+  uc_review -. "include" .-> uc_decide
+
+  classDef actor fill:#DBE9FF,stroke:#3B6FB0,stroke-width:2px;
+  class operator,engineer,infsvc actor;
+  style SYS fill:#F5F8FC,stroke:#9AA0A6;

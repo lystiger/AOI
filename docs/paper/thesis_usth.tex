@@ -365,6 +365,11 @@ drift-like change whose evidence must remain visible over time.
 {Supply a diagram showing AI proposal, operator confirmation or override, and logged review outcome.}
 {Human-in-the-loop AOI review: model output is presented to an operator, whose confirmation or override is retained as reviewable evidence.\label{fig:hitl_loop}}
 
+\thesisfigure
+{../../thesis-assets/00_generated_diagrams/state_review.png}
+{Supply a UML state-machine diagram of the operator review lifecycle from NONE to the four confirmed/overruled outcomes.}
+{Operator review lifecycle of a defect record (UML state machine), grounded in the \texttt{OperatorReview} states and the defect-review endpoint: every persisted defect begins in \texttt{NONE} and is finalized as a confirmed or overruled PASS/FAIL that is retained as evidence.\label{fig:state_review}}
+
 
 \subsection{Related Work}
 
@@ -696,6 +701,16 @@ MLOps-oriented patterns:
 {../../thesis-assets/00_generated_diagrams/aoi_inference_workflow.png}
 {Supply the repository-aligned architecture diagram from event source through FastAPI, SQLite/JSONL, Promtail, Loki, and Grafana.}
 {Implemented repository-aligned observability architecture. Synthetic or future real inference events traverse the same FastAPI, persistence, log-shipping, Loki, Grafana, and report path; no autonomous agent or retraining stage is part of the implemented system.\label{fig:implemented_architecture}}
+
+\thesisfigure
+{../../thesis-assets/00_generated_diagrams/use_case.png}
+{Supply a UML use-case diagram with the Operator, ML/Platform Engineer, and Inference Service actors.}
+{Use-case diagram (UML): the Operator drives run creation, scan upload, setup, and defect review; the Inference Service runs the model and emits events; the ML/Platform Engineer monitors dashboards and investigates anomalies.\label{fig:use_case}}
+
+\thesisfigure
+{../../thesis-assets/00_generated_diagrams/class_diagram.png}
+{Supply a UML class diagram of the backend services (DatabaseManager, SetupService, VisionService, LogManager) and the schema types.}
+{Backend class diagram (UML): the FastAPI routes drive \texttt{DatabaseManager}, which delegates setup to \texttt{SetupService} and detection to \texttt{VisionService}; \texttt{LogManager} appends each event to JSONL, and the inference runner produces \texttt{InferenceEvent}s carrying \texttt{InspectionResult} and \texttt{OperatorReview}.\label{fig:class_diagram}}
 
 
 \subsection{Case Study Implementation}

@@ -1,0 +1,21 @@
+%% State-machine diagram (UML) — operator review lifecycle of a defect log entry,
+%% grounded in the OperatorReview enum (src/aoi/schema.py) and the
+%% PATCH /runs/{run_id}/defects/{defect_id}/review endpoint. Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B"}}}%%
+stateDiagram-v2
+  [*] --> NONE : inference event ingested
+  NONE --> CONFIRMED_FAIL : agree with model FAIL (true defect)
+  NONE --> OVERRULED_PASS : overrule model FAIL to PASS (false positive)
+  NONE --> CONFIRMED_PASS : agree with model PASS (true pass)
+  NONE --> OVERRULED_FAIL : overrule model PASS to FAIL (missed defect)
+
+  CONFIRMED_FAIL --> [*] : retained as evidence
+  OVERRULED_PASS --> [*] : retained as evidence
+  CONFIRMED_PASS --> [*] : retained as evidence
+  OVERRULED_FAIL --> [*] : retained as evidence
+
+  note right of NONE
+    Default review state of every persisted
+    defect_logs row; a review may be revised
+    before it is finalized.
+  end note

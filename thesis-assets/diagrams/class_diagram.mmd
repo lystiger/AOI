@@ -1,0 +1,73 @@
+%% Class diagram (UML) — backend design grounded in src/aoi/. Methods abbreviated.
+%% Render: see diagrams/README.md
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","primaryColor":"#DBE9FF","primaryBorderColor":"#3B6FB0","primaryTextColor":"#0B2545","lineColor":"#5A6B7B","textColor":"#15202B"}}}%%
+classDiagram
+  class ApiRoutes {
+    <<FastAPI>>
+    +post_events()
+    +create_run() / list_runs()
+    +get_run() / review_defect()
+  }
+  class DatabaseManager {
+    +persist_events(events, model_version, images) PersistedRun
+    +fetch_run_with_defects(run_id)
+    +list_runs(...)
+    +update_defect_review(run_id, defect_id, status)
+    +delete_run(run_id)
+  }
+  class SetupService {
+    +create_run(pcb_id)
+    +update_run(run_id, ...)
+    +detect_fiducials(run_id) / confirm_fiducials()
+    +detect_barcode(run_id)
+    +generate_run_fov_crops(run_id)
+  }
+  class VisionService {
+    +detect_components(image, run_id)
+    +detect_fiducials(image, run_id)
+    +detect_board_region(image, run_id)
+    +detect_barcode_failure(image)
+  }
+  class LogManager {
+    +write_json(event, model_version)
+    +read_all() list
+  }
+  class InferenceRunner {
+    <<module>>
+    +run_inference(image, ...) list~InferenceEvent~
+    +run_inference_dir(image_dir, ...)
+    +post_events_to_api(events, api_url)
+    +defect_type_for(class_name)
+  }
+  class InferenceEvent {
+    <<dataclass>>
+    +pcb_id, component_id
+    +inspection_result, defect_type
+    +confidence_score, inference_latency_ms
+    +overlay_x/y/width/height
+    +create() / to_dict()
+  }
+  class InspectionResult {
+    <<enum>>
+    PASS
+    FAIL
+  }
+  class OperatorReview {
+    <<enum>>
+    NONE
+    CONFIRMED_PASS / CONFIRMED_FAIL
+    OVERRULED_PASS / OVERRULED_FAIL
+  }
+
+  ApiRoutes --> DatabaseManager : persist / query
+  ApiRoutes --> LogManager : append JSONL
+  DatabaseManager --> SetupService : delegates setup
+  DatabaseManager --> VisionService : detection
+  SetupService --> DatabaseManager
+  SetupService --> VisionService
+  LogManager ..> InferenceEvent : writes
+  DatabaseManager ..> InferenceEvent : persists
+  InferenceRunner ..> InferenceEvent : produces
+  InferenceRunner ..> ApiRoutes : POST /events
+  InferenceEvent --> InspectionResult
+  InferenceEvent --> OperatorReview

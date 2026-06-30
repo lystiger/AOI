@@ -13,6 +13,9 @@ missing. They are **grounded in the real code** (`docker-compose.yml`, the
 | `hitl_loop.mmd` | new human-in-the-loop figure | §1 / §3.2 (folder 03) |
 | `docker_topology.mmd` | new deployment figure (F7) | §3 deployment (folder 08) |
 | `er_diagram.mmd` | new ER figure (F6) | §3 database (folder 08) |
+| `use_case.mmd` | new use-case diagram (UML) | §3 system design |
+| `class_diagram.mmd` | new class diagram (UML) | §3 system design |
+| `state_review.mmd` | new operator-review state machine (UML) | §3.2 review lifecycle |
 
 ## Shared color palette (keep all figures consistent)
 
