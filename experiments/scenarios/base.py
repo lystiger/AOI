@@ -93,6 +93,7 @@ def make_event(
 def real_model_batches(
     pool: str,
     *,
+    pcb_prefix: str = "PCB",
     weights: str | None = None,
     conf: float = 0.40,
     limit: int | None = None,
@@ -104,6 +105,7 @@ def real_model_batches(
     Each board (image) becomes a batch of real inference events (real defect type,
     confidence, latency, overlay), ready to feed ``send_batch_sequence``. ``pool`` is a
     name under ``ml/data/corpus`` (good/defective/degraded/corrupt) or an absolute path.
+    ``pcb_prefix`` tags the boards so each scenario stays isolatable in Loki/Grafana.
     """
     from aoi.inference_runner import run_inference_dir
 
@@ -115,6 +117,7 @@ def real_model_batches(
         weights_path=weights,
         confidence_threshold=conf,
         limit=limit,
+        pcb_prefix=pcb_prefix,
         attach_images=False,
     )
     batches = [[event.to_dict() for event in record["events"]] for record in summary["runs"]]

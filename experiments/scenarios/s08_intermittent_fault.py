@@ -11,8 +11,8 @@ FAULT_POSITIONS = (5, 11, 17)
 
 
 def build_batches() -> list[list[dict]]:
-    batches = real_model_batches("good", limit=20)
-    bursts = real_model_batches("defective", limit=len(FAULT_POSITIONS))
+    batches = real_model_batches("good", pcb_prefix="PCB-INTERMIT", limit=20)
+    bursts = real_model_batches("defective", pcb_prefix="PCB-INTERMIT", limit=len(FAULT_POSITIONS))
     for position, burst in zip(FAULT_POSITIONS, bursts):
         if 0 <= position - 1 < len(batches):
             batches[position - 1] = burst

@@ -12,7 +12,7 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches(limit: int = 30, dominant: str | None = None) -> tuple[list[list[dict]], str]:
-    raw = real_model_batches("defective", limit=limit)
+    raw = real_model_batches("defective", pcb_prefix="PCB-FLOOD", limit=limit)
     counts = Counter(
         event["defect_type"]
         for batch in raw

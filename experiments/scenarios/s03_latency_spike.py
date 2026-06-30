@@ -12,7 +12,7 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches(limit: int = 14) -> list[list[dict]]:
-    batches = real_model_batches("defective", limit=limit)
+    batches = real_model_batches("defective", pcb_prefix="PCB-LATENCY", limit=limit)
     for index, batch in enumerate(batches):
         # 30ms -> 2000ms over the first ~7 boards, then hold high
         base_latency = min(30 + index * 280, 2000)

@@ -5,6 +5,15 @@ observability pipeline monitors authentic CNN inference, and exercise all 9 anom
 scenarios with the real model. Scope chosen: **real end-to-end path + controlled
 fault-injection** for timing-only anomalies.
 
+## Status
+
+- ✅ **WS1** dataset normalizer — `ml/pipeline/dspcbsd_dataset.py`
+- ✅ **WS2** trained model — **mAP@50 0.82** (baseline + channel_attention), Colab GPU notebook
+- ✅ **WS3** inference runner wired — `src/aoi/inference_runner.py` (+ `BOARD_FAILURE`)
+- ✅ **WS4** real-image corpus — `experiments/build_corpus.py`
+- ✅ **WS5** all 9 scenarios re-pointed onto the real model + corpus
+- 🔄 **WS6** live run + dashboards + write-up — see [WS6_RUNBOOK.md](WS6_RUNBOOK.md)
+
 ## Decisions (locked)
 
 - **Dataset:** DsPCBSD+ — 9 trace-defect classes, 10,259 images / 20,276 instances,

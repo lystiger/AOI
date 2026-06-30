@@ -10,8 +10,8 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches() -> list[list[dict]]:
-    fault = real_model_batches("defective", limit=5)
-    recovery = real_model_batches("good", limit=10)
+    fault = real_model_batches("defective", pcb_prefix="PCB-FAULT", limit=5)
+    recovery = real_model_batches("good", pcb_prefix="PCB-RECOVERED", limit=10)
     return fault + recovery
 
 

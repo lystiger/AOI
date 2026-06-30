@@ -10,8 +10,8 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches() -> list[list[dict]]:
-    good = real_model_batches("good", limit=10)
-    corrupt = real_model_batches("corrupt")  # each -> one BOARD_FAILURE event
+    good = real_model_batches("good", pcb_prefix="PCB-NORMAL", limit=10)
+    corrupt = real_model_batches("corrupt", pcb_prefix="PCB-DEAD")  # each -> one BOARD_FAILURE event
     # normal traffic, the failed boards in the middle, then recovery traffic
     return good[:5] + corrupt + good[5:10]
 

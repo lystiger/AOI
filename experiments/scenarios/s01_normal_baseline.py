@@ -9,7 +9,7 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches(limit: int = 12) -> list[list[dict]]:
-    return real_model_batches("good", limit=limit)
+    return real_model_batches("good", pcb_prefix="PCB-BASELINE", limit=limit)
 
 
 def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:

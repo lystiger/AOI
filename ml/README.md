@@ -2,25 +2,37 @@
 
 This directory contains the isolated ML workflow for AOI defect detection.
 
-Scope:
-- visible component defects
-- visible lead defects
-- visible solder defects
+> **Direction update:** the real defect detector targets **PCB fabrication / trace
+> defects** using the **DsPCBSD+** dataset (CC-BY-4.0). The earlier component-detection
+> pipeline (resistor/capacitor/… on the WACV/Roboflow seeds) remains in the repo as
+> baseline tooling but is superseded by the defect model. See
+> `docs/implementation/REAL_INFERENCE_INTEGRATION_PLAN.md`.
 
-Excluded:
-- bare copper trace defects
-- etching/fabrication line defects
-- routing-level open/short defects that are not visible as component or solder faults
+Defect detector scope (DsPCBSD+ fabrication/trace defects):
 
-Supported defect labels:
-- `missing_component`
-- `misalignment`
-- `reversed_polarity`
-- `bent_lead`
-- `lifted_lead`
-- `insufficient_solder`
-- `solder_bridge`
-- `solder_ball`
+Supported defect labels (model classes — abbreviation → schema `defect_type`):
+- `SH`   → `SHORT`
+- `SP`   → `SPUR`
+- `SC`   → `SPURIOUS_COPPER`
+- `OP`   → `OPEN_CIRCUIT`
+- `MB`   → `MOUSE_BITE`
+- `HB`   → `HOLE_BREAKOUT`
+- `CS`   → `CONDUCTOR_SCRATCH`
+- `CFO`  → `CONDUCTOR_FOREIGN_OBJECT`
+- `BMFO` → `BASE_MATERIAL_FOREIGN_OBJECT`
+
+Defect-detector quick start:
+
+```bash
+# build dataset (deterministic split), then train on Colab GPU (see ml/notebooks/colab_train_dspcbsd.ipynb)
+python -m ml.pipeline.dspcbsd_dataset --source-root <unzipped DsPCBSD+> --output-root ml/data/dspcbsd_plus --overwrite
+# run real inference over a folder of boards
+python -m aoi.inference_runner --image-dir <folder> --dry-run
+```
+
+---
+
+Legacy component-detection pipeline (baseline tooling):
 
 Quick start:
 

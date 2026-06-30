@@ -22,14 +22,14 @@ def _weights(name: str) -> str | None:
 
 
 def build_batches(limit: int = 10) -> list[list[dict]]:
-    baseline = real_model_batches("defective", weights=_weights("best-baseline.pt"), limit=limit)
-    variant = real_model_batches("defective", weights=_weights("best-channel_attention.pt"), limit=limit)
+    baseline = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit)
+    variant = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit)
     return baseline + variant
 
 
 def run(endpoint: str = "http://localhost:8000/events", limit: int = 10) -> ScenarioResult:
-    baseline = real_model_batches("defective", weights=_weights("best-baseline.pt"), limit=limit)
-    variant = real_model_batches("defective", weights=_weights("best-channel_attention.pt"), limit=limit)
+    baseline = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit)
+    variant = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit)
 
     phase_a = send_batch_sequence(
         "S09", "Model Drift — phase A (baseline)",
