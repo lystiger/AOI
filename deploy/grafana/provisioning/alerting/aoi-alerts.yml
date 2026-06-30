@@ -18,6 +18,7 @@ groups:
 
       - uid: aoi-high-fail-rate
         title: "High Defect Rate — S02 trigger"
+        isPaused: true
         condition: C
         for: 1m
         noDataState: NoData
@@ -74,6 +75,7 @@ groups:
 
       - uid: aoi-latency-spike
         title: "Latency Spike — S03 trigger"
+        isPaused: true
         condition: C
         for: 1m
         noDataState: NoData
@@ -130,6 +132,7 @@ groups:
 
       - uid: aoi-low-confidence
         title: "Low Confidence Storm — S04 trigger"
+        isPaused: true
         condition: C
         for: 2m
         noDataState: NoData
