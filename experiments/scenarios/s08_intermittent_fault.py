@@ -14,8 +14,15 @@ def build_batches() -> list[list[dict]]:
     batches = real_model_batches("good", pcb_prefix="PCB-INTERMIT", limit=20)
     bursts = real_model_batches("defective", pcb_prefix="PCB-INTERMIT", limit=len(FAULT_POSITIONS))
     for position, burst in zip(FAULT_POSITIONS, bursts):
-        if 0 <= position - 1 < len(batches):
-            batches[position - 1] = burst
+        index = position - 1
+        if not 0 <= index < len(batches):
+            continue
+        # Relabel the burst board to its sequence position so pcb_id stays unique and the
+        # defective boards land at PCB-INTERMIT-0005/0011/0017 (not colliding with goods).
+        board_id = f"PCB-INTERMIT-{position:04d}"
+        for event in burst:
+            event["pcb_id"] = board_id
+        batches[index] = burst
     return batches
 
 

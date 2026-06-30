@@ -21,15 +21,30 @@ def _weights(name: str) -> str | None:
     return str(path) if path.exists() else None
 
 
+def _relabel(batches: list[list[dict]], start: int) -> list[list[dict]]:
+    """Renumber boards from PCB-DRIFT-{start} so phase A and B ids never collide."""
+    for offset, batch in enumerate(batches):
+        board_id = f"PCB-DRIFT-{start + offset:04d}"
+        for event in batch:
+            event["pcb_id"] = board_id
+    return batches
+
+
 def build_batches(limit: int = 10) -> list[list[dict]]:
     baseline = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit)
     variant = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit)
-    return baseline + variant
+    return _relabel(baseline, 1) + _relabel(variant, len(baseline) + 1)
 
 
 def run(endpoint: str = "http://localhost:8000/events", limit: int = 10) -> ScenarioResult:
-    baseline = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit)
-    variant = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit)
+    baseline = _relabel(
+        real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit),
+        1,
+    )
+    variant = _relabel(
+        real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit),
+        len(baseline) + 1,
+    )
 
     phase_a = send_batch_sequence(
         "S09", "Model Drift — phase A (baseline)",

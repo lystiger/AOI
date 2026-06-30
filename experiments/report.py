@@ -153,9 +153,10 @@ def generate_report(output_path: Path, lookback_minutes: int = 120) -> None:
         "",
         "### S08 — Intermittent Faults",
         "```logql",
-        '{job="aoi-inference", pcb_id=~"PCB-INTERMIT-.*", inspection_result="FAIL"} | json',
+        'sum(count_over_time({job="aoi-inference", pcb_id=~"PCB-INTERMIT-.*", inspection_result="FAIL"}[30s]))',
         "```",
-        "Expected: fault bursts at batch positions 5, 11, 17 visible in the timeseries.",
+        "Expected: three tall FAIL spikes (boards 0005/0011/0017) above a near-zero "
+        "baseline; occasional single-event blips are real model false positives.",
         "",
         "### S09 — Model Degradation / Drift (variant swap)",
         "```logql",
