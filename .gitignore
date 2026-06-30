@@ -44,6 +44,7 @@ web/dist/
 run-assets/
 ml/data/
 ml/models/
+ml/ml_models/
 ml/notebooks/.ipynb_checkpoints/
 yolov8s.pt
 

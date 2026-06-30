@@ -5,6 +5,7 @@ import pytest
 
 from aoi.api.models.events import EventIn
 from aoi.inference_runner import (
+    BOARD_FAILURE_TYPE,
     DEFECT_LABELS,
     NO_DEFECT_TYPE,
     defect_type_for,
@@ -83,6 +84,21 @@ def test_no_detections_yields_single_pass_event():
     assert len(events) == 1
     assert events[0].inspection_result == InspectionResult.PASS
     assert events[0].defect_type == NO_DEFECT_TYPE
+    assert events[0].component_id == "BOARD"
+
+
+class _ExplodingModel:
+    names = {0: "open"}
+
+    def predict(self, **_kwargs):
+        raise RuntimeError("corrupt image: cv2 imdecode failed")
+
+
+def test_unreadable_scan_becomes_board_failure_event_not_a_crash():
+    events = run_inference("corrupt.jpg", model=_ExplodingModel(), pcb_id="PCB-9", run_image_index=0)
+    assert len(events) == 1
+    assert events[0].inspection_result == InspectionResult.FAIL
+    assert events[0].defect_type == BOARD_FAILURE_TYPE
     assert events[0].component_id == "BOARD"
 
 

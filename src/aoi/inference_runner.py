@@ -24,6 +24,7 @@ from aoi.schema import InferenceEvent, InspectionResult
 
 CONFIDENCE_THRESHOLD = 0.40
 NO_DEFECT_TYPE = "NO_DEFECT"
+BOARD_FAILURE_TYPE = "BOARD_FAILURE"
 MODEL_VERSION = "yolov8s-dspcbsd-v1"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
@@ -112,6 +113,19 @@ def _pass_event(board_id: str, latency_ms: int, run_image_index: int | None) -> 
     )
 
 
+def _board_failure_event(board_id: str, latency_ms: int, run_image_index: int | None) -> InferenceEvent:
+    """A scan the model could not process (corrupt/unreadable) is a board-level FAIL."""
+    return InferenceEvent.create(
+        pcb_id=board_id,
+        component_id="BOARD",
+        inspection_result=InspectionResult.FAIL,
+        defect_type=BOARD_FAILURE_TYPE,
+        confidence_score=1.0,
+        inference_latency_ms=latency_ms,
+        run_image_index=run_image_index,
+    )
+
+
 def run_inference(
     image_path: str | Path,
     *,
@@ -135,13 +149,19 @@ def run_inference(
     board_id = _board_id(pcb_id, run_id, image_path)
 
     t_start = time.perf_counter()
-    results = model.predict(
-        source=str(image_path),
-        conf=confidence_threshold,
-        imgsz=640,
-        verbose=False,
-        save=False,
-    )
+    try:
+        results = model.predict(
+            source=str(image_path),
+            conf=confidence_threshold,
+            imgsz=640,
+            verbose=False,
+            save=False,
+        )
+    except Exception:
+        # Corrupt / unreadable scan: a real inspection outcome, not a crash. Emit a
+        # board-level FAIL so the batch continues and the failure is monitored (S06).
+        latency_ms = int((time.perf_counter() - t_start) * 1000)
+        return [_board_failure_event(board_id, latency_ms, run_image_index)]
     latency_ms = int((time.perf_counter() - t_start) * 1000)
 
     result = results[0]
