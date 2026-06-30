@@ -28,7 +28,7 @@ async def post_events(
     domain_images = [image.to_domain() for image in images] if images is not None else None
 
     for event in events:
-        log_manager.write_json(event.to_domain())
+        log_manager.write_json(event.to_domain(), model_version=model_version)
 
     persisted_run = database_manager.persist_events(
         events=domain_events,

@@ -27,9 +27,11 @@ scrape_configs:
             defect_type: defect_type
             confidence_score: confidence_score
             inference_latency_ms: inference_latency_ms
+            model_version: model_version
       - labels:
           pcb_id:
           component_id:
           inspection_result:
           defect_type:
+          model_version:
 
