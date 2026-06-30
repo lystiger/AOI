@@ -5,13 +5,17 @@ All scenarios import from here — no duplication of HTTP logic.
 from __future__ import annotations
 
 import json
+import random
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib import error, request as urllib_request
 
 DEFAULT_ENDPOINT = "http://localhost:8000/events"
-DEFAULT_MODEL_VERSION = "anomaly-test-v1"
+DEFAULT_MODEL_VERSION = "yolov8s-dspcbsd-v1"
+CORPUS_ROOT = Path(__file__).resolve().parents[2] / "ml" / "data" / "corpus"
+MODELS_DIR = Path(__file__).resolve().parents[2] / "ml" / "models" / "defect_detection"
 
 
 @dataclass
@@ -86,12 +90,46 @@ def make_event(
     return {k: v for k, v in event.items() if v is not None}
 
 
+def real_model_batches(
+    pool: str,
+    *,
+    weights: str | None = None,
+    conf: float = 0.40,
+    limit: int | None = None,
+    shuffle: bool = False,
+    seed: int = 42,
+) -> list[list[dict[str, Any]]]:
+    """Run the trained model over a corpus pool and return one event-dict batch per board.
+
+    Each board (image) becomes a batch of real inference events (real defect type,
+    confidence, latency, overlay), ready to feed ``send_batch_sequence``. ``pool`` is a
+    name under ``ml/data/corpus`` (good/defective/degraded/corrupt) or an absolute path.
+    """
+    from aoi.inference_runner import run_inference_dir
+
+    pool_path = Path(pool)
+    pool_dir = pool_path if pool_path.is_absolute() else CORPUS_ROOT / pool
+    summary = run_inference_dir(
+        str(pool_dir),
+        api_url=None,
+        weights_path=weights,
+        confidence_threshold=conf,
+        limit=limit,
+        attach_images=False,
+    )
+    batches = [[event.to_dict() for event in record["events"]] for record in summary["runs"]]
+    if shuffle:
+        random.Random(seed).shuffle(batches)
+    return batches
+
+
 def send_batch_sequence(
     scenario_id: str,
     scenario_name: str,
     batches: list[list[dict[str, Any]]],
     interval_seconds: float = 2.0,
     endpoint: str = DEFAULT_ENDPOINT,
+    model_version: str = DEFAULT_MODEL_VERSION,
 ) -> ScenarioResult:
     """Send a sequence of batches with a delay between each. Returns ScenarioResult."""
     print(f"\n▶ {scenario_id} — {scenario_name}")
@@ -102,7 +140,7 @@ def send_batch_sequence(
     errors: list[str] = []
 
     for i, batch in enumerate(batches, 1):
-        result = send_events(batch, endpoint=endpoint)
+        result = send_events(batch, endpoint=endpoint, model_version=model_version)
         if result:
             total_events += len(batch)
             print(f"  Batch {i}/{len(batches)}: {len(batch)} events → run_id={str(result.get('run_id', '?'))[:8]}")

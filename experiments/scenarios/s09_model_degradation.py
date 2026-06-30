@@ -1,52 +1,53 @@
 """
-Scenario 9 — Gradual Model Degradation
-Confidence and accuracy degrade linearly over 20 batches.
-Simulates model drift / dataset shift in production.
-Duration: ~100 seconds (20 batches × 5s interval)
+Scenario 9 — Model Degradation / Drift (real model variants)
+Runs the SAME defective boards through two trained model variants in sequence — baseline
+then channel_attention — each tagged with its own model_version. The shift in the
+monitored confidence / fail-rate between phases is a real model-version drift signal,
+not a synthesized gradient. Point weights_b at an under-trained checkpoint for a starker
+degradation.
 """
 from __future__ import annotations
 
-import random
+from experiments.scenarios.base import (
+    MODELS_DIR,
+    ScenarioResult,
+    real_model_batches,
+    send_batch_sequence,
+)
 
-from experiments.scenarios.base import ScenarioResult, make_event, send_batch_sequence
+
+def _weights(name: str) -> str | None:
+    path = MODELS_DIR / name
+    return str(path) if path.exists() else None
 
 
-def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
-    batches = []
-    total_batches = 20
+def build_batches(limit: int = 10) -> list[list[dict]]:
+    baseline = real_model_batches("defective", weights=_weights("best-baseline.pt"), limit=limit)
+    variant = real_model_batches("defective", weights=_weights("best-channel_attention.pt"), limit=limit)
+    return baseline + variant
 
-    for i in range(1, total_batches + 1):
-        # Linear degradation
-        progress = (i - 1) / (total_batches - 1)          # 0.0 → 1.0
-        fail_probability = 0.20 + progress * 0.55          # 20% → 75%
-        confidence_base = 0.95 - progress * 0.50           # 0.95 → 0.45
 
-        batch = []
-        for j in range(1, 8):
-            is_fail = random.random() < fail_probability
-            batch.append(make_event(
-                pcb_id=f"PCB-DRIFT-{i:03d}",
-                component_id=f"U{j:02d}",
-                inspection_result="FAIL" if is_fail else "PASS",
-                defect_type=random.choice([
-                    "SOLDER_BRIDGE", "MISSING_COMPONENT", "BENT_LEAD"
-                ]) if is_fail else "NO_DEFECT",
-                confidence_score=round(
-                    max(0.40, confidence_base + random.uniform(-0.05, 0.05)), 3
-                ),
-                inference_latency_ms=random.randint(20, 45),
-                overlay_x=round(0.1 + j * 0.09, 3) if is_fail else None,
-                overlay_y=round(0.15 + j * 0.07, 3) if is_fail else None,
-                overlay_width=0.08 if is_fail else None,
-                overlay_height=0.06 if is_fail else None,
-            ))
-        batches.append(batch)
+def run(endpoint: str = "http://localhost:8000/events", limit: int = 10) -> ScenarioResult:
+    baseline = real_model_batches("defective", weights=_weights("best-baseline.pt"), limit=limit)
+    variant = real_model_batches("defective", weights=_weights("best-channel_attention.pt"), limit=limit)
 
-    return send_batch_sequence(
-        "S09", "Gradual Model Degradation",
-        batches=batches,
-        interval_seconds=5.0,
-        endpoint=endpoint,
+    phase_a = send_batch_sequence(
+        "S09", "Model Drift — phase A (baseline)",
+        batches=baseline, interval_seconds=5.0, endpoint=endpoint,
+        model_version="yolov8s-dspcbsd-baseline",
+    )
+    phase_b = send_batch_sequence(
+        "S09", "Model Drift — phase B (channel_attention)",
+        batches=variant, interval_seconds=5.0, endpoint=endpoint,
+        model_version="yolov8s-dspcbsd-channel_attention",
+    )
+    return ScenarioResult(
+        scenario_id="S09",
+        scenario_name="Model Degradation / Drift (baseline -> channel_attention)",
+        events_sent=phase_a.events_sent + phase_b.events_sent,
+        batches_sent=phase_a.batches_sent + phase_b.batches_sent,
+        duration_seconds=phase_a.duration_seconds + phase_b.duration_seconds,
+        errors=phase_a.errors + phase_b.errors,
     )
 
 
