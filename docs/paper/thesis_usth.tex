@@ -357,6 +357,9 @@ an inspection result and overlay; an operator confirms or overrules it; and the
 \texttt{operator\_review} state is retained with the defect record. This makes
 human review part of the evidence chain rather than an unrecorded action, a
 pattern consistent with feedback-centered ML engineering~\cite{amershi2019case}.
+Figure~\ref{fig:state_review} models this review lifecycle as a UML state machine, in
+which every defect record begins in \texttt{NONE} and is finalized as a confirmed or
+overruled PASS/FAIL that is retained as evidence.
 S04 then represents uncertainty under changed inputs, while S09 represents a
 drift-like change whose evidence must remain visible over time.
 
@@ -718,7 +721,12 @@ MLOps-oriented patterns:
 \subsubsection{Repository-Aligned AOI Platform}
 The case study implementation is based on the current AOI repository. The
 backend is implemented in Python with FastAPI and exposes routes for health,
-runs, and event ingestion. The frontend is a React workstation for PCB review,
+runs, and event ingestion. Figure~\ref{fig:use_case} maps the actors---the operator,
+the ML/platform engineer, and the inference service---to these capabilities, and
+Figure~\ref{fig:class_diagram} details the backend service classes
+(\texttt{DatabaseManager}, \texttt{SetupService}, \texttt{VisionService},
+\texttt{LogManager}) and the schema types that implement them. The frontend is a
+React workstation for PCB review,
 including run navigation, image viewing, overlay display, and operator review
 controls. SQLite is used for local persistence, and JSONL is used for event log
 output.
