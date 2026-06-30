@@ -11,7 +11,7 @@ from collections import Counter
 from experiments.scenarios.base import ScenarioResult, real_model_batches, send_batch_sequence
 
 
-def build_batches(limit: int = 30, dominant: str | None = None) -> tuple[list[list[dict]], str]:
+def build_batches(limit: int = 45, dominant: str | None = None) -> tuple[list[list[dict]], str]:
     raw = real_model_batches("defective", pcb_prefix="PCB-FLOOD", limit=limit)
     counts = Counter(
         event["defect_type"]
@@ -33,7 +33,7 @@ def run(
     return send_batch_sequence(
         "S05", f"Single Defect Type Flood (real model, {chosen})",
         batches=batches,
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 

@@ -10,17 +10,17 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches() -> list[list[dict]]:
-    good = real_model_batches("good", pcb_prefix="PCB-NORMAL", limit=10)
+    good = real_model_batches("good", pcb_prefix="PCB-NORMAL", limit=20)
     corrupt = real_model_batches("corrupt", pcb_prefix="PCB-DEAD")  # each -> one BOARD_FAILURE event
     # normal traffic, the failed boards in the middle, then recovery traffic
-    return good[:5] + corrupt + good[5:10]
+    return good[:10] + corrupt + good[10:20]
 
 
 def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
     return send_batch_sequence(
         "S06", "Entire Board Failure (real model, corrupt scans)",
         batches=build_batches(),
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 

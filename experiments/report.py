@@ -158,12 +158,14 @@ def generate_report(output_path: Path, lookback_minutes: int = 120) -> None:
         "Expected: three tall FAIL spikes (boards 0005/0011/0017) above a near-zero "
         "baseline; occasional single-event blips are real model false positives.",
         "",
-        "### S09 — Model Degradation / Drift (variant swap)",
+        "### S09 — Model Degradation / Drift (baseline -> under-trained)",
         "```logql",
-        'avg by (model_version) (avg_over_time({job="aoi-inference"} | json | unwrap confidence_score [1m]))',
+        'sum by (model_version) (count_over_time({job="aoi-inference", pcb_id=~"PCB-DRIFT-.*", inspection_result="FAIL"}[30s]))',
         "```",
-        "Expected: a measurable confidence/fail-rate shift between model_version "
-        "`yolov8s-dspcbsd-baseline` and `yolov8s-dspcbsd-channel_attention`.",
+        "Expected: on identical defective boards the under-trained model "
+        "(`yolov8s-dspcbsd-epoch0`) emits far fewer FAILs than `yolov8s-dspcbsd-baseline` "
+        "(missed defects) — a sharp drop at the phase boundary. Swap the metric to "
+        "`unwrap confidence_score` to also see the confidence dip.",
         "",
         "---",
         "",

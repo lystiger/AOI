@@ -1,10 +1,11 @@
 """
-Scenario 9 — Model Degradation / Drift (real model variants)
-Runs the SAME defective boards through two trained model variants in sequence — baseline
-then channel_attention — each tagged with its own model_version. The shift in the
-monitored confidence / fail-rate between phases is a real model-version drift signal,
-not a synthesized gradient. Point weights_b at an under-trained checkpoint for a starker
-degradation.
+Scenario 9 — Model Degradation / Drift (real models)
+Runs the SAME defective boards through two real model checkpoints in sequence — the
+fully-trained baseline (phase A) then a deliberately under-trained checkpoint (phase B,
+epoch 0) — each tagged with its own model_version. On identical defective input the
+degraded model misses most defects and reports lower confidence, so the monitored
+fail-rate / confidence drops sharply at the phase boundary. This is a real drift signal,
+not a synthesized gradient.
 """
 from __future__ import annotations
 
@@ -14,6 +15,10 @@ from experiments.scenarios.base import (
     real_model_batches,
     send_batch_sequence,
 )
+
+BASELINE_WEIGHTS = "best-baseline.pt"
+DEGRADED_WEIGHTS = "epoch0-degraded.pt"
+INTERVAL = 2.0
 
 
 def _weights(name: str) -> str | None:
@@ -30,35 +35,34 @@ def _relabel(batches: list[list[dict]], start: int) -> list[list[dict]]:
     return batches
 
 
-def build_batches(limit: int = 10) -> list[list[dict]]:
-    baseline = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit)
-    variant = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit)
-    return _relabel(baseline, 1) + _relabel(variant, len(baseline) + 1)
+def _phase(weights: str, limit: int, start: int) -> list[list[dict]]:
+    batches = real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights(weights), limit=limit)
+    return _relabel(batches, start)
 
 
-def run(endpoint: str = "http://localhost:8000/events", limit: int = 10) -> ScenarioResult:
-    baseline = _relabel(
-        real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-baseline.pt"), limit=limit),
-        1,
-    )
-    variant = _relabel(
-        real_model_batches("defective", pcb_prefix="PCB-DRIFT", weights=_weights("best-channel_attention.pt"), limit=limit),
-        len(baseline) + 1,
-    )
+def build_batches(limit: int = 20) -> list[list[dict]]:
+    baseline = _phase(BASELINE_WEIGHTS, limit, 1)
+    degraded = _phase(DEGRADED_WEIGHTS, limit, len(baseline) + 1)
+    return baseline + degraded
+
+
+def run(endpoint: str = "http://localhost:8000/events", limit: int = 20) -> ScenarioResult:
+    baseline = _phase(BASELINE_WEIGHTS, limit, 1)
+    degraded = _phase(DEGRADED_WEIGHTS, limit, len(baseline) + 1)
 
     phase_a = send_batch_sequence(
-        "S09", "Model Drift — phase A (baseline)",
-        batches=baseline, interval_seconds=5.0, endpoint=endpoint,
+        "S09", "Model Drift — phase A (trained baseline)",
+        batches=baseline, interval_seconds=INTERVAL, endpoint=endpoint,
         model_version="yolov8s-dspcbsd-baseline",
     )
     phase_b = send_batch_sequence(
-        "S09", "Model Drift — phase B (channel_attention)",
-        batches=variant, interval_seconds=5.0, endpoint=endpoint,
-        model_version="yolov8s-dspcbsd-channel_attention",
+        "S09", "Model Drift — phase B (under-trained epoch0)",
+        batches=degraded, interval_seconds=INTERVAL, endpoint=endpoint,
+        model_version="yolov8s-dspcbsd-epoch0",
     )
     return ScenarioResult(
         scenario_id="S09",
-        scenario_name="Model Degradation / Drift (baseline -> channel_attention)",
+        scenario_name="Model Degradation / Drift (baseline -> under-trained)",
         events_sent=phase_a.events_sent + phase_b.events_sent,
         batches_sent=phase_a.batches_sent + phase_b.batches_sent,
         duration_seconds=phase_a.duration_seconds + phase_b.duration_seconds,

@@ -11,7 +11,7 @@ FAULT_POSITIONS = (5, 11, 17)
 
 
 def build_batches() -> list[list[dict]]:
-    batches = real_model_batches("good", pcb_prefix="PCB-INTERMIT", limit=20)
+    batches = real_model_batches("good", pcb_prefix="PCB-INTERMIT", limit=30)
     bursts = real_model_batches("defective", pcb_prefix="PCB-INTERMIT", limit=len(FAULT_POSITIONS))
     for position, burst in zip(FAULT_POSITIONS, bursts):
         index = position - 1
@@ -30,7 +30,7 @@ def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
     return send_batch_sequence(
         "S08", "Intermittent Faults (real model)",
         batches=build_batches(),
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 

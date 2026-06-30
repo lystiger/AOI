@@ -129,21 +129,28 @@ def build_degraded(good_dir: Path, out_dir: Path, rng: random.Random) -> int:
     return written
 
 
-def build_corrupt(reference_dir: Path, out_dir: Path) -> int:
+def build_corrupt(reference_dir: Path, out_dir: Path, count: int = 8) -> int:
+    """Write a variety of unreadable image files so the board-failure pool isn't 3 points."""
+    import os
+
     out_dir.mkdir(parents=True, exist_ok=True)
     written = 0
 
-    (out_dir / "empty.jpg").write_bytes(b"")
-    written += 1
-
-    (out_dir / "garbage.jpg").write_bytes(b"not an image at all \x00\x01\x02" * 50)
-    written += 1
-
-    reference = next(iter(sorted(reference_dir.glob("*.jpg"))), None)
-    if reference is not None:
-        data = reference.read_bytes()
-        (out_dir / "truncated.jpg").write_bytes(data[: max(1, len(data) // 8)])
+    def emit(name: str, data: bytes) -> None:
+        nonlocal written
+        (out_dir / name).write_bytes(data)
         written += 1
+
+    emit("empty.jpg", b"")                        # zero bytes
+    emit("onebyte.jpg", b"\xff")                  # single byte
+    emit("header_only.jpg", b"\xff\xd8\xff\xe0")  # JPEG markers, no image data
+    for i in range(2):
+        emit(f"garbage_{i + 1}.jpg", os.urandom(800))  # random non-image bytes
+
+    refs = sorted(reference_dir.glob("*.jpg"))
+    for i, ref in enumerate(refs[: max(0, count - written)]):
+        data = ref.read_bytes()
+        emit(f"truncated_{i + 1}.jpg", data[: max(1, len(data) // (6 + i))])
 
     return written
 

@@ -11,7 +11,7 @@ import random
 from experiments.scenarios.base import ScenarioResult, real_model_batches, send_batch_sequence
 
 
-def build_batches(limit: int = 14) -> list[list[dict]]:
+def build_batches(limit: int = 24) -> list[list[dict]]:
     batches = real_model_batches("defective", pcb_prefix="PCB-LATENCY", limit=limit)
     for index, batch in enumerate(batches):
         # 30ms -> 2000ms over the first ~7 boards, then hold high
@@ -25,7 +25,7 @@ def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
     return send_batch_sequence(
         "S03", "Latency Spike (real predictions, injected latency)",
         batches=build_batches(),
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 

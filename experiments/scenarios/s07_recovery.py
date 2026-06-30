@@ -10,8 +10,8 @@ from experiments.scenarios.base import ScenarioResult, real_model_batches, send_
 
 
 def build_batches() -> list[list[dict]]:
-    fault = real_model_batches("defective", pcb_prefix="PCB-FAULT", limit=5)
-    recovery = real_model_batches("good", pcb_prefix="PCB-RECOVERED", limit=10)
+    fault = real_model_batches("defective", pcb_prefix="PCB-FAULT", limit=10)
+    recovery = real_model_batches("good", pcb_prefix="PCB-RECOVERED", limit=20)
     return fault + recovery
 
 
@@ -19,7 +19,7 @@ def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
     return send_batch_sequence(
         "S07", "System Recovery (real model)",
         batches=build_batches(),
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 

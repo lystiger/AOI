@@ -9,7 +9,7 @@ from __future__ import annotations
 from experiments.scenarios.base import ScenarioResult, real_model_batches, send_batch_sequence
 
 
-def build_batches(limit: int = 18) -> list[list[dict]]:
+def build_batches(limit: int = 40) -> list[list[dict]]:
     return real_model_batches("degraded", pcb_prefix="PCB-LOWCONF", limit=limit)
 
 
@@ -17,7 +17,7 @@ def run(endpoint: str = "http://localhost:8000/events") -> ScenarioResult:
     return send_batch_sequence(
         "S04", "Low Confidence Storm (real model, degraded boards)",
         batches=build_batches(),
-        interval_seconds=5.0,
+        interval_seconds=2.0,
         endpoint=endpoint,
     )
 
