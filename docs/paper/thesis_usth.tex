@@ -13,6 +13,15 @@
 \usepackage{listings}
 \usepackage[margin=1in]{geometry}
 \usepackage{placeins}
+\usepackage{subcaption}
+
+% --- scenario-gallery panel: real capture or placeholder, with a subcaption+label ---
+\newcommand{\scenariopanel}[3]{%
+  \begin{subfigure}[t]{0.31\textwidth}\centering
+    \IfFileExists{#1}{\includegraphics[width=\linewidth]{#1}}{%
+      \fbox{\parbox[c][0.8in][c]{\linewidth}{\centering\scriptsize\textbf{#2}}}}%
+    \caption{#3}%
+  \end{subfigure}}
 
 % --- float placement: keep figures/tables near their referencing text ---
 \setcounter{topnumber}{4}
@@ -475,7 +484,7 @@ The objectives of this thesis are as follows:
 \section{MATERIALS AND METHODS}
 \subsection{System Design}
 
-\subsubsection{Monitoring Scope and Signal Selection}
+\subsubsection{Monitoring Scope and Signal Selection}\label{subsubsec:signal_selection}
 Monitoring answers predefined operational questions, while observability also
 supports investigation of behavior that was not anticipated when a dashboard
 was created. This thesis therefore implements log-based monitoring with
@@ -1362,36 +1371,46 @@ for the quantitative results above.
 \FloatBarrier
 \subsection{Experimental Results and Evidence}
 \subsubsection{Representative Scenario Evidence}
+Figure~\ref{fig:scenario_gallery} collects the Grafana Explore capture for all
+nine anomaly scenarios (S01--S09), each executed with real inference. Every
+scenario discussion that follows refers to a panel of that figure.
+
+\begin{figure}[p]\centering
+\scenariopanel{../../thesis-assets/11_ws6_real/s01_baseline.png}{S01}{S01 baseline control: PASS dominates FAIL; the comparison condition for every anomaly scenario.\label{fig:s01}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s02_high_defect.png}{S02}{S02 fail-rate anomaly: FAIL-dominated stream under a \texttt{PCB-HIGHFAIL-.*} filter.\label{fig:s02}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s03_latency.png}{S03}{S03 latency spike: \texttt{inference\_latency\_ms} climbs toward a $\sim$2000\,ms plateau while real predictions continue.\label{fig:s03}}
+
+\vspace{0.8em}
+\scenariopanel{../../thesis-assets/11_ws6_real/s04_confidence.png}{S04}{S04 low confidence: the detector's own average confidence on degraded boards falls below baseline.\label{fig:s04}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s05_flood.png}{S05}{S05 defect concentration: a single dominant real class (\texttt{SPUR}) isolated by \texttt{defect\_type}.\label{fig:s05}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s06_board_failure.png}{S06}{S06 board-level failure: \texttt{BOARD\_FAILURE} isolated from the corrupt \texttt{PCB-DEAD} boards.\label{fig:s06}}
+
+\vspace{0.8em}
+\scenariopanel{../../thesis-assets/11_ws6_real/s07_recovery.png}{S07}{S07 recovery: FAIL and PASS series cross back as the line returns to healthy operation.\label{fig:s07}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s08_intermittent.png}{S08}{S08 intermittent fault: three real defective-board bursts within otherwise clean traffic.\label{fig:s08}}\hfill
+\scenariopanel{../../thesis-assets/11_ws6_real/s09_degradation.png}{S09}{S09 model regression: detected defects per \texttt{model\_version} collapse under the under-trained checkpoint.\label{fig:s09}}
+\caption{Grafana Explore evidence for all nine anomaly scenarios (S01--S09), each executed with real inference. Every panel is a live capture of the LogQL query for that scenario over the same structured log stream; together they show that each anomaly family produces a distinct, queryable signature.\label{fig:scenario_gallery}}
+\end{figure}
+
 \textbf{S01: Normal baseline.}
 The baseline scenario runs the detector over defect-free board crops, producing a
 \texttt{PASS}-dominated stream (about 90\% pass, the few failures being real
 model false positives). It establishes the control condition against which the
-anomaly scenarios are compared.
+anomaly scenarios are compared (Figure~\ref{fig:s01}).
 
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s01_baseline.png}
-{Grafana baseline capture for S01 showing PASS dominating FAIL.}
-{Scenario S01 control evidence in Grafana Explore. The LogQL query isolates baseline PCB identifiers, and PASS remains above FAIL; this establishes the comparison condition for later anomaly scenarios.\label{fig:s01}}
-
-\FloatBarrier
 \textbf{S03: Latency spike.}
 This scenario keeps the detector's real predictions while overriding
 \texttt{inference\_latency\_ms} to escalate from a normal baseline toward a
 $\sim$2000\,ms plateau. It represents resource starvation, model-loading issues,
 or runtime degradation. The latency panel and alert rule expose the slowdown even
-though real inference outputs continue to arrive.
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s03_latency.png}
-{Grafana capture for S03 showing latency climbing toward the 2000\,ms plateau.}
-{Scenario S03 latency evidence in Grafana Explore. The query unwraps \texttt{inference\_latency\_ms} and rises toward the injected two-second plateau while real predictions continue to arrive.\label{fig:s03}}
+though real inference outputs continue to arrive (Figure~\ref{fig:s03}).
 
 \FloatBarrier
 \subsubsection{Additional Scenario Coverage}
 S02 and S04--S08 extend the suite across fail-rate, confidence, defect-type,
 board-level, recovery, and intermittent-fault behavior. Each of these scenarios
 was executed with real inference and observed live in Grafana Explore, and the
-corresponding captures are reproduced in Figures~\ref{fig:s02}--\ref{fig:s08}. The
+corresponding captures are the remaining panels of Figure~\ref{fig:scenario_gallery}. The
 S02 capture in Figure~\ref{fig:s02}, for example, shows the \texttt{FAIL} series
 rising well above the \texttt{PASS} series under a \texttt{PCB-HIGHFAIL-.*} filter;
 Figure~\ref{fig:s06} isolates the \texttt{BOARD\_FAILURE} events from the corrupt
@@ -1403,46 +1422,11 @@ a generator. The figures complement the comparative summaries in
 Tables~\ref{tab:scenario_quantitative_profile} and
 \ref{tab:scenario_results_template} and retain the queryable visual evidence.
 
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s02_high_defect.png}
-{Scenario S02 Grafana capture.}
-{Scenario S02 high-defect-rate evidence from real inference over defective boards. The filtered time series shows a FAIL-dominated stream.\label{fig:s02}}
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s04_confidence.png}
-{Scenario S04 Grafana capture.}
-{Scenario S04 low-confidence evidence. On degraded boards the detector's own average confidence falls below the baseline.\label{fig:s04}}
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s05_flood.png}
-{Scenario S05 Grafana capture.}
-{Scenario S05 defect-concentration evidence. Filtering by \texttt{defect\_type} isolates a single dominant real class (\texttt{SPUR}).\label{fig:s05}}
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s06_board_failure.png}
-{Scenario S06 Grafana capture.}
-{Scenario S06 board-level evidence. Grouping by \texttt{defect\_type} isolates the \texttt{BOARD\_FAILURE} events from the corrupt \texttt{PCB-DEAD} boards.\label{fig:s06}}
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s07_recovery.png}
-{Scenario S07 Grafana capture.}
-{Scenario S07 recovery evidence. The time series retains both the fault phase and the return toward healthy operation.\label{fig:s07}}
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s08_intermittent.png}
-{Scenario S08 Grafana capture.}
-{Scenario S08 intermittent-fault evidence. Three real defective-board bursts remain visible within otherwise clean traffic.\label{fig:s08}}
-
 \textbf{S09: Gradual model degradation.}
 This scenario evaluates model-regression detection by running identical defective
 boards through the trained baseline and then a deliberately under-trained
 checkpoint. It represents a drift-like degradation rather than a sudden fault
-event.
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/s09_degradation.png}
-{Grafana capture for S09 showing FAIL counts dropping from the baseline to the under-trained model.}
-{Scenario S09 evidence in Grafana Explore. Detected defects per \texttt{model\_version} collapse when the under-trained checkpoint replaces the baseline on identical boards.\label{fig:s09}}
+event (Figure~\ref{fig:s09}).
 
 S09 is the most analytically important scenario in the suite because it
 resembles the way many production ML failures actually emerge. Unlike S02 or
@@ -1574,6 +1558,96 @@ forensic filter, while the provisioned alert rule uses a \texttt{< 0.60}
 threshold so that it fires with headroom before confidence fully collapses. The
 query is an exact-match diagnostic, whereas the alert is an operational early
 warning.
+
+\FloatBarrier
+
+\subsubsection{Label-Design Ablation: \texttt{pcb\_id} as Label versus Parsed Field}\label{subsubsec:label_ablation}
+The label schema in Section~\ref{subsubsec:signal_selection} and
+Figure~\ref{fig:event_label_mapping} promotes \texttt{pcb\_id} to a Loki label
+while keeping numeric fields parsed. To test that decision rather than assert it,
+a controlled ablation holds every factor constant except the one under study:
+whether \texttt{pcb\_id} is promoted. One Loki instance ingests the same
+synthesized corpus through two Promtail arms---\texttt{aoi-label} (\texttt{pcb\_id}
+promoted, the deployed design) and \texttt{aoi-parsed} (\texttt{pcb\_id} extracted
+but kept as a parsed JSON field)---so the two arms differ only in that single line
+of Promtail configuration. The corpus preserves the deployed run's label
+\emph{shapes} (15 components, seven defect classes, two model versions) and adds a
+fixed five-board \texttt{PCB-DEAD} isolation set, so the board-isolation query
+returns an identical 50-entry result set at every scale while the surrounding
+corpus grows. The board count $N$ is swept from 131 (the deployed scale) to 4000,
+and cardinality and query latency are measured with the same Loki \texttt{series}
+and \texttt{query\_range} endpoints used for Table~\ref{tab:performance_resources}.
+The harness is version-controlled (\texttt{experiments/ablation\_sweep.py} with the
+two \texttt{deploy/promtail/config.ablation-*.yml} arms).
+
+Table~\ref{tab:label_ablation} and Figure~\ref{fig:label_ablation} report the
+outcome. At $N=131$ the label arm reproduces the deployed cardinality (1184 active
+series against the 1177 measured in Table~\ref{tab:performance_resources}), which
+validates the synthetic corpus against the real system. Three findings follow.
+
+\textbf{Cardinality scales with the labelled identifier.} Promoting \texttt{pcb\_id}
+makes active series grow linearly at roughly nine series per board (1184, 4575,
+9086, 18098, and 36097 series at $N=131,500,1000,2000,4000$), because each board
+multiplies the stream count. Keeping \texttt{pcb\_id} parsed holds the series count
+flat at about 225 regardless of $N$, bounded by the product of the remaining
+low-cardinality labels.
+
+\textbf{The labelled arm breaks the default deployment.} Under Loki's default
+per-tenant limit of 5000 streams, the label arm saturates between 500 and 1000
+boards; Loki then silently rejects new streams---including, because they arrive
+last, the \texttt{PCB-DEAD} isolation boards, so the board-isolation query returns
+nothing. The measurements in Table~\ref{tab:label_ablation} therefore required the
+stream limit to be lifted (\texttt{deploy/loki/config.ablation.yml}); the
+default-limit run that exhibits the data loss is retained as
+\texttt{docs/experiments/label\_ablation\_defaultlimit.json}. The parsed arm never
+approaches the limit.
+
+\textbf{The label does not buy query speed at this scale.} For the realistic
+board-isolation query---a regex match \texttt{pcb\_id=\textasciitilde"PCB-DEAD-.*"}
+returning the same 50 entries---the parsed-field form
+(\texttt{| json | pcb\_id=\textasciitilde\ldots}) is as fast or faster than the
+label-selector form at every tested $N$ (9.0 versus 16.7\,ms at $N=131$, rising to
+20.3 versus 32.8\,ms at $N=4000$). Because a regex label selector forces Loki to
+match the pattern against every distinct \texttt{pcb\_id} value in the index, the
+labelled path carries more overhead than a linear scan over a corpus this small;
+the scan cost that would eventually favour the label only dominates at data volumes
+well beyond a 4000-board run.
+
+Taken together, these results reframe the labeling decision empirically. The
+18.8\,ms board-isolation latency in Table~\ref{tab:performance_resources} is not
+attributable to the label---the parsed equivalent is comparable---so promoting
+\texttt{pcb\_id} is justified by dashboard label-navigation and forward
+compatibility rather than current query performance, and its measured cost is a
+cardinality that becomes operationally prohibitive under default limits by roughly
+1000 boards. This confirms, with measurement, the scale-bounded reading given in
+Section~\ref{subsubsec:signal_selection}: at the 131-board prototype the cost is
+bounded and the choice is defensible, whereas at production scale \texttt{pcb\_id}
+should move to a parsed field or to structured metadata. The decision is thus
+demonstrated rather than asserted.
+
+\begin{table}[!ht]
+\centering
+\caption{Label-design ablation: active Loki series and board-isolation query latency for \texttt{pcb\_id} promoted to a label versus kept as a parsed field, over a board-count sweep. Both arms ingest an identical corpus; the board query returns the same 50-entry result set at every $N$.}
+\label{tab:label_ablation}
+\begin{tabular}{rrrrr}
+\toprule
+& \multicolumn{2}{c}{\textbf{Active Loki series}} & \multicolumn{2}{c}{\textbf{Board query (ms, median)}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+\textbf{Boards $N$} & label & parsed & label selector & parsed filter \\
+\midrule
+131  & 1184  & 190 & 16.7 & 9.0 \\
+500  & 4575  & 222 & 19.1 & 10.6 \\
+1000 & 9086  & 224 & 27.1 & 12.4 \\
+2000 & 18098 & 225 & 24.2 & 15.7 \\
+4000 & 36097 & 225 & 32.8 & 20.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\thesisfigure
+{../../thesis-assets/12_label_ablation/label_ablation.png}
+{Label-design ablation: cardinality and board-query latency versus board count.}
+{Label-design ablation over a board-count sweep. (a) Active Loki series (log scale): promoting \texttt{pcb\_id} to a label grows series linearly and crosses Loki's default 5000-stream limit between 500 and 1000 boards, while the parsed-field arm stays flat near 225. (b) Median latency of the board-isolation query for an identical 50-entry result set: the parsed-field filter is as fast or faster than the regex label selector at every tested scale.\label{fig:label_ablation}}
 
 \FloatBarrier
 
@@ -1814,6 +1888,15 @@ production line. A practical deployment would additionally need to monitor
 real-time image acquisition, operator variability, equipment state, production
 throughput, board mix, and review latency.
 
+Finally, the label schema is bounded to the prototype scale. The ablation in
+Section~\ref{subsubsec:label_ablation} quantifies this: promoting \texttt{pcb\_id}
+to a Loki label grows active series linearly with the board count and exceeds
+Loki's default 5000-stream limit at roughly 1000 boards, at which point the
+default deployment silently drops data. The prototype's 131 boards sit well
+inside this bound, so the choice is defensible here, but a production-scale
+deployment would need to demote \texttt{pcb\_id} to a parsed field or to
+structured metadata.
+
 For these reasons, the current implementation should be viewed as a monitoring prototype and experimental framework that demonstrates the feasibility of AI inference observability in an AOI workflow. Further validation on real production data and industrial deployment environments would be required before considering the system suitable for large-scale operational use.
 
 
@@ -1823,7 +1906,8 @@ Future work can extend the platform in four directions:
 \begin{itemize}
     \item Extend the detector to assembled-board (post-placement) defects and harden it for production, since the current model is trained on bare-copper boards;
     \item Add model version, runtime, and hardware metadata to each event;
-    \item Calibrate the existing alert thresholds against representative production data; and
+    \item Calibrate the existing alert thresholds against representative production data;
+    \item Demote high-cardinality identifiers such as \texttt{pcb\_id} from Loki labels to parsed fields or structured metadata before production scale, as quantified by the label-design ablation (Section~\ref{subsubsec:label_ablation}); and
     \item Compare log-based monitoring with richer metrics or tracing systems.
 \end{itemize}
 
