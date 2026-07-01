@@ -538,7 +538,7 @@ The selected Loki labels are categorical identifiers used by recurring
 queries. Numeric values such as confidence and latency remain parsed JSON
 fields. This follows Loki's guidance to avoid unbounded or high-cardinality
 labels~\cite{lokilabels}; the actual active cardinality is left for the
-measurement procedure in Section~4.1.5 and Table~\ref{tab:performance_resources}.
+measurement procedure in Section~\ref{subsubsec:perf_resources} and Table~\ref{tab:performance_resources}.
 Grafana was retained because the
 implemented system already provisions its Loki data source, dashboards, and
 alerts as code; Kibana is the dashboard native to the Elasticsearch stack.
@@ -644,7 +644,7 @@ The design groups anomalies by the operational signal that changes: traffic
 volume, prediction outcomes, latency, confidence, or domain identifiers such as
 \texttt{pcb\_id} and \texttt{defect\_type}. This compact taxonomy determines
 which fields must be logged and which dashboard queries must be supported; the
-specific test scenarios are defined in Section~3.3 and summarized in
+specific test scenarios are defined in Section~\ref{subsec:experiments} and summarized in
 Table~\ref{tab:scenario_suite}.
 
 \subsubsection{Why This Design Pattern Was Chosen}
@@ -1007,7 +1007,7 @@ cannot be summoned on demand. Model degradation (S09) is realized by running the
 same defective boards first through the trained baseline and then through the
 under-trained checkpoint, each tagged with its own \texttt{model\_version}.
 
-\subsection{Experiments}
+\subsection{Experiments}\label{subsec:experiments}
 
 \subsubsection{Experimental Goal}
 The experimental objective is to determine whether the monitoring stack can
@@ -1182,7 +1182,7 @@ for idx, scenario_id in enumerate(targets):
 \textbf{Report stage.} After execution, the reporting step queries
 Loki directly through its HTTP API, counts matching log entries over a lookback
 window, and produces the final evaluation report summarized in
-Section~4.1.6. This closes the loop from test generation to runtime evidence
+Section~\ref{subsubsec:results_summary}. This closes the loop from test generation to runtime evidence
 and reported results.
 
 \begin{lstlisting}[language=Python,caption={Loki-backed report generation pattern.},label={lst:report}]
@@ -1514,7 +1514,7 @@ Defect-type concentration & \texttt{\{job="aoi-inference", defect\_type="SPUR"\}
 \end{tabular}
 \end{table}
 
-\subsubsection{Performance and Resource Consumption}
+\subsubsection{Performance and Resource Consumption}\label{subsubsec:perf_resources}
 The system-level evaluation records freshness, container resource use, storage
 growth, representative query latency, and active Loki label cardinality.
 Table~\ref{tab:performance_resources} reports the captured results. End-to-end
@@ -1546,7 +1546,7 @@ End-to-end freshness & Event injection to first Loki visibility; 10 trials & $12
 Container CPU and memory & One \texttt{docker stats} snapshot & \texttt{aoi-app}: 0.23\%, 42.86\,MiB; \texttt{aoi-grafana}: 0.08\%, 48.71\,MiB; \texttt{aoi-loki}: 0.84\%, 179.5\,MiB; \texttt{aoi-promtail}: 0.64\%, 24.88\,MiB; \texttt{aoi-web}: 0.00\%, 198.4\,MiB \\
 Storage growth per $N$ events & $N=1000$; KiB reported by \texttt{du -sk} & JSONL: $+380$\,KiB; Loki: $+388$\,KiB; 1000/1000 events visible \\
 LogQL query latency & Ten HTTP timings per query in Table~\ref{tab:logql_queries} & All events: $94.4 \pm 10.6$\,ms; failures: $76.5 \pm 5.3$\,ms; latency anomaly: $34.6 \pm 3.2$\,ms; low confidence: $36.2 \pm 4.9$\,ms; board isolation: $18.8 \pm 2.5$\,ms; defect concentration: $24.2 \pm 2.4$\,ms \\
-Active label cardinality & 120-minute selector window & 1177 active series; distinct \texttt{pcb\_id}: 131, \texttt{component\_id}: 15, \texttt{defect\_type}: 7, \texttt{inspection\_result}: 2 \\
+Active label cardinality & 120-minute selector window & 1177 active series; distinct \texttt{pcb\_id}: 131, \texttt{component\_id}: 15, \texttt{defect\_type}: 7, \texttt{inspection\_result}: 2, \texttt{model\_version}: 2 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1577,7 +1577,7 @@ warning.
 
 \FloatBarrier
 
-\subsubsection{Measured Results Summary}
+\subsubsection{Measured Results Summary}\label{subsubsec:results_summary}
 The anomaly suite was executed end to end with real inference, and the
 Loki-backed report was regenerated after Promtail completed ingestion. The run
 recorded all 350 submitted events: 106 \texttt{PASS} events and 244 \texttt{FAIL}
@@ -1620,7 +1620,7 @@ Overall fail rate & 69.7\% \\
 Most frequent defect label & \texttt{NO\_DEFECT} (106) \\
 Most frequent failure label & \texttt{MOUSE\_BITE} (41) \\
 Provisioned alert rules & 3 (paused in final capture) \\
-Alerts fired during execution & S02, S04 thresholds crossed \\
+Alerts fired during execution & S02, S03 thresholds crossed \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1673,12 +1673,9 @@ produced a distinct visual and queryable signature, and the same structured log
 stream supported both dashboard-level summaries and targeted forensic queries.
 The baseline remained stable, fail-rate spikes became obvious in short windows,
 latency anomalies remained visible even when inference outputs continued to
-arrive, and recovery scenarios produced clear state transitions over time.
-
-\thesisfigure
-{../../thesis-assets/11_ws6_real/dashboard.png}
-{Overview Grafana screenshot from the real-inference run.}
-{Implemented anomaly dashboard during the real-inference run. The top row summarizes fail rate, average confidence, and P95 latency; the time-series panels expose fail-rate, confidence, and latency trends, while the defect-type breakdown---containing only the real DsPCBSD+ classes and \texttt{BOARD\_FAILURE}---supports categorical diagnosis.}
+arrive, and recovery scenarios produced clear state transitions over time; the
+consolidated view of these signals is the anomaly dashboard in
+Figure~\ref{fig:ws6_dashboard}.
 
 \FloatBarrier
 
@@ -1703,7 +1700,7 @@ whether the monitoring system makes important changes in service behavior
 visible and interpretable. Evaluation therefore considers three capabilities:
 detecting a changed signal, isolating its source through structured fields, and
 preserving its temporal shape for diagnosis. The individual scenarios are
-defined in Section~3.3 and summarized in Table~\ref{tab:scenario_suite}; this
+defined in Section~\ref{subsec:experiments} and summarized in Table~\ref{tab:scenario_suite}; this
 discussion focuses on what their combined results demonstrate.
 
 \subsubsection{Strengths of the Proposed Approach}
