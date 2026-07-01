@@ -564,7 +564,7 @@ trends.
 
 In repository terms, the path is concrete rather than conceptual. A FastAPI API
 accepts \texttt{POST /events} requests, writes event rows to JSONL, and stores
-run metadata in SQLite. Promtail scrapes \texttt{/var/log/aoi/*.jsonl},
+run metadata in SQLite. Promtail scrapes the shared JSON log volume,
 extracts selected fields from each JSON object, and promotes a subset of those
 fields to labels. Loki stores the resulting log streams, while Grafana provides
 the dashboard and alerting surface. This design keeps the event source, log
@@ -782,13 +782,13 @@ demonstration without requiring a fully deployed production model.
 
 \subsubsection{Code Pattern: Event Construction and Safe Emission}
 The experiment harness avoids raw dictionary duplication by centralizing event
-construction in \texttt{experiments/scenarios/base.py}. The helper function
+construction in the shared scenario helper module. The helper function
 \texttt{make\_event(...)} clamps confidence to the API's accepted range,
 prevents negative latency values, and only emits overlay geometry when the
 inspection result is \texttt{FAIL}. This is a useful pattern because it keeps
 scenario scripts focused on behavior rather than payload plumbing.
 
-\begin{lstlisting}[language=Python,caption={Core event-construction pattern in \texttt{experiments/scenarios/base.py}.},label={lst:make_event}]
+\begin{lstlisting}[language=Python,caption={Core event-construction pattern in the shared scenario helper.},label={lst:make_event}]
 def make_event(...):
     confidence_score = max(0.0, min(1.0, confidence_score))
     inference_latency_ms = max(0, inference_latency_ms)
@@ -831,12 +831,12 @@ Frontend & React workstation & Uses event data for review traceability \\
 \thesisfigure
 {../../assets/readme/review-workspace.png}
 {AOI review workstation showing the uploaded PCB scan, run history, filters, defect queue, and review canvas.}
-{Implemented AOI review workstation with \texttt{docs/pcb/8.webp} uploaded through the live setup workflow. The run browser and filters appear at left, while the defect queue and PCB review canvas provide the operator-facing inspection surface.}
+{Implemented AOI review workstation with a representative PCB scan uploaded through the live setup workflow. The run browser and filters appear at left, while the defect queue and PCB review canvas provide the operator-facing inspection surface.}
 
 \subsubsection{REST API Design}
 The backend exposes resource-oriented HTTP endpoints and publishes its generated
-OpenAPI description through FastAPI. The event-ingestion contract documented in
-\texttt{docs/api\_spec.md} is implemented by \texttt{POST /events}; the run and
+OpenAPI description through FastAPI. The event-ingestion contract is implemented
+by \texttt{POST /events}; the run and
 review routes connect the same accepted events to the operator workstation. This
 separation follows REST's resource-oriented interface constraints~\cite{fielding2000rest}
 while retaining Pydantic validation and generated API documentation~\cite{fastapi}.
@@ -869,9 +869,8 @@ Figure~\ref{fig:experiment_workflow}.
 The implementation has two explicit schema layers. The Pydantic
 \texttt{EventIn} model validates the HTTP payload and converts it to the domain
 \texttt{InferenceEvent} dataclass. Listing~\ref{lst:event_in} reproduces the
-actual request-field declarations from
-\path{src/aoi/api/models/events.py}; naming it \texttt{EventIn} here preserves
-the repository's real class boundary rather than conflating the API and domain
+actual inbound request-field declarations; naming this model \texttt{EventIn}
+preserves the real class boundary rather than conflating the API and domain
 types.
 
 \begin{lstlisting}[language=Python,caption={Pydantic event request model used by the implemented API.},label={lst:event_in}]
@@ -1047,7 +1046,7 @@ promotes \texttt{pcb\_id}, \texttt{component\_id},
 Loki labels. Loki
 stores the resulting streams and makes both label filters and parsed numeric
 fields available to LogQL. Grafana then queries those streams for dashboard
-panels and provisioned alerts. Finally, \texttt{experiments/report.py} queries
+panels and provisioned alerts. Finally, a Loki-backed reporting step queries
 the Loki HTTP API and produces a Markdown report, so the reported evidence is
 derived from the same records that passed through the complete monitoring
 stack rather than directly from the scenario runner.
@@ -1156,20 +1155,19 @@ remains visible and queryable after aggregation.
 The implemented experiment lifecycle separates generation, execution, and
 reporting into three stages, summarized below.
 
-\textbf{Build stage.} Individual scenario modules such as
-\texttt{s02\_high\_defect\_rate.py} and \texttt{s03\_latency\_spike.py} build their
-batches by running the detector over a corpus pool through a shared
+\textbf{Build stage.} Individual scenario modules, such as those for S02 and S03,
+build their batches by running the detector over a corpus pool through a shared
 \texttt{real\_model\_batches} helper. For example, S02 runs the model over real
 defective boards, while S03 keeps the real predictions but raises
 \texttt{inference\_latency\_ms} toward a 2000\,ms plateau. This is how the test
 scenes are built.
 
-\textbf{Run stage.} The module \texttt{experiments/runner.py} maps scenario IDs
+\textbf{Run stage.} The experiment runner maps scenario IDs
 S01--S09 to their generators and executes them sequentially. A 15-second pause
 is inserted between scenarios so that Grafana time-series panels show visually
 separated anomaly windows instead of one merged stream.
 
-\begin{lstlisting}[language=Python,caption={Scenario orchestration pattern in \texttt{experiments/runner.py}.},label={lst:runner}]
+\begin{lstlisting}[language=Python,caption={Scenario orchestration pattern in the experiment runner.},label={lst:runner}]
 ALL_SCENARIOS = {"S01": s01_normal_baseline, ..., "S09": s09_model_degradation}
 INTER_SCENARIO_PAUSE_SECONDS = 15
 
@@ -1181,13 +1179,13 @@ for idx, scenario_id in enumerate(targets):
         time.sleep(INTER_SCENARIO_PAUSE_SECONDS)
 \end{lstlisting}
 
-\textbf{Report stage.} After execution, \texttt{experiments/report.py} queries
+\textbf{Report stage.} After execution, the reporting step queries
 Loki directly through its HTTP API, counts matching log entries over a lookback
 window, and produces the final evaluation report summarized in
 Section~4.1.6. This closes the loop from test generation to runtime evidence
 and reported results.
 
-\begin{lstlisting}[language=Python,caption={Loki-backed report generation pattern in \texttt{experiments/report.py}.},label={lst:report}]
+\begin{lstlisting}[language=Python,caption={Loki-backed report generation pattern.},label={lst:report}]
 total_events = count_logs('{job="aoi-inference"}', lookback_minutes)
 total_fails = count_logs('{job="aoi-inference", inspection_result="FAIL"}',
                          lookback_minutes)
@@ -1320,6 +1318,7 @@ Base-material foreign object (BMFO) & 0.80 & 0.85 & 0.82 & 0.83 \\
 {Supply a grid of model predictions on held-out boards.}
 {Representative detector predictions on held-out DsPCBSD+ boards, showing localized trace defects with confidence scores.\label{fig:model_samples}}
 
+\FloatBarrier
 Inference latency on the test split averaged 13\,ms (median 12.5\,ms, p95
 16\,ms) under batched GPU evaluation. Single-image CPU inference in the live
 service path is higher---tens to low hundreds of milliseconds---but remains well
@@ -1360,6 +1359,7 @@ expected out-of-distribution effect and is itself a useful observability finding
 assembled-board imagery is therefore used only for qualitative illustration, not
 for the quantitative results above.
 
+\FloatBarrier
 \subsection{Experimental Results and Evidence}
 \subsubsection{Representative Scenario Evidence}
 \textbf{S01: Normal baseline.}
@@ -1373,6 +1373,7 @@ anomaly scenarios are compared.
 {Grafana baseline capture for S01 showing PASS dominating FAIL.}
 {Scenario S01 control evidence in Grafana Explore. The LogQL query isolates baseline PCB identifiers, and PASS remains above FAIL; this establishes the comparison condition for later anomaly scenarios.\label{fig:s01}}
 
+\FloatBarrier
 \textbf{S03: Latency spike.}
 This scenario keeps the detector's real predictions while overriding
 \texttt{inference\_latency\_ms} to escalate from a normal baseline toward a
@@ -1385,6 +1386,7 @@ though real inference outputs continue to arrive.
 {Grafana capture for S03 showing latency climbing toward the 2000\,ms plateau.}
 {Scenario S03 latency evidence in Grafana Explore. The query unwraps \texttt{inference\_latency\_ms} and rises toward the injected two-second plateau while real predictions continue to arrive.\label{fig:s03}}
 
+\FloatBarrier
 \subsubsection{Additional Scenario Coverage}
 S02 and S04--S08 extend the suite across fail-rate, confidence, defect-type,
 board-level, recovery, and intermittent-fault behavior. Each of these scenarios
@@ -1734,7 +1736,7 @@ configured \texttt{for} durations: the fail-rate and latency rules (one-minute
 shows a banner reading ``Failed to load the data source configuration for
 Loki.'' This refers to Grafana's attempt to fetch \emph{data-source-managed}
 (Loki ruler) rules, which this deployment does not use. The AOI alerts are
-\emph{Grafana-managed} and provisioned from \texttt{aoi-alerts.yml}; they
+\emph{Grafana-managed} and provisioned as version-controlled configuration; they
 evaluated and fired normally, as the firing and pending states confirm.}
 
 \textbf{Second}, structured fields made targeted diagnosis easier. The
