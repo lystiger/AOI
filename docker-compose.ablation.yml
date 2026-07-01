@@ -1,0 +1,33 @@
+# Label-design ablation stack: one Loki, two Promtail arms reading the SAME
+# synthesized corpus. Arm A promotes pcb_id to a label; arm B keeps it parsed-only.
+# Loki keeps its data in the container's ephemeral /tmp, so every `up` is a fresh
+# index -- the sweep runner brings this up/down once per corpus size.
+services:
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: abl-loki
+    command: -config.file=/etc/loki/config.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/config.ablation.yml:/etc/loki/config.yml:ro
+
+  promtail-label:
+    image: grafana/promtail:3.0.0
+    container_name: abl-promtail-label
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    volumes:
+      - ./deploy/promtail/config.ablation-label.yml:/etc/promtail/config.yml:ro
+      - ./experiments/ablation_data:/var/log/aoi:ro
+
+  promtail-parsed:
+    image: grafana/promtail:3.0.0
+    container_name: abl-promtail-parsed
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    volumes:
+      - ./deploy/promtail/config.ablation-parsed.yml:/etc/promtail/config.yml:ro
+      - ./experiments/ablation_data:/var/log/aoi:ro

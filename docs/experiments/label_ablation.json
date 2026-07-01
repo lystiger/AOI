@@ -1,0 +1,408 @@
+{
+  "captured_at": "2026-07-01T05:40:29.701823+00:00",
+  "repeats": 10,
+  "sizes": [
+    131,
+    500,
+    1000,
+    2000,
+    4000
+  ],
+  "points": [
+    {
+      "n_boards": 136,
+      "events": 1197,
+      "ingested": {
+        "aoi-label": 1197,
+        "aoi-parsed": 1197
+      },
+      "label_arm": {
+        "cardinality": {
+          "active_series": 1184,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "pcb_id": 136,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-label\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 17.4878163,
+            "median": 16.659925,
+            "min": 15.274127,
+            "max": 21.99087
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-label\"} | json",
+          "returned_entries": 1197,
+          "ms": {
+            "mean": 73.699139,
+            "median": 73.8612445,
+            "min": 68.860825,
+            "max": 79.683226
+          }
+        }
+      },
+      "parsed_arm": {
+        "cardinality": {
+          "active_series": 190,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-parsed\"} | json | pcb_id=~\"PCB-DEAD-.*\"",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 9.4462569,
+            "median": 9.0091095,
+            "min": 8.67314,
+            "max": 11.240952
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-parsed\"} | json",
+          "returned_entries": 1197,
+          "ms": {
+            "mean": 57.850584100000006,
+            "median": 57.836473,
+            "min": 53.868396,
+            "max": 63.072611
+          }
+        }
+      }
+    },
+    {
+      "n_boards": 505,
+      "events": 4584,
+      "ingested": {
+        "aoi-label": 4584,
+        "aoi-parsed": 4584
+      },
+      "label_arm": {
+        "cardinality": {
+          "active_series": 4575,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "pcb_id": 505,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-label\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 19.3215619,
+            "median": 19.136586,
+            "min": 14.675983,
+            "max": 27.444009
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-label\"} | json",
+          "returned_entries": 4584,
+          "ms": {
+            "mean": 256.2236641,
+            "median": 253.4316435,
+            "min": 245.111149,
+            "max": 272.346259
+          }
+        }
+      },
+      "parsed_arm": {
+        "cardinality": {
+          "active_series": 222,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-parsed\"} | json | pcb_id=~\"PCB-DEAD-.*\"",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 11.076436099999999,
+            "median": 10.5896535,
+            "min": 9.265431,
+            "max": 13.992455
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-parsed\"} | json",
+          "returned_entries": 4584,
+          "ms": {
+            "mean": 191.71083570000002,
+            "median": 191.5082645,
+            "min": 182.318767,
+            "max": 204.991918
+          }
+        }
+      }
+    },
+    {
+      "n_boards": 1005,
+      "events": 9098,
+      "ingested": {
+        "aoi-label": 9098,
+        "aoi-parsed": 9098
+      },
+      "label_arm": {
+        "cardinality": {
+          "active_series": 9086,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "pcb_id": 1005,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-label\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 26.816944499999998,
+            "median": 27.1103235,
+            "min": 20.654468,
+            "max": 36.854138
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-label\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 297.3091347,
+            "median": 297.5245335,
+            "min": 267.127418,
+            "max": 351.526523
+          }
+        }
+      },
+      "parsed_arm": {
+        "cardinality": {
+          "active_series": 224,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-parsed\"} | json | pcb_id=~\"PCB-DEAD-.*\"",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 12.5533839,
+            "median": 12.364557,
+            "min": 10.137386,
+            "max": 15.704208
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-parsed\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 249.57193,
+            "median": 232.02864499999998,
+            "min": 226.612636,
+            "max": 409.843821
+          }
+        }
+      }
+    },
+    {
+      "n_boards": 2005,
+      "events": 18110,
+      "ingested": {
+        "aoi-label": 18110,
+        "aoi-parsed": 18110
+      },
+      "label_arm": {
+        "cardinality": {
+          "active_series": 18098,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "pcb_id": 2005,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-label\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 28.819349700000004,
+            "median": 24.224785,
+            "min": 17.426112,
+            "max": 64.226943
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-label\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 407.27986,
+            "median": 397.51429,
+            "min": 379.716985,
+            "max": 457.785315
+          }
+        }
+      },
+      "parsed_arm": {
+        "cardinality": {
+          "active_series": 225,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-parsed\"} | json | pcb_id=~\"PCB-DEAD-.*\"",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 16.524525099999998,
+            "median": 15.7104405,
+            "min": 14.620665,
+            "max": 20.633628
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-parsed\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 289.8321715,
+            "median": 290.57365949999996,
+            "min": 247.571651,
+            "max": 332.991871
+          }
+        }
+      }
+    },
+    {
+      "n_boards": 4005,
+      "events": 36107,
+      "ingested": {
+        "aoi-label": 36107,
+        "aoi-parsed": 36107
+      },
+      "label_arm": {
+        "cardinality": {
+          "active_series": 36097,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "pcb_id": 4005,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-label\", pcb_id=~\"PCB-DEAD-.*\"} | json",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 31.7919876,
+            "median": 32.7639055,
+            "min": 23.035549,
+            "max": 36.404844
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-label\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 654.9598544,
+            "median": 643.9988235,
+            "min": 609.895234,
+            "max": 775.756693
+          }
+        }
+      },
+      "parsed_arm": {
+        "cardinality": {
+          "active_series": 225,
+          "distinct": {
+            "app": 1,
+            "component_id": 15,
+            "defect_type": 8,
+            "filename": 1,
+            "inspection_result": 2,
+            "job": 1,
+            "model_version": 2,
+            "service_name": 1
+          }
+        },
+        "board_query": {
+          "query": "{job=\"aoi-parsed\"} | json | pcb_id=~\"PCB-DEAD-.*\"",
+          "returned_entries": 50,
+          "ms": {
+            "mean": 21.4511023,
+            "median": 20.3006845,
+            "min": 17.743868,
+            "max": 33.748049
+          }
+        },
+        "full_scan": {
+          "query": "{job=\"aoi-parsed\"} | json",
+          "returned_entries": 5000,
+          "ms": {
+            "mean": 392.24161130000005,
+            "median": 394.181052,
+            "min": 348.956449,
+            "max": 423.277876
+          }
+        }
+      }
+    }
+  ]
+}
