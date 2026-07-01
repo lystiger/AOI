@@ -49,8 +49,8 @@
 \newcommand{\usthexternalsupervisor}{Eng. Pham Xuan Long}
 \newcommand{\usthinternalsupervisor}{Dr. Kieu Quoc Viet}
 \newcommand{\usthcompany}{FUYU Precision Component VN (Foxconn Industrial Internet)}
-\newcommand{\thesistitle}{Design and Evaluation of an Observability System for
-AI-Assisted PCB Inspection Using Grafana Loki}
+\newcommand{\thesistitle}{Design and Evaluation of an AI Model Logging and
+Monitoring System Using the Loki stack}
 
 \newcommand{\thesisfigure}[3]{%
 \begin{figure}[!ht]\centering
@@ -119,18 +119,23 @@ constant encouragement and support.
 \addcontentsline{toc}{section}{LIST OF ABBREVIATIONS}
 \begin{tabbing}
 \textbf{INSUFFICIENT} \= \kill
+\textbf{AI}     \> Artificial Intelligence \\
 \textbf{AOI}    \> Automatic Optical Inspection \\
-\textbf{PCB}    \> Printed Circuit Board \\
 \textbf{API}    \> Application Programming Interface \\
+\textbf{CPU}    \> Central Processing Unit \\
+\textbf{GPU}    \> Graphics Processing Unit \\
+\textbf{HTTP}   \> Hypertext Transfer Protocol \\
 \textbf{JSON}   \> JavaScript Object Notation \\
 \textbf{JSONL}  \> JSON Lines \\
+\textbf{LogQL}  \> Log Query Language \\
 \textbf{ML}     \> Machine Learning \\
 \textbf{MLOps}  \> Machine Learning Operations \\
-\textbf{LogQL}  \> Log Query Language \\
-\textbf{SRE}    \> Site Reliability Engineering \\
 \textbf{P95}    \> 95th-percentile latency \\
-\textbf{GPU}    \> Graphics Processing Unit \\
+\textbf{PCB}    \> Printed Circuit Board \\
+\textbf{REST}   \> Representational State Transfer \\
+\textbf{SD}     \> Standard Deviation \\
 \textbf{UI}     \> User Interface \\
+\textbf{UML}    \> Unified Modeling Language \\
 \end{tabbing}
 \clearpage
 
@@ -950,7 +955,7 @@ the API. React is used as the component-based view layer~\cite{reactdocs}; the
 backend remains the persistence boundary rather than duplicating review state
 inside the browser.
 
-\subsubsection{Deployment}
+\subsubsection{Deployment}\label{subsubsec:deployment}
 Docker Compose defines the deployable service topology: \texttt{aoi-app} and
 \texttt{aoi-web} provide the application, while Promtail, Loki, and Grafana
 provide log transport, storage, querying, and visualization. The named
@@ -1208,25 +1213,16 @@ suite reproducible and easier to extend. Listings~\ref{lst:runner} and
 explicit within this thesis.
 
 \subsubsection{Reproducibility Procedure}
-An evaluator can reproduce the experiment from the repository root with the
-following repository-defined commands:
-
-\begin{lstlisting}[language=bash,caption={Commands for reproducing the anomaly experiment suite.},label={lst:reproduce}]
-docker compose up -d --build
-python3 -m experiments.runner
-python3 -m experiments.report --output docs/experiments/anomaly_results.md
-\end{lstlisting}
-
-The first command starts the FastAPI service, Promtail, Loki, and Grafana from
-the repository's Compose configuration. The second command executes S01--S09;
-selected scenarios can instead be chosen with the runner's
-\texttt{--scenarios} option. During or after execution, the evaluator can open
-the local Grafana service on port 3000 using the repository defaults
-(\texttt{admin}/\texttt{admin}) and inspect the provisioned AOI dashboard or
-run the scenario queries in Explore. The final command reads the preceding
-120 minutes from Loki and writes the retained report to the output path shown
-in Listing~\ref{lst:reproduce}. The stack can be stopped with
-\texttt{docker compose down}.
+The experiment can be reproduced in four steps. First, the containerized
+FastAPI, Promtail, Loki, and Grafana services are started with the fixed
+configuration described in Section~\ref{subsubsec:deployment}. Second,
+the S01--S09 scenarios are executed sequentially with the inter-scenario pause
+defined above. Third, the provisioned AOI dashboard and the LogQL queries in
+Table~\ref{tab:logql_queries} are used to inspect the resulting streams. Finally,
+the same Loki records are queried over a fixed 120-minute lookback window to
+regenerate the aggregate report. Reproduction therefore depends on the stated
+service versions, scenario definitions, timing, and queries rather than on
+undocumented manual dashboard operations.
 
 \subsubsection{Scenario Set}
 The experiment suite contains one baseline scenario and multiple anomaly
@@ -1577,8 +1573,9 @@ returns an identical 50-entry result set at every scale while the surrounding
 corpus grows. The board count $N$ is swept from 131 (the deployed scale) to 4000,
 and cardinality and query latency are measured with the same Loki \texttt{series}
 and \texttt{query\_range} endpoints used for Table~\ref{tab:performance_resources}.
-The harness is version-controlled (\texttt{experiments/ablation\_sweep.py} with the
-two \texttt{deploy/promtail/config.ablation-*.yml} arms).
+The sweep is automated, and the two Promtail pipelines differ only in whether
+\texttt{pcb\_id} is promoted to a label; all other ingestion and query settings
+are identical.
 
 Table~\ref{tab:label_ablation} and Figure~\ref{fig:label_ablation} report the
 outcome. At $N=131$ the label arm reproduces the deployed cardinality (1184 active
@@ -1597,10 +1594,9 @@ per-tenant limit of 5000 streams, the label arm saturates between 500 and 1000
 boards; Loki then silently rejects new streams---including, because they arrive
 last, the \texttt{PCB-DEAD} isolation boards, so the board-isolation query returns
 nothing. The measurements in Table~\ref{tab:label_ablation} therefore required the
-stream limit to be lifted (\texttt{deploy/loki/config.ablation.yml}); the
-default-limit run that exhibits the data loss is retained as
-\texttt{docs/experiments/label\_ablation\_defaultlimit.json}. The parsed arm never
-approaches the limit.
+per-tenant stream ceiling to be raised above the largest measured cardinality.
+A separate run at the default 5000-stream limit confirmed the resulting data
+loss, while the parsed arm never approached the limit.
 
 \textbf{The label does not buy query speed at this scale.} For the realistic
 board-isolation query---a regex match \texttt{pcb\_id=\textasciitilde"PCB-DEAD-.*"}
@@ -1656,13 +1652,11 @@ The anomaly suite was executed end to end with real inference, and the
 Loki-backed report was regenerated after Promtail completed ingestion. The run
 recorded all 350 submitted events: 106 \texttt{PASS} events and 244 \texttt{FAIL}
 events, for an overall fail rate of 69.7\%. The defect distribution was led by
-\texttt{NO\_DEFECT} (106 events), followed by \texttt{MOUSE\_BITE} (41),
-\texttt{SPUR} (35), \texttt{CONDUCTOR\_SCRATCH} (33),
-\texttt{BASE\_MATERIAL\_FOREIGN\_OBJECT} (31), \texttt{HOLE\_BREAKOUT} (28),
-\texttt{OPEN\_CIRCUIT} (27), \texttt{SPURIOUS\_COPPER} (22),
-\texttt{CONDUCTOR\_FOREIGN\_OBJECT} (17), \texttt{BOARD\_FAILURE} (8), and
-\texttt{SHORT} (2). Each \texttt{PASS} event carries \texttt{NO\_DEFECT}, so the
-\texttt{PASS} and \texttt{NO\_DEFECT} counts coincide.
+no defect (106 events), followed by mouse bite (41), spur (35), conductor
+scratch (33), base-material foreign object (31), hole breakout (28), open
+circuit (27), spurious copper (22), conductor foreign object (17), board
+failure (8), and short (2). Each passing inspection is categorized as no
+defect, so the two counts coincide.
 
 These aggregate values should not be read as factory-level quality rates,
 because the suite deliberately mixes normal and abnormal traffic. Their purpose
@@ -1902,12 +1896,12 @@ For these reasons, the current implementation should be viewed as a monitoring p
 
 \subsubsection{Future Work}
 \label{sec:future_work}
-Future work can extend the platform in four directions:
+Future work can extend the platform in five directions:
 \begin{itemize}
     \item Extend the detector to assembled-board (post-placement) defects and harden it for production, since the current model is trained on bare-copper boards;
     \item Add model version, runtime, and hardware metadata to each event;
     \item Calibrate the existing alert thresholds against representative production data;
-    \item Demote high-cardinality identifiers such as \texttt{pcb\_id} from Loki labels to parsed fields or structured metadata before production scale, as quantified by the label-design ablation (Section~\ref{subsubsec:label_ablation}); and
+    \item Demote high-cardinality identifiers such as \texttt{pcb\_id} from Loki labels to parsed fields or structured metadata before production scale, as quantified by the label-design ablation (Section~\ref{subsubsec:label_ablation});
     \item Compare log-based monitoring with richer metrics or tracing systems.
 \end{itemize}
 
@@ -1998,7 +1992,7 @@ alerts, and reproducible LogQL queries.
 \bibitem{alloydocs} Grafana Labs, ``Grafana Alloy documentation,'' \url{https://grafana.com/docs/alloy/}.
 \bibitem{twelvefactor} A. Wiggins, ``The Twelve-Factor App: Logs,'' \url{https://12factor.net/logs}.
 \bibitem{holly} Shanghai Holly Electronics Co., Ltd., ``Holly AOI systems,'' vendor documentation, \url{http://www.iholly.com.cn/}.
-\bibitem{hctaoi} HCT, ``SMT Line Automatic AOI Testing Equipment,'' product documentation, \url{https://www.hct-smt.com/products/aoi-testing-equipment/smt-line-automatic-aoi-testing-equipment}, accessed June 29, 2026.
+\bibitem{hctaoi} HCT, ``SMT Line Automatic AOI Testing Equipment,'' product documentation, available at: \href{https://www.hct-smt.com/products/aoi-testing-equipment/smt-line-automatic-aoi-testing-equipment}{\nolinkurl{https://www.hct-smt.com/}}, accessed June 29, 2026.
 \bibitem{jutze} Shenzhen Jinghe Technology Co., Ltd., ``JUTZE AOI inspection system,'' vendor product listing, \url{https://www.jhims.com/}.
 \bibitem{flytake} Flytake, ``AI AOI inspection system,'' vendor documentation, \url{https://flytake.com/page-nsW5tB.php}.
 \bibitem{dspcbsd} ``DsPCBSD+: A Dataset for Deep-Learning-Based Detection of Printed Circuit Board Surface Defects,'' \textit{Scientific Data}, 2024, doi: 10.1038/s41597-024-03656-8 (CC BY 4.0); dataset mirror: \url{https://www.kaggle.com/datasets/enisteper1/dataset-of-pcb-surface-defects-dspcbsd}.
