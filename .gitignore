@@ -81,3 +81,9 @@ docs/paper/usth-logo.png
 docs/paper/build_imrad.py
 docs/paper/build_usth_latex.py
 docs/paper/merge_docx.py
+
+# Thesis deck local artifacts (large, regenerable / local-only)
+thesis-assets/pptx-backups/
+output/
+# MS Office lock files
+~$*
