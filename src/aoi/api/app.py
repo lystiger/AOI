@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,6 +23,9 @@ def create_app(*, db_path: Path, log_path: Path, storage_path: Path) -> FastAPI:
     app.state.database_manager.storage_path = app.state.storage_path
     app.state.vision_service = VisionService(db_path=db_path, storage_path=app.state.storage_path)
     app.state.setup_service = SetupService(app.state.database_manager, app.state.vision_service)
+    # When set, /inspect delegates to the standalone inference service instead of loading the
+    # ML stack in-process. This keeps the API image lean; the sidecar is opt-in (demo profile).
+    app.state.inference_url = (os.environ.get("AOI_INFERENCE_URL") or "").strip() or None
 
     def _validation_message(exc: RequestValidationError) -> str:
         first_error = exc.errors()[0] if exc.errors() else {}

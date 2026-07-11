@@ -69,6 +69,17 @@ def _load_model(weights_path: str | Path):
     return YOLO(str(weights_path))
 
 
+def load_defect_model(weights_path: str | Path | None = None):
+    """Load the trained defect detector for API/UI-driven inspection.
+
+    Public entry point so callers do not have to reach into private helpers. Raises
+    ``FileNotFoundError`` when no trained weights are present and ``ImportError`` (via
+    ``ModuleNotFoundError``) when the ultralytics runtime is not installed.
+    """
+    weights = Path(weights_path) if weights_path else _default_weights_path()
+    return _load_model(weights)
+
+
 def _default_weights_path() -> Path:
     candidates = [
         SRC_ROOT.parent / "ml" / "models" / "defect_detection" / "best.pt",

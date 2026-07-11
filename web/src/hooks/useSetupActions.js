@@ -35,6 +35,7 @@ export function useSetupActions({
   const [barcodeError, setBarcodeError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isInspecting, setIsInspecting] = useState(false)
   const analyzeTimerRef = useRef(null)
   const [isCreatingRun, setIsCreatingRun] = useState(false)
   const [isSavingModel, setIsSavingModel] = useState(false)
@@ -568,6 +569,31 @@ export function useSetupActions({
     toast.info('Transitioning to normal review mode')
   }
 
+  async function handleRunInspection() {
+    if (!selectedRunId || isInspecting) {
+      return
+    }
+    setIsInspecting(true)
+    setError('')
+    try {
+      await updateSetupRun(`/runs/${selectedRunId}/inspect`, 'POST', {}, 'Inspection Error', (nextRun) => {
+        const failCount = (nextRun.defect_logs || []).filter(
+          (defect) => defect.inspection_result === 'FAIL',
+        ).length
+        toast.success(
+          failCount > 0
+            ? `Inspection complete: ${failCount} defect${failCount === 1 ? '' : 's'} found`
+            : 'Inspection complete: board passed',
+        )
+      })
+    } catch (err) {
+      setError(err.message)
+      toast.error(err.message)
+    } finally {
+      setIsInspecting(false)
+    }
+  }
+
   return {
     barcodeError,
     clearRunDrafts,
@@ -589,6 +615,7 @@ export function useSetupActions({
     handleManualBarcodeChange,
     handleManualFiducialChange,
     handleRemoveFovDraft,
+    handleRunInspection,
     handleSaveManualBarcode,
     handleSaveManualFiducials,
     handleSaveFovs,
@@ -599,6 +626,7 @@ export function useSetupActions({
     isDetectingBarcode,
     isDetectingFiducials,
     isGeneratingFovs,
+    isInspecting,
     isSavingManualBarcode,
     isSavingManualFiducials,
     isSavingFovs,

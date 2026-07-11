@@ -1,0 +1,7 @@
+# Heavy ML dependencies for the standalone inference service (Dockerfile.inference) only.
+# Kept out of requirements.txt so the main API image stays lean. torch/torchvision are
+# installed from the CPU wheel index in the Dockerfile to avoid the large CUDA build.
+fastapi>=0.115.0
+uvicorn>=0.32.0
+pillow>=11.0.0
+ultralytics>=8.3.0

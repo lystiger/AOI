@@ -1,0 +1,24 @@
+# Standalone defect-inference model server. This is the heavy image (torch + ultralytics);
+# it is only started behind the Compose "demo" profile, so the main API image stays lean.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install CPU-only torch first so ultralytics doesn't drag in the large CUDA build.
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch torchvision
+
+COPY requirements-ml.txt /app/
+# ultralytics pulls the GUI build of opencv (needs libGL/libxcb, absent in slim). Swap it for
+# the headless build so cv2 imports on a lean server image with no extra system libraries.
+RUN pip install --no-cache-dir -r requirements-ml.txt \
+    && pip uninstall -y opencv-python opencv-contrib-python \
+    && pip install --no-cache-dir "opencv-python-headless>=4.8.0"
+
+COPY src /app/src
+
+ENV PYTHONPATH=/app/src
+
+# Trained weights are mounted read-only at runtime (see docker-compose aoi-inference volume),
+# so the model can change without rebuilding this image.
+CMD ["python", "-m", "aoi.cli", "serve-inference", "--host", "0.0.0.0", "--port", "8001"]

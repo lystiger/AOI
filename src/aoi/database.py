@@ -289,6 +289,74 @@ class DatabaseManager:
 
         return PersistedRun(run_id=run_id, pcb_id=pcb_id, status=status, event_count=len(events))
 
+    def persist_run_inference(
+        self,
+        run_id: str,
+        *,
+        events: list[InferenceEvent],
+        model_version: str,
+        run_image_id: str,
+    ) -> dict[str, object] | None:
+        """Attach real-model defect inference to an existing run.
+
+        Unlike :meth:`persist_events` (which mints a fresh run per POST for the ingestion
+        pipeline), this targets a run the UI already created during setup. It replaces any
+        prior defect logs for the run so re-inspecting is idempotent, links every defect to
+        the supplied scan image, and updates the run's ``model_version`` and PASS/FAIL
+        ``status``. Returns the refreshed run row, or ``None`` if the run is missing.
+        """
+        if not events:
+            raise ValueError("cannot persist an empty event list")
+        if self.fetch_run(run_id) is None:
+            return None
+
+        status = self._derive_run_status(events)
+        with self._connect() as connection:
+            connection.execute("DELETE FROM defect_logs WHERE run_id = ?", (run_id,))
+            connection.execute(
+                "UPDATE inspection_runs SET model_version = ?, status = ? WHERE id = ?",
+                (model_version, status, run_id),
+            )
+            connection.executemany(
+                """
+                INSERT INTO defect_logs (
+                    run_id,
+                    run_image_id,
+                    component_id,
+                    defect_type,
+                    severity,
+                    confidence_score,
+                    inference_latency_ms,
+                    inspection_result,
+                    operator_review,
+                    timestamp,
+                    overlay_x,
+                    overlay_y,
+                    overlay_width,
+                    overlay_height,
+                    overlay_shape
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        run_image_id,
+                        event.component_id,
+                        event.defect_type,
+                        self._derive_severity(event),
+                        event.confidence_score,
+                        event.inference_latency_ms,
+                        event.inspection_result.value,
+                        event.operator_review.value,
+                        event.timestamp,
+                        *self._resolve_overlay(event, index),
+                    )
+                    for index, event in enumerate(events)
+                ],
+            )
+        return self.fetch_run(run_id)
+
     def insert_run(
         self,
         *,

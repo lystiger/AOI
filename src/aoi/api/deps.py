@@ -8,6 +8,7 @@ from fastapi import Depends, Request
 from aoi.database import DatabaseManager
 from aoi.log_manager import LogManager
 from aoi.setup_service import SetupService
+from aoi.vision_service import VisionService
 
 
 def get_database_manager(request: Request) -> DatabaseManager:
@@ -22,6 +23,10 @@ def get_setup_service(request: Request) -> SetupService:
     return request.app.state.setup_service
 
 
+def get_vision_service(request: Request) -> VisionService:
+    return request.app.state.vision_service
+
+
 def get_storage_path(request: Request) -> Path:
     return request.app.state.storage_path
 
@@ -29,4 +34,5 @@ def get_storage_path(request: Request) -> Path:
 DatabaseManagerDep = Annotated[DatabaseManager, Depends(get_database_manager)]
 LogManagerDep = Annotated[LogManager, Depends(get_log_manager)]
 SetupServiceDep = Annotated[SetupService, Depends(get_setup_service)]
+VisionServiceDep = Annotated[VisionService, Depends(get_vision_service)]
 StoragePathDep = Annotated[Path, Depends(get_storage_path)]

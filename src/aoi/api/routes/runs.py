@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from pathlib import Path
 import shutil
 import uuid
 from typing import Annotated, Literal
+from urllib import error as urllib_error, parse as urllib_parse, request as urllib_request
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
-from aoi.api.deps import DatabaseManagerDep, SetupServiceDep, StoragePathDep
+from aoi.api.deps import (
+    DatabaseManagerDep,
+    LogManagerDep,
+    SetupServiceDep,
+    StoragePathDep,
+    VisionServiceDep,
+)
 from aoi.api.models import (
     CreateRunRequest,
     ManualBarcodeRequest,
@@ -18,9 +26,64 @@ from aoi.api.models import (
     ReviewDefectRequest,
     SaveModelFovsRequest,
     UpdateRunRequest,
+    parse_post_events_payload,
 )
+from aoi.inference_runner import MODEL_VERSION, load_defect_model, run_inference
+from aoi.schema import InferenceEvent, InspectionResult
 
 router = APIRouter()
+
+
+def _load_cached_defect_model(request: Request):
+    """Load the defect detector once per process and reuse it across inspections.
+
+    Caching on ``app.state`` avoids re-reading the weights (and re-importing the ML stack)
+    on every button click, so only the first inspection pays the model-load cost.
+    """
+    model = getattr(request.app.state, "defect_model", None)
+    if model is None:
+        model = load_defect_model()
+        request.app.state.defect_model = model
+    return model
+
+
+def _remote_inference(
+    inference_url: str,
+    scan_file: Path,
+    *,
+    pcb_id: str,
+    run_id: str | None,
+) -> tuple[list[InferenceEvent], str | None]:
+    """Delegate inference to the standalone model service and rebuild domain events.
+
+    Uses stdlib urllib (no extra API deps) and the same event schema ``/events`` accepts, so
+    the response round-trips through the parsing the API already owns. Connection failures
+    surface as 503 (service down / not started) rather than an opaque 500.
+    """
+    query = {"pcb_id": pcb_id}
+    if run_id:
+        query["run_id"] = run_id
+    endpoint = f"{inference_url.rstrip('/')}/infer?{urllib_parse.urlencode(query)}"
+    http_request = urllib_request.Request(
+        endpoint,
+        data=scan_file.read_bytes(),
+        headers={"Content-Type": "application/octet-stream"},
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(http_request, timeout=120) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")
+        raise HTTPException(status_code=502, detail=f"inference service error: {detail}") from exc
+    except (urllib_error.URLError, TimeoutError, OSError) as exc:
+        raise HTTPException(status_code=503, detail="inference service is unavailable") from exc
+
+    try:
+        events_in, model_version, _images = parse_post_events_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"inference service returned an invalid response: {exc}") from exc
+    return [event.to_domain() for event in events_in], model_version
 
 RunStatusFilter = Literal["PASS", "FAIL"]
 SeverityFilter = Literal["none", "minor", "major", "critical"]
@@ -107,6 +170,77 @@ def get_run_defects(
         inspection_result=inspection_result,
     )
     return {"status": "ok", "run_id": run_id, "count": len(defect_logs), "defect_logs": defect_logs}
+
+
+@router.post("/runs/{run_id}/inspect")
+def run_inspection(
+    run_id: str,
+    request: Request,
+    database_manager: DatabaseManagerDep,
+    log_manager: LogManagerDep,
+    vision_service: VisionServiceDep,
+) -> dict[str, object]:
+    """Run the trained defect model on the run's scan and attach the results.
+
+    Persists one PASS/FAIL defect per detection onto this run (replacing prior results so
+    re-inspection is idempotent) and writes each event to the JSONL log so it flows through
+    the Promtail -> Loki -> Grafana pipeline, exactly like the synthetic scenarios.
+    """
+    run = database_manager.fetch_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    images = database_manager.fetch_run_images(run_id)
+    scan = next((image for image in images if image.get("image_role") == "full_board"), None)
+    if scan is None:
+        raise HTTPException(status_code=422, detail="upload a PCB scan before running inspection")
+
+    try:
+        scan_file = vision_service.resolve_run_image_file(run_id, scan)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    inference_url = getattr(request.app.state, "inference_url", None)
+    if inference_url:
+        events, model_version = _remote_inference(
+            inference_url, scan_file, pcb_id=str(run["pcb_id"]), run_id=run_id
+        )
+    else:
+        try:
+            model = _load_cached_defect_model(request)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="defect inference runtime is unavailable; install ultralytics to enable AI inspection",
+            ) from exc
+        events = run_inference(scan_file, model=model, run_id=run_id, pcb_id=str(run["pcb_id"]))
+        model_version = MODEL_VERSION
+
+    model_version = model_version or MODEL_VERSION
+    updated_run = database_manager.persist_run_inference(
+        run_id,
+        events=events,
+        model_version=model_version,
+        run_image_id=str(scan["id"]),
+    )
+    if updated_run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    for event in events:
+        log_manager.write_json(event, model_version=model_version)
+
+    hydrated_run = database_manager.fetch_run_with_defects(run_id)
+    assert hydrated_run is not None
+    fail_count = sum(1 for event in events if event.inspection_result == InspectionResult.FAIL)
+    return {
+        "status": "ok",
+        "run": hydrated_run,
+        "model_version": model_version,
+        "event_count": len(events),
+        "fail_count": fail_count,
+    }
 
 
 @router.patch("/runs/{run_id}")

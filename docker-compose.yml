@@ -6,9 +6,25 @@ services:
     container_name: aoi-app
     ports:
       - "8000:8000"
+    environment:
+      # Points at the opt-in inference sidecar. Effective only when the "demo" profile is up;
+      # otherwise /inspect returns a graceful 503 (inference service is unavailable).
+      AOI_INFERENCE_URL: http://aoi-inference:8001
     volumes:
       - aoi-logs:/var/log/aoi
       - aoi-data:/var/lib/aoi
+
+  aoi-inference:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    container_name: aoi-inference
+    profiles:
+      - demo
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ml/models/defect_detection:/app/ml/models/defect_detection:ro
 
   aoi-web:
     build:

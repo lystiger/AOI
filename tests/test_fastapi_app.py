@@ -866,3 +866,224 @@ def test_fastapi_review_defect_patch(tmp_path) -> None:
         json={"status": "OVERRULED_PASS"},
     )
     assert bad_patch.status_code == 404
+
+
+class _FakeScalar:
+    def __init__(self, value) -> None:
+        self._value = value
+
+    def item(self):
+        return self._value
+
+
+class _FakeVec:
+    def __init__(self, values) -> None:
+        self._values = values
+
+    def tolist(self):
+        return list(self._values)
+
+
+class _FakeBoxes:
+    def __init__(self, cls, conf, xyxyn) -> None:
+        self.cls = [_FakeScalar(c) for c in cls]
+        self.conf = [_FakeScalar(c) for c in conf]
+        self.xyxyn = [_FakeVec(b) for b in xyxyn]
+
+    def __len__(self) -> int:
+        return len(self.cls)
+
+
+class _FakeResult:
+    def __init__(self, names, boxes) -> None:
+        self.names = names
+        self.boxes = boxes
+
+
+class _FakeDefectModel:
+    """Stands in for a loaded YOLO model so the endpoint can be tested without ultralytics."""
+
+    names = {0: "short", 1: "spur"}
+
+    def predict(self, **_kwargs):
+        boxes = _FakeBoxes(
+            cls=[0, 1],
+            conf=[0.91, 0.55],
+            xyxyn=[[0.10, 0.10, 0.20, 0.20], [0.50, 0.50, 0.62, 0.60]],
+        )
+        return [_FakeResult(self.names, boxes)]
+
+
+def _upload_scan(client, run_id, *, size=(1600, 900)):
+    buffer = BytesIO()
+    Image.new("RGB", size, color=(26, 150, 98)).save(buffer, format="PNG")
+    return client.post(
+        f"/runs/{run_id}/images",
+        content=buffer.getvalue(),
+        headers={"Content-Type": "image/png"},
+    )
+
+
+def test_fastapi_run_inspection_attaches_real_inference_defects(tmp_path) -> None:
+    log_path = tmp_path / "inference.jsonl"
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=log_path,
+        storage_path=tmp_path / "storage",
+    )
+    app.state.defect_model = _FakeDefectModel()  # inject a fake so no weights/ultralytics needed
+    client = TestClient(app)
+
+    run_id = client.post("/runs", json={"pcb_id": "PCB-INSPECT"}).json()["run"]["id"]
+    upload = _upload_scan(client, run_id)
+    assert upload.status_code == 201
+    scan_image_id = upload.json()["image_id"]
+
+    response = client.post(f"/runs/{run_id}/inspect")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["event_count"] == 2
+    assert body["fail_count"] == 2
+    assert body["model_version"]
+
+    run = body["run"]
+    assert run["status"] == "FAIL"
+    assert run["model_version"] == body["model_version"]
+    assert len(run["defect_logs"]) == 2
+    for defect in run["defect_logs"]:
+        assert defect["run_image_id"] == scan_image_id
+        assert defect["inspection_result"] == "FAIL"
+        assert defect["overlay_x"] is not None
+        assert defect["overlay_width"] is not None
+
+    # Inference events are shipped to the JSONL pipeline (Promtail -> Loki -> Grafana).
+    log_lines = [line for line in log_path.read_text().splitlines() if line.strip()]
+    assert len(log_lines) == 2
+
+    # Re-inspecting replaces prior results instead of duplicating them.
+    second = client.post(f"/runs/{run_id}/inspect")
+    assert second.status_code == 200
+    assert len(second.json()["run"]["defect_logs"]) == 2
+
+
+def test_fastapi_run_inspection_requires_scan(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    app.state.defect_model = _FakeDefectModel()
+    client = TestClient(app)
+
+    run_id = client.post("/runs", json={"pcb_id": "PCB-NOSCAN"}).json()["run"]["id"]
+    response = client.post(f"/runs/{run_id}/inspect")
+
+    assert response.status_code == 422
+    assert "scan" in response.json()["message"]
+
+
+def test_fastapi_run_inspection_missing_run_returns_404(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    app.state.defect_model = _FakeDefectModel()
+    client = TestClient(app)
+
+    response = client.post("/runs/does-not-exist/inspect")
+    assert response.status_code == 404
+
+
+def test_inference_service_infer_returns_events(tmp_path) -> None:
+    from aoi.api.inference_app import create_inference_app
+
+    app = create_inference_app()
+    app.state.defect_model = _FakeDefectModel()  # inject fake so no ultralytics/weights needed
+    client = TestClient(app)
+
+    buffer = BytesIO()
+    Image.new("RGB", (640, 640), color=(20, 140, 90)).save(buffer, format="PNG")
+    resp = client.post(
+        "/infer",
+        params={"pcb_id": "PCB-SVC", "run_id": "run-1"},
+        content=buffer.getvalue(),
+        headers={"Content-Type": "application/octet-stream"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["model_version"]
+    assert len(body["events"]) == 2
+    for event in body["events"]:
+        assert event["pcb_id"] == "PCB-SVC"
+        assert event["inspection_result"] == "FAIL"
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+
+
+def test_inspect_delegates_to_remote_inference_service(tmp_path, monkeypatch) -> None:
+    from aoi.api.routes import runs as runs_route
+    from aoi.schema import InferenceEvent, InspectionResult
+
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    app.state.inference_url = "http://inference.test"  # force the remote branch (no in-process ML)
+
+    def _fake_remote(inference_url, scan_file, *, pcb_id, run_id):
+        assert inference_url == "http://inference.test"
+        event = InferenceEvent.create(
+            pcb_id=pcb_id,
+            component_id="DET-001",
+            inspection_result=InspectionResult.FAIL,
+            defect_type="SHORT",
+            confidence_score=0.88,
+            inference_latency_ms=12,
+            overlay_x=0.10,
+            overlay_y=0.10,
+            overlay_width=0.05,
+            overlay_height=0.05,
+            overlay_shape="rect",
+        )
+        return [event], "yolov8s-dspcbsd-v1"
+
+    monkeypatch.setattr(runs_route, "_remote_inference", _fake_remote)
+    client = TestClient(app)
+
+    run_id = client.post("/runs", json={"pcb_id": "PCB-REMOTE"}).json()["run"]["id"]
+    assert _upload_scan(client, run_id).status_code == 201
+
+    response = client.post(f"/runs/{run_id}/inspect")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_version"] == "yolov8s-dspcbsd-v1"
+    assert body["fail_count"] == 1
+    assert len(body["run"]["defect_logs"]) == 1
+
+    # The API still owns logging, so events reach the JSONL pipeline regardless of where inference ran.
+    log_lines = [line for line in (tmp_path / "inference.jsonl").read_text().splitlines() if line.strip()]
+    assert len(log_lines) == 1
+
+
+def test_inspect_returns_503_when_inference_service_down(tmp_path) -> None:
+    app = create_app(
+        db_path=tmp_path / "aoi.db",
+        log_path=tmp_path / "inference.jsonl",
+        storage_path=tmp_path / "storage",
+    )
+    app.state.inference_url = "http://127.0.0.1:1"  # nothing is listening -> connection refused
+    client = TestClient(app)
+
+    run_id = client.post("/runs", json={"pcb_id": "PCB-DOWN"}).json()["run"]["id"]
+    assert _upload_scan(client, run_id).status_code == 201
+
+    response = client.post(f"/runs/{run_id}/inspect")
+    assert response.status_code == 503
+    assert "unavailable" in response.json()["message"]

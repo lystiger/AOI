@@ -21,7 +21,9 @@ export default function ReviewWorkspace({ workspace }) {
     setSelectedImageId,
     isAnalyzing,
     isUploading,
+    isInspecting,
     openImagePicker,
+    handleRunInspection,
     handleDeleteRun,
     isDeletingRun,
     stepDefect,
@@ -114,6 +116,17 @@ export default function ReviewWorkspace({ workspace }) {
                 disabled={!fullBoardImage}
               >
                 Back To Full Board
+              </button>
+            ) : null}
+            {!showSetupMode ? (
+              <button
+                type="button"
+                className={`primary-button compact run-inspection-button ${isInspecting ? 'loading' : ''}`}
+                onClick={handleRunInspection}
+                disabled={isInspecting || !selectedRunId || !fullBoardImage}
+                title={fullBoardImage ? 'Run the AI defect model on this scan' : 'Upload a PCB scan first'}
+              >
+                {isInspecting ? 'Running Inspection...' : 'Run Inspection'}
               </button>
             ) : null}
             <button

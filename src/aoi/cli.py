@@ -59,6 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="path to store uploaded run assets",
     )
 
+    serve_inference = subparsers.add_parser(
+        "serve-inference", help="run the standalone defect-inference model server (needs ultralytics)"
+    )
+    serve_inference.add_argument("--host", default="0.0.0.0", help="bind host")
+    serve_inference.add_argument("--port", type=int, default=8001, help="bind port")
+    serve_inference.add_argument(
+        "--weights",
+        type=Path,
+        default=None,
+        help="path to trained weights (default: ml/models/defect_detection/best.pt)",
+    )
+
     sender = subparsers.add_parser("send-mock-events", help="send mock events to the HTTP service")
     sender.add_argument("--batch-size", type=int, default=5, help="events sent per cycle")
     sender.add_argument("--interval-seconds", type=float, default=5.0, help="delay between cycles")
@@ -103,6 +115,13 @@ def main() -> None:
             storage_path=args.storage_path,
         )
         uvicorn.run(app, host=args.host, port=args.port)
+        return
+
+    if args.command == "serve-inference":
+        from aoi.api.inference_app import create_inference_app
+
+        inference_app = create_inference_app(weights_path=args.weights)
+        uvicorn.run(inference_app, host=args.host, port=args.port)
         return
 
     if args.command == "send-mock-events":
