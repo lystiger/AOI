@@ -202,21 +202,22 @@
   display: grid;
   gap: 4px;
   justify-items: start;
+  min-width: 0;
 }
 
 .defect-list-type {
-  display: inline-flex;
+  display: block;
+  max-width: 100%;
   align-items: center;
   min-height: 20px;
-  padding: 0 7px;
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  padding: 0;
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: inherit;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .run-card-id {

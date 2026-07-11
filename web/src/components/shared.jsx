@@ -1,4 +1,4 @@
-import { formatTimestamp } from '../app/utils'
+import { formatMachineLabel, formatTimestamp } from '../app/utils'
 
 export function FilterField({ label, value, onChange, type = 'text', options, compact = false }) {
   return (
@@ -55,6 +55,8 @@ export function RunCard({ run, active, onSelect }) {
 }
 
 export function DefectListItem({ defect, active, hovered, onSelect, onHover }) {
+  const defectLabel = formatMachineLabel(defect.defect_type)
+
   return (
     <button
       type="button"
@@ -66,7 +68,7 @@ export function DefectListItem({ defect, active, hovered, onSelect, onHover }) {
       <div className="defect-list-top">
         <div className="defect-list-titleblock">
           <strong>{defect.component_id}</strong>
-          <span className="defect-list-type">{defect.defect_type}</span>
+          <span className="defect-list-type" title={defect.defect_type}>{defectLabel}</span>
         </div>
         <StatusChip value={defect.severity} kind="severity" />
       </div>

@@ -237,36 +237,6 @@
   z-index: 100;
 }
 
-.floating-inspector {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  width: 288px;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: rgba(10, 14, 20, 0.7);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-  pointer-events: auto;
-  color: var(--ink);
-  opacity: var(--ghost-opacity, 0.2);
-  transition:
-    opacity 0.2s ease,
-    background 0.3s ease,
-    transform 0.3s ease,
-    backdrop-filter 0.3s ease;
-  z-index: 100;
-}
-
-.floating-inspector:hover {
-  opacity: 0.98 !important;
-  background: rgba(14, 19, 28, 0.92);
-  backdrop-filter: blur(12px);
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-}
-
 .inspector-header {
   display: flex;
   justify-content: space-between;
@@ -278,12 +248,14 @@
 .inspector-heading {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .inspector-heading strong {
   font-family: var(--font-mono);
   font-size: 0.95rem;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 
 .inspector-grid {
@@ -292,8 +264,14 @@
   gap: 10px;
 }
 
-.inspector-item span {
+.inspector-item > .eyebrow {
   display: block;
+}
+
+.inspector-item > .chip {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
 }
 
 .inspector-item {
@@ -301,6 +279,7 @@
   border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
+  min-width: 0;
 }
 
 .inspector-item strong {
@@ -309,6 +288,22 @@
   font-size: 0.84rem;
   color: var(--ink);
   margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.inspector-item .inspector-friendly-value {
+  font-family: inherit;
+  line-height: 1.35;
+}
+
+.inspector-item code {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .inspector-item-wide {
@@ -410,12 +405,6 @@
   color: var(--muted);
 }
 
-@media (max-width: 980px) {
-  .floating-inspector {
-    width: 260px;
-  }
-}
-
 @media (max-width: 760px) {
   .viewer-toolbar,
   .viewer-toolbar-group,
@@ -438,10 +427,4 @@
     justify-content: flex-start;
   }
 
-  .floating-inspector {
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    width: auto;
-  }
 }

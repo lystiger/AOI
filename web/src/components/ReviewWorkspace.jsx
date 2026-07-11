@@ -1,7 +1,7 @@
 import SetupFlow from './SetupFlow'
 import PcbViewer from './PcbViewer'
 import { DefectListItem, EmptyStateMessage, FilterField, StatusChip } from './shared'
-import { formatTimestamp } from '../app/utils'
+import { formatMachineLabel, formatTimestamp } from '../app/utils'
 
 export default function ReviewWorkspace({ workspace }) {
   const {
@@ -92,7 +92,7 @@ export default function ReviewWorkspace({ workspace }) {
       <div className="review-topbar">
         <div className="review-context">
           <div className="review-context-head">
-            <p className="eyebrow">Active Review Surface</p>
+            <p className="eyebrow">Active run</p>
             {selectedRun ? <StatusChip value={selectedRun.status} /> : null}
           </div>
           <div className="review-runline">
@@ -105,39 +105,6 @@ export default function ReviewWorkspace({ workspace }) {
           </div>
         </div>
         <div className="review-controls">
-          {!showSetupMode ? (
-            <div className="review-selectors">
-              <button
-                type="button"
-                className="ghost-button setup-edit-button"
-                onClick={() => setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: false }))}
-                disabled={!selectedRunId}
-              >
-                Edit Setup
-              </button>
-              <label className="review-image-select field compact">
-                <span>Surface</span>
-                <select
-                  className="image-selector"
-                  value={effectiveSelectedImageId}
-                  onChange={(event) => setSelectedImageId(event.target.value)}
-                  disabled={!runImages.length}
-                >
-                  {runImages.map((image) => (
-                    <option key={image.id} value={image.id}>
-                      {image.image_role
-                        ? image.image_role
-                            .replaceAll('_', ' ')
-                            .split(' ')
-                            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                            .join(' ')
-                        : image.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
           <div className="review-actions">
             {currentImageIsFov ? (
               <button
@@ -156,14 +123,6 @@ export default function ReviewWorkspace({ workspace }) {
               disabled={isUploading || isAnalyzing || !selectedRunId}
             >
               {isUploading ? 'Uploading Scan...' : isAnalyzing ? 'Analyzing...' : 'Upload PCB Scan'}
-            </button>
-            <button
-              type="button"
-              className="ghost-button delete-button"
-              onClick={handleDeleteRun}
-              disabled={!selectedRunId || isDeletingRun}
-            >
-              {isDeletingRun ? 'Deleting Run...' : 'Delete Run'}
             </button>
             {!showSetupMode ? (
               <div className="review-stepper" role="group" aria-label="Step defects">
@@ -194,6 +153,54 @@ export default function ReviewWorkspace({ workspace }) {
                 </button>
               </div>
             ) : null}
+            <details className="review-more-menu">
+              <summary className="ghost-button review-more-button" aria-label="More run actions" title="More run actions">
+                •••
+              </summary>
+              <div className="review-more-popover">
+                {!showSetupMode ? (
+                  <>
+                    <button
+                      type="button"
+                      className="review-menu-item"
+                      onClick={() => setDismissedSetupRuns((current) => ({ ...current, [selectedRunId]: false }))}
+                      disabled={!selectedRunId}
+                    >
+                      Configure run
+                    </button>
+                    <label className="review-menu-field">
+                      <span>Review surface</span>
+                      <select
+                        value={effectiveSelectedImageId}
+                        onChange={(event) => setSelectedImageId(event.target.value)}
+                        disabled={!runImages.length}
+                      >
+                        {runImages.map((image) => (
+                          <option key={image.id} value={image.id}>
+                            {image.image_role
+                              ? image.image_role
+                                  .replaceAll('_', ' ')
+                                  .split(' ')
+                                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                  .join(' ')
+                              : image.id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="review-menu-divider" />
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="review-menu-danger"
+                  onClick={handleDeleteRun}
+                  disabled={!selectedRunId || isDeletingRun}
+                >
+                  {isDeletingRun ? 'Deleting run…' : 'Delete run'}
+                </button>
+              </div>
+            </details>
           </div>
           {!selectedRunId ? <span className="upload-helper">Select a run from History to enable upload.</span> : null}
         </div>
@@ -258,7 +265,6 @@ export default function ReviewWorkspace({ workspace }) {
                 <div className="review-card-header">
                   <div className="review-card-heading">
                     <p className="eyebrow">Defect filters</p>
-                    <span className="section-note">Slice the active defect queue</span>
                   </div>
                 </div>
                 <div className="sidebar-filters">
@@ -306,7 +312,6 @@ export default function ReviewWorkspace({ workspace }) {
               <div className="review-card-header">
                 <div className="review-card-heading">
                   <p className="eyebrow">Defects</p>
-                  <span className="section-note">Live issue stack</span>
                 </div>
                 <span className="section-note review-count-badge">{visibleDefects.length}</span>
               </div>
@@ -375,50 +380,58 @@ export default function ReviewWorkspace({ workspace }) {
                   onSaveReview={workspace.saveDefectReview}
                   onNextDefect={() => workspace.stepDefect(1)}
                 />
-                {selectedDefect ? (
-                  <div className="floating-inspector" style={{ '--ghost-opacity': hudGhostOpacity }}>
-                    <div className="inspector-header">
-                      <div className="inspector-heading">
-                        <p className="eyebrow">Defect Inspector</p>
-                        <strong>{selectedDefect.component_id}</strong>
-                      </div>
-                      <StatusChip value={selectedDefect.inspection_result} />
-                    </div>
-                    <div className="inspector-grid">
-                      <div className="inspector-item">
-                        <span className="eyebrow">Reference</span>
-                        <strong>{selectedDefect.component_id}</strong>
-                      </div>
-                      <div className="inspector-item">
-                        <span className="eyebrow">Type</span>
-                        <strong>{selectedDefect.defect_type}</strong>
-                      </div>
-                      <div className="inspector-item">
-                        <span className="eyebrow">Severity</span>
-                        <strong>{selectedDefect.severity}</strong>
-                      </div>
-                      <div className="inspector-item">
-                        <span className="eyebrow">Confidence</span>
-                        <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
-                      </div>
-                      {selectedDefect.inference_latency_ms != null ? (
-                        <div className="inspector-item">
-                          <span className="eyebrow">Latency</span>
-                          <strong>{selectedDefect.inference_latency_ms}ms</strong>
-                        </div>
-                      ) : null}
-                      {selectedDefect.operator_review && selectedDefect.operator_review !== 'NONE' ? (
-                        <div className="inspector-item inspector-item-wide">
-                          <span className="eyebrow">Human Review</span>
-                          <StatusChip value={selectedDefect.operator_review} />
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
               </>
             )}
           </div>
+
+          <aside className="defect-inspector" style={{ '--ghost-opacity': hudGhostOpacity }}>
+            {selectedDefect ? (
+              <>
+                <div className="inspector-header">
+                  <div className="inspector-heading">
+                    <p className="eyebrow">Defect inspector</p>
+                    <strong>{selectedDefect.component_id}</strong>
+                  </div>
+                  <StatusChip value={selectedDefect.inspection_result} />
+                </div>
+                <div className="inspector-grid">
+                  <div className="inspector-item">
+                    <span className="eyebrow">Reference</span>
+                    <strong>{selectedDefect.component_id}</strong>
+                  </div>
+                  <div className="inspector-item inspector-item-wide">
+                    <span className="eyebrow">Type</span>
+                    <strong className="inspector-friendly-value" title={selectedDefect.defect_type}>
+                      {formatMachineLabel(selectedDefect.defect_type)}
+                    </strong>
+                    <code>{selectedDefect.defect_type}</code>
+                  </div>
+                  <div className="inspector-item">
+                    <span className="eyebrow">Severity</span>
+                    <strong>{formatMachineLabel(selectedDefect.severity)}</strong>
+                  </div>
+                  <div className="inspector-item">
+                    <span className="eyebrow">Confidence</span>
+                    <strong>{Number(selectedDefect.confidence_score ?? 0).toFixed(2)}</strong>
+                  </div>
+                  {selectedDefect.inference_latency_ms != null ? (
+                    <div className="inspector-item">
+                      <span className="eyebrow">Latency</span>
+                      <strong>{selectedDefect.inference_latency_ms}ms</strong>
+                    </div>
+                  ) : null}
+                  {selectedDefect.operator_review && selectedDefect.operator_review !== 'NONE' ? (
+                    <div className="inspector-item inspector-item-wide">
+                      <span className="eyebrow">Human review</span>
+                      <StatusChip value={selectedDefect.operator_review} />
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <EmptyStateMessage title="No defect selected" body="Choose a defect to inspect its result and measurements." />
+            )}
+          </aside>
         </div>
       )}
     </section>

@@ -77,6 +77,13 @@ export function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleString()
 }
 
+export function formatMachineLabel(value) {
+  if (!value) return 'Unknown'
+
+  const normalized = String(value).replaceAll('_', ' ').trim().toLowerCase()
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
 export function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
