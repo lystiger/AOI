@@ -95,6 +95,12 @@ class DatabaseManager:
             self._ensure_column(
                 connection,
                 table_name="inspection_runs",
+                column_name="requires_fovs",
+                definition="INTEGER NOT NULL DEFAULT 0",
+            )
+            self._ensure_column(
+                connection,
+                table_name="inspection_runs",
                 column_name="requires_fiducials",
                 definition="INTEGER NOT NULL DEFAULT 0",
             )
@@ -417,18 +423,21 @@ class DatabaseManager:
         barcode_json: str | None,
         setup_status: str,
         status: str,
+        requires_fovs: bool | None = None,
     ) -> None:
         with self._connect() as connection:
             connection.execute(
                 """
                 UPDATE inspection_runs
-                SET model_name = ?, requires_fiducials = ?, fiducial_status = ?, fiducials_json = ?,
+                SET model_name = ?, requires_fovs = COALESCE(?, requires_fovs),
+                    requires_fiducials = ?, fiducial_status = ?, fiducials_json = ?,
                     requires_barcode = ?, barcode_status = ?, barcode_json = ?, setup_status = ?,
                     status = ?
                 WHERE id = ?
                 """,
                 (
                     model_name,
+                    None if requires_fovs is None else int(requires_fovs),
                     int(requires_fiducials),
                     fiducial_status,
                     fiducials_json,
@@ -466,6 +475,7 @@ class DatabaseManager:
         run_id: str,
         *,
         model_name: str | None = None,
+        requires_fovs: bool | None = None,
         requires_fiducials: bool | None = None,
         requires_barcode: bool | None = None,
         setup_status: str | None = None,
@@ -473,6 +483,7 @@ class DatabaseManager:
         return self._setup_service().update_run(
             run_id,
             model_name=model_name,
+            requires_fovs=requires_fovs,
             requires_fiducials=requires_fiducials,
             requires_barcode=requires_barcode,
             setup_status=setup_status,
@@ -500,6 +511,7 @@ class DatabaseManager:
             row = connection.execute(
                 """
                 SELECT id, pcb_id, timestamp, model_version, model_name, status, setup_status,
+                       requires_fovs,
                        requires_fiducials, fiducial_status, fiducials_json,
                        requires_barcode, barcode_status, barcode_json,
                        component_detection_status, components_json
@@ -511,6 +523,7 @@ class DatabaseManager:
         if row is None:
             return None
         payload = dict(row)
+        payload["requires_fovs"] = bool(payload.get("requires_fovs"))
         payload["requires_fiducials"] = bool(payload.get("requires_fiducials"))
         payload["fiducials"] = json.loads(payload["fiducials_json"]) if payload.get("fiducials_json") else []
         payload["requires_barcode"] = bool(payload.get("requires_barcode"))
@@ -673,6 +686,7 @@ class DatabaseManager:
                     r.model_name,
                     r.status,
                     r.setup_status,
+                    r.requires_fovs,
                     r.requires_fiducials,
                     r.fiducial_status,
                     r.requires_barcode,
@@ -683,6 +697,7 @@ class DatabaseManager:
                 LEFT JOIN defect_logs AS d ON d.run_id = r.id
                 {where_sql}
                 GROUP BY r.id, r.pcb_id, r.timestamp, r.model_version, r.model_name, r.status, r.setup_status,
+                         r.requires_fovs,
                          r.requires_fiducials, r.fiducial_status, r.requires_barcode, r.barcode_status,
                          r.component_detection_status
                 ORDER BY r.timestamp DESC
@@ -693,6 +708,7 @@ class DatabaseManager:
         payload = []
         for row in rows:
             entry = dict(row)
+            entry["requires_fovs"] = bool(entry.get("requires_fovs"))
             entry["requires_fiducials"] = bool(entry.get("requires_fiducials"))
             entry["requires_barcode"] = bool(entry.get("requires_barcode"))
             payload.append(entry)

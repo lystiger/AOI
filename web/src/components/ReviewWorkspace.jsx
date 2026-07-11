@@ -31,6 +31,8 @@ export default function ReviewWorkspace({ workspace }) {
     activeSetupStep,
     modelDraft,
     setModelDraft,
+    requiresFovsDraft,
+    setRequiresFovsDraft,
     requiresFiducialsDraft,
     setRequiresFiducialsDraft,
     requiresBarcodeDraft,
@@ -226,9 +228,11 @@ export default function ReviewWorkspace({ workspace }) {
           selectedRun={selectedRun}
           selectedImage={setupImage}
           modelDraft={modelDraft}
+          requiresFovsDraft={requiresFovsDraft}
           requiresFiducialsDraft={requiresFiducialsDraft}
           requiresBarcodeDraft={requiresBarcodeDraft}
           onModelDraftChange={setModelDraft}
+          onRequiresFovsChange={setRequiresFovsDraft}
           onRequiresFiducialsChange={setRequiresFiducialsDraft}
           onRequiresBarcodeChange={setRequiresBarcodeDraft}
           onCreateRun={handleCreateRun}

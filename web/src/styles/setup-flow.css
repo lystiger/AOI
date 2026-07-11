@@ -42,11 +42,23 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
+  cursor: pointer;
 }
 
 .setup-step-card.active {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.setup-step-card.disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.75);
+  background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+}
+
+.setup-step-card.disabled:hover {
+  border-color: var(--line);
 }
 
 .setup-step-index {

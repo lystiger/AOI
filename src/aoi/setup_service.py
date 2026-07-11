@@ -46,6 +46,7 @@ class SetupService:
         run_id: str,
         *,
         model_name: str | None = None,
+        requires_fovs: bool | None = None,
         requires_fiducials: bool | None = None,
         requires_barcode: bool | None = None,
         setup_status: str | None = None,
@@ -60,6 +61,10 @@ class SetupService:
             next_model_name = model_name.strip() or None
         next_model_name_text = str(next_model_name or "").strip()
         model_changed = model_name is not None and next_model_name_text != current_model_name
+
+        next_requires_fovs = bool(run_row.get("requires_fovs"))
+        if requires_fovs is not None:
+            next_requires_fovs = requires_fovs
 
         next_requires_fiducials = bool(run_row.get("requires_fiducials"))
         current_requires_fiducials = next_requires_fiducials
@@ -107,6 +112,7 @@ class SetupService:
         next_setup_status = setup_status or self._calculate_setup_status(
             run_id,
             next_model_name,
+            requires_fovs=next_requires_fovs,
             requires_fiducials=next_requires_fiducials,
             fiducial_status=next_fiducial_status,
             requires_barcode=next_requires_barcode,
@@ -120,6 +126,7 @@ class SetupService:
         self.database.update_run_setup_state(
             run_id,
             model_name=next_model_name,
+            requires_fovs=next_requires_fovs,
             requires_fiducials=next_requires_fiducials,
             fiducial_status=next_fiducial_status,
             fiducials_json=next_fiducials_json,
@@ -520,16 +527,24 @@ class SetupService:
         run_id: str,
         model_name: object,
         *,
+        requires_fovs: bool | None = None,
         requires_fiducials: bool = False,
         fiducial_status: str = "not_required",
         requires_barcode: bool = False,
         barcode_status: str = "not_required",
     ) -> str:
         has_model = bool(model_name and str(model_name).strip())
-        has_images = bool(self.database.fetch_run_images(run_id))
+        images = self.database.fetch_run_images(run_id)
+        has_images = bool(images)
+        if requires_fovs is None:
+            run_row = self.database.fetch_run(run_id)
+            requires_fovs = bool(run_row and run_row.get("requires_fovs"))
+        model_fovs = self.database.fetch_model_fovs(str(model_name)) if has_model else []
+        fov_image_count = sum(1 for image in images if str(image.get("image_role") or "").startswith("fov:"))
+        fovs_ready = not requires_fovs or (bool(model_fovs) and fov_image_count >= len(model_fovs))
         fiducials_ready = not requires_fiducials or fiducial_status == "confirmed"
         barcode_ready = not requires_barcode or barcode_status == "confirmed"
-        if has_model and has_images and fiducials_ready and barcode_ready:
+        if has_model and has_images and fovs_ready and fiducials_ready and barcode_ready:
             return "review_ready"
         if has_model or has_images:
             return "in_progress"

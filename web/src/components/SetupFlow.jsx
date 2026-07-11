@@ -118,9 +118,11 @@ export default function SetupFlow({
   selectedRun,
   selectedImage,
   modelDraft,
+  requiresFovsDraft,
   requiresFiducialsDraft,
   requiresBarcodeDraft,
   onModelDraftChange,
+  onRequiresFovsChange,
   onRequiresFiducialsChange,
   onRequiresBarcodeChange,
   onCreateRun,
@@ -200,9 +202,9 @@ export default function SetupFlow({
           {steps.map((step) => (
             <div
               key={step.id}
-              className={`setup-step-card ${step.active ? 'active' : ''}`}
-              onClick={() => onStepClick?.(step.id)}
-              style={{ cursor: 'pointer' }}
+              className={`setup-step-card ${step.active ? 'active' : ''} ${step.disabled ? 'disabled' : ''}`}
+              onClick={() => !step.disabled && onStepClick?.(step.id)}
+              aria-disabled={step.disabled}
             >
               <div className="setup-step-index">{step.order}</div>
               <div className="setup-step-copy">
@@ -255,20 +257,28 @@ export default function SetupFlow({
               <label className="setup-checkbox">
                 <input
                   type="checkbox"
-                  checked={requiresFiducialsDraft}
-                  onChange={(event) => onRequiresFiducialsChange(event.target.checked)}
+                  checked={!requiresFovsDraft}
+                  onChange={(event) => onRequiresFovsChange(!event.target.checked)}
                 />
-                <span>Require fiducial alignment for this product</span>
+                <span>Skip field-of-view setup</span>
               </label>
               <label className="setup-checkbox">
                 <input
                   type="checkbox"
-                  checked={requiresBarcodeDraft}
-                  onChange={(event) => onRequiresBarcodeChange(event.target.checked)}
+                  checked={!requiresFiducialsDraft}
+                  onChange={(event) => onRequiresFiducialsChange(!event.target.checked)}
                 />
-                <span>Require barcode validation for this product</span>
+                <span>Skip fiducial mark setup</span>
               </label>
-              <p>Set the model name now so later steps can decide whether fiducials or barcode validation are required.</p>
+              <label className="setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={!requiresBarcodeDraft}
+                  onChange={(event) => onRequiresBarcodeChange(!event.target.checked)}
+                />
+                <span>Skip barcode setup</span>
+              </label>
+              <p>Skipped setup steps are disabled after you save this model configuration.</p>
               {modelError ? <div className="step-error-message">{modelError}</div> : null}
               <button
                 type="button"
@@ -563,7 +573,11 @@ export default function SetupFlow({
             <strong>{selectedRun?.model_name || 'Unset'}</strong>
             <span>Model FOVs</span>
             <strong>
-              {(selectedRun?.model_fovs?.length || 0) > 0 ? `${selectedRun?.model_fovs?.length || 0} saved` : 'Unset'}
+              {!selectedRun?.requires_fovs
+                ? 'Skipped'
+                : (selectedRun?.model_fovs?.length || 0) > 0
+                  ? `${selectedRun?.model_fovs?.length || 0} saved`
+                  : 'Required'}
             </strong>
             <span>Components</span>
             <strong>
@@ -572,9 +586,9 @@ export default function SetupFlow({
                 : 'Blocked'}
             </strong>
             <span>Fiducials</span>
-            <strong>{selectedRun?.requires_fiducials ? selectedRun?.fiducial_status || 'Required' : 'Not required'}</strong>
+            <strong>{selectedRun?.requires_fiducials ? selectedRun?.fiducial_status || 'Required' : 'Skipped'}</strong>
             <span>Barcode</span>
-            <strong>{selectedRun?.requires_barcode ? selectedRun?.barcode_status || 'Required' : 'Not required'}</strong>
+            <strong>{selectedRun?.requires_barcode ? selectedRun?.barcode_status || 'Required' : 'Skipped'}</strong>
             <span>Setup</span>
             <strong>{selectedRun?.setup_status || 'Not started'}</strong>
           </div>

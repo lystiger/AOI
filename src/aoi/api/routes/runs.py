@@ -252,6 +252,7 @@ def update_run(
     run = setup_service.update_run(
         run_id,
         model_name=payload.model_name if "model_name" in payload.model_fields_set else None,
+        requires_fovs=payload.requires_fovs if "requires_fovs" in payload.model_fields_set else None,
         requires_fiducials=payload.requires_fiducials if "requires_fiducials" in payload.model_fields_set else None,
         requires_barcode=payload.requires_barcode if "requires_barcode" in payload.model_fields_set else None,
     )

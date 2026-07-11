@@ -47,6 +47,7 @@ export function useSetupActions({
   const [isSavingManualBarcode, setIsSavingManualBarcode] = useState(false)
   const [isDeletingRun, setIsDeletingRun] = useState(false)
   const [modelDraft, setModelDraft] = useState('')
+  const [requiresFovsDraft, setRequiresFovsDraft] = useState(false)
   const [requiresFiducialsDraft, setRequiresFiducialsDraft] = useState(false)
   const [requiresBarcodeDraft, setRequiresBarcodeDraft] = useState(false)
   const [manualFovDraft, setManualFovDraft] = useState(() => buildManualFovDraft(null))
@@ -55,6 +56,7 @@ export function useSetupActions({
 
   const clearRunDrafts = useCallback(() => {
     setModelDraft('')
+    setRequiresFovsDraft(false)
     setRequiresFiducialsDraft(false)
     setRequiresBarcodeDraft(false)
     setManualFovDraft(buildManualFovDraft(null))
@@ -75,6 +77,7 @@ export function useSetupActions({
   const syncSetupFromRun = useCallback((nextRun) => {
     selectedRunRef.current = nextRun
     setModelDraft(nextRun?.model_name || '')
+    setRequiresFovsDraft(Boolean(nextRun?.requires_fovs))
     setRequiresFiducialsDraft(Boolean(nextRun?.requires_fiducials))
     setRequiresBarcodeDraft(Boolean(nextRun?.requires_barcode))
     setManualFovDraft(buildManualFovDraft(nextRun))
@@ -191,6 +194,7 @@ export function useSetupActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model_name: modelDraft.trim(),
+          requires_fovs: requiresFovsDraft,
           requires_fiducials: requiresFiducialsDraft,
           requires_barcode: requiresBarcodeDraft,
         }),
@@ -639,12 +643,14 @@ export function useSetupActions({
     modelDraft,
     modelError,
     requiresBarcodeDraft,
+    requiresFovsDraft,
     requiresFiducialsDraft,
     setBarcodeError,
     setCreateRunError,
     setManualStepId,
     setModelDraft,
     setRequiresBarcodeDraft,
+    setRequiresFovsDraft,
     setRequiresFiducialsDraft,
     syncSetupFromRun,
     uploadError,

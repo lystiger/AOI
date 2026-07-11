@@ -192,6 +192,8 @@ export function useRunData({
   const hasModel = Boolean(selectedRun?.model_name?.trim())
   const modelFovCount = selectedRun?.model_fovs?.length || 0
   const fovImageCount = runImages.filter((image) => image.image_role?.startsWith('fov:')).length
+  const requiresFovs = Boolean(selectedRun?.requires_fovs)
+  const fovsReady = !requiresFovs || (modelFovCount > 0 && fovImageCount >= modelFovCount)
   const requiresFiducials = Boolean(selectedRun?.requires_fiducials)
   const fiducialStatus = selectedRun?.fiducial_status || 'not_required'
   const requiresBarcode = Boolean(selectedRun?.requires_barcode)
@@ -201,6 +203,7 @@ export function useRunData({
     selectedRunId &&
     hasScan &&
     hasModel &&
+    fovsReady &&
     (!requiresFiducials || fiducialStatus === 'confirmed') &&
     (!requiresBarcode || barcodeStatus === 'confirmed'),
   )
@@ -264,15 +267,16 @@ export function useRunData({
         order: 5,
         label: 'Define FOVs',
         description: 'Define named field-of-view boxes for this model and generate crop surfaces for review or training.',
-        status: !selectedRunId || !hasScan || !hasModel ? 'blocked' : modelFovCount > 0 && fovImageCount >= modelFovCount ? 'done' : 'ready',
+        status: !requiresFovs ? 'not_required' : !selectedRunId || !hasScan || !hasModel ? 'blocked' : modelFovCount > 0 && fovImageCount >= modelFovCount ? 'done' : 'ready',
         statusLabel:
-          !selectedRunId || !hasScan || !hasModel
+          !requiresFovs
+            ? 'Skipped'
+            : !selectedRunId || !hasScan || !hasModel
             ? 'Blocked'
             : modelFovCount > 0 && fovImageCount >= modelFovCount
               ? 'Done'
-              : modelFovCount > 0
-                ? 'Ready'
-                : 'Ready',
+              : 'Ready',
+        disabled: !requiresFovs,
       },
       {
         id: 'fiducials',
@@ -282,7 +286,7 @@ export function useRunData({
         status: !requiresFiducials ? 'not_required' : fiducialStatus === 'confirmed' ? 'done' : fiducialStatus,
         statusLabel:
           !requiresFiducials
-            ? 'Not Required'
+            ? 'Skipped'
             : fiducialStatus === 'confirmed'
               ? 'Done'
               : fiducialStatus === 'needs_review'
@@ -294,6 +298,7 @@ export function useRunData({
                     : fiducialStatus === 'blocked'
                       ? 'Blocked'
                       : 'Ready',
+        disabled: !requiresFiducials,
       },
       {
         id: 'barcode',
@@ -303,7 +308,7 @@ export function useRunData({
         status: !requiresBarcode ? 'not_required' : barcodeStatus === 'confirmed' ? 'done' : barcodeStatus,
         statusLabel:
           !requiresBarcode
-            ? 'Not Required'
+            ? 'Skipped'
             : barcodeStatus === 'confirmed'
               ? 'Done'
               : barcodeStatus === 'needs_review'
@@ -315,6 +320,7 @@ export function useRunData({
                     : barcodeStatus === 'blocked'
                       ? 'Blocked'
                       : 'Ready',
+        disabled: !requiresBarcode,
       },
       {
         id: 'continue-review',
@@ -328,7 +334,7 @@ export function useRunData({
 
     const autoStepId =
       baseSteps.find((step) => step.status === 'needs_review')?.id ||
-      baseSteps.find((step) => step.status === 'ready')?.id ||
+      (isReviewReady ? 'continue-review' : baseSteps.find((step) => step.status === 'ready')?.id) ||
       baseSteps.find((step) => step.status === 'blocked')?.id ||
       baseSteps.at(-1)?.id
     const activeStepId = manualStepId && baseSteps.some((step) => step.id === manualStepId) ? manualStepId : autoStepId
@@ -343,6 +349,7 @@ export function useRunData({
     componentDetectionStatus,
     fovImageCount,
     requiresBarcode,
+    requiresFovs,
     requiresFiducials,
     modelFovCount,
     selectedRunId,

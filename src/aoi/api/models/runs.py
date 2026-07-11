@@ -26,6 +26,7 @@ class UpdateRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model_name: str | None = None
+    requires_fovs: bool | None = None
     requires_fiducials: bool | None = None
     requires_barcode: bool | None = None
 
