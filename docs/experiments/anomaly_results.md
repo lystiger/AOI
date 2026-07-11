@@ -1,6 +1,6 @@
 # Anomaly Detection Experiment Results
 
-**Generated:** 2026-06-28 12:56 UTC
+**Generated:** 2026-07-11 13:27 UTC
 **Lookback window:** 120 minutes
 **Loki endpoint:** `http://localhost:3100`
 
@@ -10,22 +10,26 @@
 
 | Metric | Value |
 |--------|-------|
-| Total events logged | 5000 |
-| PASS events | 2973 |
-| FAIL events | 2220 |
-| Overall fail rate | 44.4% |
+| Total events logged | 731 |
+| PASS events | 240 |
+| FAIL events | 491 |
+| Overall fail rate | 67.2% |
 
 ## Defect Type Distribution
 
 | Defect Type | Event Count |
 |-------------|-------------|
-| NO_DEFECT | 2973 |
-| INSUFFICIENT_SOLDER | 825 |
-| MISALIGNMENT | 699 |
-| SOLDER_BRIDGE | 360 |
-| MISSING_COMPONENT | 188 |
-| BENT_LEAD | 138 |
-| SOLDER_BALL | 10 |
+| NO_DEFECT | 240 |
+| MOUSE_BITE | 82 |
+| SPUR | 70 |
+| CONDUCTOR_SCRATCH | 66 |
+| BASE_MATERIAL_FOREIGN_OBJECT | 62 |
+| HOLE_BREAKOUT | 56 |
+| OPEN_CIRCUIT | 54 |
+| SPURIOUS_COPPER | 45 |
+| CONDUCTOR_FOREIGN_OBJECT | 36 |
+| BOARD_FAILURE | 16 |
+| SHORT | 4 |
 
 ---
 
@@ -34,41 +38,41 @@
 Each LogQL query below verifies that the corresponding scenario was captured by Loki.
 These can be run directly in Grafana Explore.
 
-### S01 — Normal Baseline
+### S01 — Normal Baseline (real model, clean board crops)
 ```logql
 {job="aoi-inference", pcb_id=~"PCB-BASELINE-.*"} | json
 ```
-Expected: ~120 events, ~30% FAIL rate, latency 20–50ms.
+Expected: PASS-dominated (~85–90% PASS); the few FAILs are real model false positives.
 
-### S02 — High Defect Rate Spike
+### S02 — High Defect Rate Spike (real defective boards)
 ```logql
 {job="aoi-inference", pcb_id=~"PCB-HIGHFAIL-.*"} | json
 ```
-Expected: ~100 events, >80% FAIL rate.
+Expected: ~100% FAIL with real DsPCBSD+ defect classes (SPUR, SHORT, ...).
 
-### S03 — Latency Spike
+### S03 — Latency Spike (real predictions, injected latency)
 ```logql
 {job="aoi-inference", pcb_id=~"PCB-LATENCY-.*"} | json | inference_latency_ms > 500
 ```
-Expected: latency values 500–2500ms visible in log values.
+Expected: latency values escalating to ~2000ms; predictions themselves are real.
 
-### S04 — Low Confidence Storm
+### S04 — Low Confidence Storm (real model on degraded boards)
 ```logql
-{job="aoi-inference", pcb_id=~"PCB-LOWCONF-.*"} | json | confidence_score < 0.56
+{job="aoi-inference", pcb_id=~"PCB-LOWCONF-.*"} | json | confidence_score < 0.70
 ```
-Expected: all events return confidence between 0.40–0.55.
+Expected: lower mean detection confidence than S02 plus some missed defects.
 
-### S05 — Single Defect Type Flood
+### S05 — Single Defect Type Flood (real, one dominant class)
 ```logql
-{job="aoi-inference", pcb_id=~"PCB-FLOOD-.*", defect_type="SOLDER_BRIDGE"}
+{job="aoi-inference", pcb_id=~"PCB-FLOOD-.*"} | json
 ```
-Expected: SOLDER_BRIDGE accounts for ~100% of FAIL events in this PCB range.
+Expected: one DsPCBSD+ defect class accounts for ~100% of the FAIL events.
 
-### S06 — Entire Board Failure
+### S06 — Entire Board Failure (corrupt scans)
 ```logql
-{job="aoi-inference", inspection_result="FAIL", pcb_id=~"PCB-DEAD-.*"} | json
+{job="aoi-inference", defect_type="BOARD_FAILURE", pcb_id=~"PCB-DEAD-.*"} | json
 ```
-Expected: all 8 component events per dead board are FAIL.
+Expected: BOARD_FAILURE events for unreadable scans, isolated amid normal traffic.
 
 ### S07 — Recovery
 ```logql
@@ -78,15 +82,15 @@ Expected: FAIL rate drops sharply mid-scenario in the timeseries.
 
 ### S08 — Intermittent Faults
 ```logql
-{job="aoi-inference", pcb_id=~"PCB-INTERMIT-.*", inspection_result="FAIL"} | json
+sum(count_over_time({job="aoi-inference", pcb_id=~"PCB-INTERMIT-.*", inspection_result="FAIL"}[30s]))
 ```
-Expected: bursts at batch positions 5, 11, 17 visible in timeseries.
+Expected: three tall FAIL spikes (boards 0005/0011/0017) above a near-zero baseline; occasional single-event blips are real model false positives.
 
-### S09 — Gradual Degradation
+### S09 — Model Degradation / Drift (baseline -> under-trained)
 ```logql
-{job="aoi-inference", pcb_id=~"PCB-DRIFT-.*"} | json | unwrap confidence_score
+sum by (model_version) (count_over_time({job="aoi-inference", pcb_id=~"PCB-DRIFT-.*", inspection_result="FAIL"}[30s]))
 ```
-Expected: decreasing confidence_score trend from ~0.95 → ~0.45 over time.
+Expected: on identical defective boards the under-trained model (`yolov8s-dspcbsd-epoch0`) emits far fewer FAILs than `yolov8s-dspcbsd-baseline` (missed defects) — a sharp drop at the phase boundary. Swap the metric to `unwrap confidence_score` to also see the confidence dip.
 
 ---
 
