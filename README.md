@@ -71,37 +71,47 @@ Core thesis-supporting documents:
 
 ## Supporting ML Workstream
 
-The repository also contains a separate ML workstream for eventual replacement
-of mock inference with a real PCB model backend. This is supporting work for the
-platform, not the primary thesis claim.
+The monitored model is a YOLOv8s defect detector trained on
+[DsPCBSD+](ml/README.md) (CC BY 4.0): nine PCB fabrication and trace defect classes,
+split 7,388 train / 2,051 val / 820 test images. The model is the subject being
+monitored, not the thesis contribution; its accuracy shows that the monitored
+signals come from a competent detector.
 
-Current ML snapshot:
+Test split (820 images), as reported in the thesis results chapter
+([`docs/paper/thesis_usth.tex`](docs/paper/thesis_usth.tex)):
 
-| Item | Current Value |
-| --- | --- |
-| Task | `component_detection` |
-| Dataset profile | `reduced` |
-| Active classes | `resistor`, `capacitor`, `connector`, `ic`, `led`, `other` |
-| Dataset split | `470 train / 102 val / 100 test` |
-| Latest test `mAP@50` | `0.1346` |
-| Latest test `mAP@50-95` | `0.0687` |
-| Latest test precision | `0.1602` |
-| Latest test recall | `0.2452` |
-| Best current class | `ic` (`AP50 = 0.461`) |
-| Current limitation | dense small parts still suppress `resistor` and `led` performance |
+| Metric | Value |
+| --- | ---: |
+| `mAP@50` | **0.82** |
+| `mAP@50-95` | 0.48 |
+| Precision | 0.78 |
+| Recall | 0.79 |
 
-Important boundary:
+| Defect class | Precision | Recall | AP@50 |
+| --- | ---: | ---: | ---: |
+| Short (SH) | 0.81 | 0.87 | 0.91 |
+| Spur (SP) | 0.77 | 0.74 | 0.80 |
+| Spurious copper (SC) | 0.80 | 0.78 | 0.83 |
+| Open (OP) | 0.77 | 0.85 | 0.84 |
+| Mouse-bite (MB) | 0.80 | 0.77 | 0.81 |
+| Hole-breakout (HB) | 0.92 | 0.92 | 0.97 |
+| Conductor scratch (CS) | 0.70 | 0.61 | 0.70 |
+| Conductor foreign object (CFO) | 0.68 | 0.73 | 0.72 |
+| Base-material foreign object (BMFO) | 0.80 | 0.85 | 0.83 |
 
-- these ML results are internal engineering baselines
-- they are useful for future real-inference integration
-- they are not the central evidence for the monitoring thesis
+Known limitation: the model is trained on bare-copper boards and over-triggers on
+assembled boards (see [`docs/implementation/WS6_RUNBOOK.md`](docs/implementation/WS6_RUNBOOK.md)).
+
+The earlier component-detection baseline (resistor, capacitor, connector, IC, LED on a
+reduced 470 / 102 / 100 split, test `mAP@50` 0.1346) is superseded by the defect model
+and kept as baseline tooling.
 
 Supporting ML references:
 
-- [Project progress](docs/project_progress.md)
 - [ML pipeline README](ml/README.md)
+- [Colab training notebook](ml/notebooks/colab_train_dspcbsd.ipynb)
+- [Real inference integration plan](docs/implementation/REAL_INFERENCE_INTEGRATION_PLAN.md)
 - [Component baseline assessment](docs/component_baseline_assessment.md)
-- [Larger-seed evaluation report](ml/reports/component_detection/20260531-170800Z-evaluate.md)
 
 ## Anomaly Detection & Monitoring Evaluation
 
